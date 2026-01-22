@@ -177,7 +177,6 @@
                 <div className="max-w-7xl mx-auto px-6 py-3 flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <div className="bg-rose-500 text-white p-1.5 rounded-lg shadow-sm"><ProtectionLogo size={20}/></div>
-                    {/* FIX: Texto siempre visible, tamaño adaptable */}
                     <span className="font-semibold text-base sm:text-lg tracking-tight text-black">Asistente de Beneficios</span>
                   </div>
                   <div className="flex items-center gap-3">
@@ -257,13 +256,38 @@
           );
         }
 
-        // --- LEADS LIST COMPLETA (RESTAURADA CON MODAL) ---
+        // --- LEADS LIST COMPLETA (CON MODAL DE BORRADO Y DETALLES) ---
         function LeadsList({ leads, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
           const [selectedLead, setSelectedLead] = useState(null);
+          const [leadToDelete, setLeadToDelete] = useState(null); // Estado para borrar
           const filteredLeads = leads.filter(l => String(l.nombre||'').toLowerCase().includes(searchTerm.toLowerCase()));
+
+          const confirmDelete = async () => {
+             if (leadToDelete) {
+                 await onDeleteLead(leadToDelete);
+                 setLeadToDelete(null);
+             }
+          };
           
           return (
             <div className="animate-in fade-in duration-500">
+                {/* Modal Confirmación Borrado */}
+                {leadToDelete && (
+                    <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                        <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm border border-gray-100 text-center">
+                            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+                                <Trash2 size={24} />
+                            </div>
+                            <h3 className="font-bold text-lg text-slate-800 mb-2">¿Eliminar este Lead?</h3>
+                            <p className="text-sm text-slate-500 mb-6">Esta acción es irreversible. Se borrarán todos los datos del cliente.</p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setLeadToDelete(null)} className="flex-1 py-2.5 bg-white border border-gray-200 text-slate-600 rounded-xl font-medium text-sm hover:bg-gray-50 transition-colors">Cancelar</button>
+                                <button onClick={confirmDelete} className="flex-1 py-2.5 bg-red-500 text-white rounded-xl font-medium text-sm hover:bg-red-600 transition-colors shadow-lg shadow-red-200">Eliminar</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {selectedLead && (
                     <div className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4">
                         <div className="bg-white w-full max-w-2xl rounded-[24px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
@@ -298,7 +322,14 @@
                           <td className="px-8 py-5 truncate"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-gradient-to-b from-gray-100 to-gray-200 flex items-center justify-center font-semibold text-xs text-gray-500 shrink-0 border border-white shadow-sm">{l.nombre ? l.nombre.charAt(0).toUpperCase() : '?'}</div><div className="min-w-0"><div className="text-sm font-semibold text-[#1d1d1f] truncate">{String(l.nombre || 'Anónimo')}</div><div className="text-[11px] text-[#86868b] mt-0.5">{String(l.edad || '')} años • {String(l.estado || '')}</div></div></div></td>
                           <td className="px-8 py-5"><div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium border ${l.metodo_contacto === 'ahora' ? 'bg-orange-50/50 text-orange-600 border-orange-100' : 'bg-blue-50/50 text-blue-600 border-blue-100'}`}>{l.metodo_contacto === 'ahora' ? <Zap size={10}/> : <CalendarClock size={10}/>}{l.metodo_contacto === 'ahora' ? 'Inmediato' : 'Programado'}</div><div className="text-[11px] text-[#86868b] mt-1.5 pl-1 truncate font-medium">{l.telefono || '...'}</div></td>
                           <td className="px-8 py-5"><p className="text-xs text-[#1d1d1f] truncate opacity-80">"{String(l.resumen_ai || '')}"</p></td>
-                          <td className="px-8 py-5 text-center" onClick={(e) => e.stopPropagation()}><div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"><button onClick={() => onUpdateStatus(l.id, isArchive ? 'active' : 'archived')} className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-white rounded-lg transition-all"><RotateCcw size={16} strokeWidth={1.5}/></button><button onClick={() => onDeleteLead(l.id)} className="p-2 text-[#86868b] hover:text-red-500 hover:bg-white rounded-lg transition-all"><Trash2 size={16} strokeWidth={1.5}/></button></div></td>
+                          <td className="px-8 py-5 text-center" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                  <button onClick={() => onUpdateStatus(l.id, isArchive ? 'active' : 'archived')} className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-white rounded-lg transition-all">
+                                    {isArchive ? <RotateCcw size={16} strokeWidth={1.5}/> : <Archive size={16} strokeWidth={1.5}/>}
+                                  </button>
+                                  <button onClick={() => setLeadToDelete(l.id)} className="p-2 text-[#86868b] hover:text-red-500 hover:bg-white rounded-lg transition-all"><Trash2 size={16} strokeWidth={1.5}/></button>
+                              </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
