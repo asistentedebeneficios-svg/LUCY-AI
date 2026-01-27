@@ -24,7 +24,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'lucy-production-v1'; 
 
-// CLAVE API IA (Dividida)
+// CLAVE API IA
 const partA = "AIzaSyB9qP1gjlqrrdANqvh";
 const partB = "I2hY5KAirqByeI9Q";
 const GOOGLE_API_KEY = partA + partB;
@@ -37,7 +37,6 @@ const LucyAvatar = ({ className = "w-10 h-10" }) => (
 );
 
 const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
-const BrainAvatar = ({ className = "w-10 h-10" }) => (<div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}><Sparkles size={20} strokeWidth={2} /></div>);
 
 function cleanAiMessage(text) { 
     if (!text) return ''; 
@@ -78,7 +77,7 @@ const DEFAULT_SCHEDULE = {
     domingo: { enabled: false, shifts: [{start: '10:00', end: '14:00'}] } 
 };
 
-// Verifica si está abierto "ahora mismo" (para el botón de llamada instantánea)
+// LÓGICA DE ESTADO
 const getAgentStatus = (config) => {
   const now = new Date();
   if (config.vacationMode && config.vacationStart && config.vacationEnd) {
@@ -91,12 +90,9 @@ const getAgentStatus = (config) => {
   if (!sch || !sch.enabled) return { isAgentAvailable: false, message: "Cerrado hoy" };
 
   const nowMins = now.getHours() * 60 + now.getMinutes();
-  let isOpen = false;
-
-  // Lógica robusta para array de turnos
   const shifts = sch.shifts || (sch.start ? [{start: sch.start, end: sch.end}] : []);
   
-  isOpen = shifts.some(shift => {
+  const isOpen = shifts.some(shift => {
       if (!shift.start || !shift.end) return false;
       const [sH, sM] = shift.start.split(':').map(Number);
       const [eH, eM] = shift.end.split(':').map(Number);
@@ -134,76 +130,69 @@ function LandingView({ onStartChat, onOpenLogin, isAdmin, onGoToAdmin }) {
   const testimonials = [
       { text: "Me ayudaron a encontrar justo lo que necesitaba para mi familia.", author: "María G." },
       { text: "Excelente atención, muy rápidos y amables.", author: "José R." },
-      { text: "Me siento mucho más tranquila con mi cobertura.", author: "Ana P." },
-      { text: "Muy fácil de usar, ¡recomendado!", author: "Carlos M." },
-      { text: "La mejor asesoría que he recibido.", author: "Sofia L." }
+      { text: "Me siento mucho más tranquila con mi cobertura.", author: "Ana P." }
   ];
-  const [index, setIndex] = useState(0);
-  const [itemsToShow, setItemsToShow] = useState(1);
-
-  // Responsive items count
-  useEffect(() => {
-      const handleResize = () => {
-          if (window.innerWidth >= 1024) setItemsToShow(3); // Desktop
-          else if (window.innerWidth >= 768) setItemsToShow(2); // Tablet
-          else setItemsToShow(1); // Mobile
-      };
-      handleResize();
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Auto-rotation
-  useEffect(() => {
-      const interval = setInterval(() => {
-          setIndex((prevIndex) => (prevIndex + 1) % testimonials.length);
-      }, 4000);
-      return () => clearInterval(interval);
-  }, [testimonials.length]);
-
-  const getVisibleTestimonials = () => {
-      let visible = [];
-      for (let i = 0; i < itemsToShow; i++) {
-          visible.push(testimonials[(index + i) % testimonials.length]);
-      }
-      return visible;
-  };
 
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-white">
-      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-4xl mx-auto space-y-8 animate-in slide-up">
-        <div className="relative mb-4"><div className="absolute inset-0 bg-rose-200 rounded-full blur-2xl opacity-30 animate-pulse"></div><LucyAvatar className="w-28 h-28 md:w-32 md:h-32 border-4 border-white shadow-xl relative z-10" /><div className="absolute bottom-0 right-0 bg-white p-1.5 rounded-full shadow-md z-20"><Heart size={20} className="text-rose-500 fill-current animate-bounce" /></div></div>
-        <div className="space-y-3"><h1 className="text-3xl md:text-5xl font-bold text-slate-900 tracking-tight">Hola, soy Lucy 👋</h1><p className="text-slate-500 text-lg md:text-xl font-medium max-w-md mx-auto leading-relaxed">Su asistente <span className="text-rose-500 font-bold">AI</span> experta en <span className="text-rose-500 font-semibold">Protección Familiar</span>.</p><p className="text-slate-400 text-sm md:text-base max-w-lg mx-auto">Estoy aquí para escucharle y explicarle los beneficios de protección disponibles para usted.</p></div>
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-5xl mx-auto space-y-10 animate-in slide-up">
         
-        <button onClick={onStartChat} className="group relative inline-flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-semibold text-lg shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 w-full md:w-auto justify-center"><span>Hablar con Lucy</span><MessageSquare size={20} /></button>
-        
-        {/* CARRUSEL DE TESTIMONIOS MEJORADO */}
-        <div className="w-full mt-8 overflow-hidden">
-            <div className="flex gap-4 justify-center transition-all duration-500 ease-in-out">
-                {getVisibleTestimonials().map((t, i) => (
-                    <div key={`${index}-${i}`} className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex-1 min-w-[280px] max-w-xs shadow-sm animate-in fade-in">
-                        <div className="flex gap-1 text-yellow-400 mb-2 justify-center"><Star size={12} fill="currentColor"/><Star size={12} fill="currentColor"/><Star size={12} fill="currentColor"/><Star size={12} fill="currentColor"/><Star size={12} fill="currentColor"/></div>
-                        <p className="text-sm text-slate-600 italic mb-3">"{t.text}"</p>
-                        <div className="text-xs font-bold text-slate-800">- {t.author}</div>
-                    </div>
-                ))}
+        {/* Hero Section */}
+        <div className="space-y-6 max-w-2xl mx-auto">
+             <div className="relative mb-6 inline-block">
+                <div className="absolute inset-0 bg-rose-200 rounded-full blur-3xl opacity-40 animate-pulse"></div>
+                <LucyAvatar className="w-32 h-32 border-4 border-white shadow-2xl relative z-10" />
+                <div className="absolute -bottom-2 -right-2 bg-white p-2 rounded-full shadow-lg z-20"><Heart size={24} className="text-rose-500 fill-current animate-bounce" /></div>
             </div>
+            
+            <h1 className="text-4xl md:text-6xl font-bold text-slate-900 tracking-tight leading-tight">
+                Hola, soy <span className="text-rose-500">Lucy</span> 👋
+            </h1>
+            <p className="text-lg md:text-xl text-slate-600 font-medium leading-relaxed">
+                Su asistente experta en <span className="text-slate-900 font-bold">Protección Familiar</span>.
+                <br/><span className="text-slate-400 font-normal text-base">Hablemos con confianza, a su ritmo y sin complicaciones.</span>
+            </p>
+            
+            <button onClick={onStartChat} className="group relative inline-flex items-center gap-3 bg-slate-900 text-white px-10 py-5 rounded-2xl font-semibold text-xl shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 w-full md:w-auto justify-center mt-4">
+                <span>Hablar con Lucy</span>
+                <MessageSquare size={24} className="group-hover:translate-x-1 transition-transform" />
+            </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 w-full max-w-md pt-8 border-t border-slate-100">
-            <div className="flex flex-col items-center gap-1"><div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><UserCheck size={18} /></div><span className="text-[9px] font-bold text-slate-400 uppercase">Licenciados</span></div>
-            <div className="flex flex-col items-center gap-1"><div className="p-2 bg-red-50 text-red-600 rounded-xl"><PhoneOff size={18} /></div><span className="text-[9px] font-bold text-slate-400 uppercase">Seguro</span></div>
-            <div className="flex flex-col items-center gap-1"><div className="p-2 bg-green-50 text-green-600 rounded-xl"><ShieldCheck size={18} /></div><span className="text-[9px] font-bold text-slate-400 uppercase">Privado</span></div>
-            <div className="flex flex-col items-center gap-1"><div className="p-2 bg-yellow-50 text-yellow-600 rounded-xl"><Zap size={18} /></div><span className="text-[9px] font-bold text-slate-400 uppercase">Rápido</span></div>
-            <div className="flex flex-col items-center gap-1"><div className="p-2 bg-purple-50 text-purple-600 rounded-xl"><Activity size={18} /></div><span className="text-[9px] font-bold text-slate-400 uppercase">Sin Examen</span></div>
-            <div className="flex flex-col items-center gap-1"><div className="p-2 bg-pink-50 text-pink-600 rounded-xl"><Heart size={18} /></div><span className="text-[9px] font-bold text-slate-400 uppercase">Soporte</span></div>
+        {/* Testimonials Grid (Static & Clean) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mt-8">
+            {testimonials.map((t, i) => (
+                <div key={i} className="bg-slate-50 p-6 rounded-3xl border border-slate-100 hover:shadow-md transition-all text-left">
+                    <div className="flex text-yellow-400 mb-3"><Star size={14} fill="currentColor"/><Star size={14} fill="currentColor"/><Star size={14} fill="currentColor"/><Star size={14} fill="currentColor"/><Star size={14} fill="currentColor"/></div>
+                    <p className="text-slate-700 italic mb-4 text-sm leading-relaxed">"{t.text}"</p>
+                    <div className="text-xs font-bold text-slate-900 uppercase tracking-wide">- {t.author}</div>
+                </div>
+            ))}
+        </div>
+
+        {/* Features Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 w-full pt-8 border-t border-slate-100">
+            {[
+                {icon: <UserCheck size={20}/>, text: "Licenciados", color: "text-blue-600 bg-blue-50"},
+                {icon: <ShieldCheck size={20}/>, text: "100% Seguro", color: "text-green-600 bg-green-50"},
+                {icon: <Zap size={20}/>, text: "Rápido", color: "text-yellow-600 bg-yellow-50"},
+                {icon: <Activity size={20}/>, text: "Sin Examen", color: "text-purple-600 bg-purple-50"},
+                {icon: <Heart size={20}/>, text: "Soporte", color: "text-pink-600 bg-pink-50"},
+                {icon: <PhoneOff size={20}/>, text: "Sin Spam", color: "text-red-600 bg-red-50"}
+            ].map((f, i) => (
+                <div key={i} className="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-slate-50 transition-colors">
+                    <div className={`p-2.5 rounded-xl ${f.color}`}>{f.icon}</div>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{f.text}</span>
+                </div>
+            ))}
         </div>
       </div>
-      <div className="p-4 text-center">
+      
+      <div className="p-6 text-center border-t border-slate-50 bg-white">
           {isAdmin ? (
-              <button onClick={onGoToAdmin} className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center justify-center gap-1 mx-auto"><LayoutDashboard size={14}/> Ir al Panel de Admin</button>
+              <button onClick={onGoToAdmin} className="inline-flex items-center gap-2 px-6 py-2 bg-blue-50 text-blue-600 rounded-full text-xs font-bold hover:bg-blue-100 transition-colors"><LayoutDashboard size={14}/> Ir al Panel de Admin</button>
           ) : (
-              <button onClick={onOpenLogin} className="text-[9px] text-slate-300 hover:text-slate-400 transition-colors">Acceso Corporativo</button>
+              <button onClick={onOpenLogin} className="text-[10px] font-bold text-slate-300 hover:text-slate-500 transition-colors uppercase tracking-widest">Acceso Corporativo</button>
           )}
       </div>
     </div>
@@ -356,14 +345,6 @@ function LeadsList({ leads, agents, onDeleteLead, onUpdateStatus, onAssignAgent,
   };
 
   const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
-
-  const copyLeadToClipboard = (lead) => {
-      if (!lead) return;
-      const text = [`📋 FICHA`, `Nombre: ${lead.nombre}`, `Email: ${lead.email}`, `Tel: ${lead.telefono}`, `Resumen: ${lead.resumen_ai}`].join('\n');
-      const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.select();
-      try { document.execCommand('copy'); setCopyFeedback(true); setTimeout(() => setCopyFeedback(false), 2000); } catch (err) {}
-      document.body.removeChild(textArea);
-  };
   
   return (
     <div className="animate-in fade-in duration-500">
@@ -456,19 +437,13 @@ function AgentsManager({ agents, onViewReport }) {
     const [currentAgent, setCurrentAgent] = useState({ name: '', phone: '', email: '', licenses: '', photoUrl: '', bio: '' });
     const [saving, setSaving] = useState(false);
     const [agentToDelete, setAgentToDelete] = useState(null);
-    const [userId, setUserId] = useState(null);
-
-    useEffect(() => {
-        const u = getAuth().currentUser;
-        if(u) setUserId(u.uid);
-    }, []);
 
     const handleSaveAgent = async (e) => {
         e.preventDefault(); 
-        if(!userId) return;
         setSaving(true);
         try {
             const agentData = { ...currentAgent };
+            // FIX: Guardar en colección PÚBLICA para que sea visible por el admin y el sistema
             if (currentAgent.id) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'agents', currentAgent.id), agentData);
             else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'agents'), { ...agentData, createdAt: serverTimestamp() });
             setIsEditing(false); setCurrentAgent({ name: '', phone: '', email: '', licenses: '', photoUrl: '', bio: '' });
@@ -477,7 +452,7 @@ function AgentsManager({ agents, onViewReport }) {
     };
 
     const confirmDeleteAgent = async () => {
-        if (!agentToDelete || !userId) return;
+        if (!agentToDelete) return;
         try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'agents', agentToDelete.id)); setAgentToDelete(null); } catch (error) {}
     };
 
@@ -506,7 +481,7 @@ function AgentsManager({ agents, onViewReport }) {
                         <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Foto URL</label><input value={currentAgent.photoUrl} onChange={e => setCurrentAgent({...currentAgent, photoUrl: e.target.value})} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-100" /></div>
                         <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Licencias</label><input value={currentAgent.licenses} onChange={e => setCurrentAgent({...currentAgent, licenses: e.target.value})} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-100" /></div>
                         <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Bio</label><textarea rows="3" value={currentAgent.bio} onChange={e => setCurrentAgent({...currentAgent, bio: e.target.value})} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-100" /></div>
-                        <div className="flex gap-3 pt-2"><button type="button" onClick={() => setIsEditing(false)} className="flex-1 py-2.5 text-slate-500 bg-slate-50 rounded-lg text-sm font-medium">Cancelar</button><button type="submit" disabled={saving} className="flex-1 py-2.5 bg-black text-white rounded-lg text-sm font-medium">Guardar</button></div>
+                        <div className="flex gap-3 pt-2"><button type="button" onClick={() => setIsEditing(false)} className="flex-1 py-2.5 text-slate-500 bg-slate-50 rounded-lg text-sm font-medium">Cancelar</button><button type="submit" disabled={saving} className="flex-1 py-2.5 bg-black text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2">{saving && <div className="w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>} Guardar</button></div>
                     </form>
                 </div>
             ) : (
@@ -899,16 +874,19 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   
   const [aiConfig, setAiConfig] = useState({ systemPrompt: `Eres Lucy...`, webhookUrl: "", assignmentWebhookUrl: "", schedule: DEFAULT_SCHEDULE, vacationMode: false });
-  const [agentToAudit, setAgentToAudit] = useState(null); 
+  const [agentToAudit, setAgentToAudit] = useState(null); // ESTADO PARA NAVEGACIÓN EQUIPO -> REPORTE
 
   useEffect(() => {
     const init = async () => { 
+        // 100% PRODUCCION: Iniciamos autenticación anónima para que cualquier visitante pueda chatear
         await signInAnonymously(auth); 
     };
     init();
     return onAuthStateChanged(auth, (u) => { 
         if (u) { 
             setUser(u); 
+            // En producción, solo eres Admin si te logueas explícitamente. No asumimos nada.
+            setIsAdmin(false); 
         } 
     });
   }, []);
