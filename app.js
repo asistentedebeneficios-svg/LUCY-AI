@@ -24,7 +24,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'lucy-production-v1'; 
 
-// CLAVE API IA
+// CLAVE API IA (Dividida)
 const partA = "AIzaSyB9qP1gjlqrrdANqvh";
 const partB = "I2hY5KAirqByeI9Q";
 const GOOGLE_API_KEY = partA + partB;
@@ -45,10 +45,21 @@ function cleanAiMessage(text) {
     return cleaned.split('***').join('').split('---').join('').trim();
 }
 
-function to12h(t) { if (!t) return ''; const [h, m] = t.split(':'); return `${h % 12 || 12}:${m.toString().padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`; }
-function formatScheduledDate(d) { if (!d || d.length < 10) return d; const date = new Date(d); return isNaN(date) ? d : date.toLocaleDateString('en-US', {month:'2-digit', day:'2-digit', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true}); }
 function formatFirestoreDate(ts) { if (!ts) return 'Reciente'; return ts.toDate ? ts.toDate().toLocaleDateString('en-US') : new Date(ts.seconds * 1000).toLocaleDateString('en-US'); }
 function getJsDate(ts) { if (!ts) return new Date(); return ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000); }
+
+// Helper para convertir el objeto de horario a texto legible para la IA
+function formatScheduleForAI(schedule) {
+    if (!schedule) return "No hay horario definido.";
+    const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+    return days.map(day => {
+        const config = schedule[day];
+        if (!config || !config.enabled) return `${day}: CERRADO`;
+        const shifts = config.shifts || [{start: config.start, end: config.end}]; // Soporte legacy
+        const shiftsText = shifts.map(s => `${s.start} a ${s.end}`).join(' Y ');
+        return `${day}: ${shiftsText}`;
+    }).join('\n');
+}
 
 const RichText = ({ content }) => {
   if (!content || typeof content !== 'string') return null;
@@ -57,7 +68,6 @@ const RichText = ({ content }) => {
 
 const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
 
-// ESTRUCTURA ACTUALIZADA: Soporta array de turnos (shifts)
 const DEFAULT_SCHEDULE = { 
     lunes: { enabled: true, shifts: [{start: '09:00', end: '18:00'}] }, 
     martes: { enabled: true, shifts: [{start: '09:00', end: '18:00'}] }, 
@@ -68,51 +78,34 @@ const DEFAULT_SCHEDULE = {
     domingo: { enabled: false, shifts: [{start: '10:00', end: '14:00'}] } 
 };
 
-// LÓGICA DE ESTADO CORREGIDA PARA MÚLTIPLES TURNOS
+// Verifica si está abierto "ahora mismo" (para el botón de llamada instantánea)
 const getAgentStatus = (config) => {
   const now = new Date();
-  
-  // Modo Vacaciones
   if (config.vacationMode && config.vacationStart && config.vacationEnd) {
      const vStart = new Date(config.vacationStart + 'T00:00:00'); 
      const vEnd = new Date(config.vacationEnd + 'T23:59:59'); 
-     if (now >= vStart && now <= vEnd) {
-         return { isAgentAvailable: false, isVacation: true, resumeDate: new Date(vEnd.setDate(vEnd.getDate() + 1)) };
-     }
+     if (now >= vStart && now <= vEnd) return { isAgentAvailable: false, isVacation: true, resumeDate: new Date(vEnd.setDate(vEnd.getDate() + 1)) };
   }
-
   const day = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'][now.getDay()];
   const sch = config.schedule?.[day];
-  
-  // Si no existe configuración para el día o está deshabilitado
   if (!sch || !sch.enabled) return { isAgentAvailable: false, message: "Cerrado hoy" };
 
   const nowMins = now.getHours() * 60 + now.getMinutes();
-
-  // Verificar turnos (shifts)
-  // Soporta estructura antigua (start/end directos) y nueva (array shifts) para evitar crash
   let isOpen = false;
 
-  if (sch.shifts && Array.isArray(sch.shifts)) {
-      isOpen = sch.shifts.some(shift => {
-          if (!shift.start || !shift.end) return false;
-          const [sH, sM] = shift.start.split(':').map(Number);
-          const [eH, eM] = shift.end.split(':').map(Number);
-          const startMins = sH * 60 + sM;
-          const endMins = eH * 60 + eM;
-          return nowMins >= startMins && nowMins < endMins;
-      });
-  } else if (sch.start && sch.end) {
-      // Fallback para estructura antigua
-      const [sH, sM] = sch.start.split(':').map(Number);
-      const [eH, eM] = sch.end.split(':').map(Number);
+  // Lógica robusta para array de turnos
+  const shifts = sch.shifts || (sch.start ? [{start: sch.start, end: sch.end}] : []);
+  
+  isOpen = shifts.some(shift => {
+      if (!shift.start || !shift.end) return false;
+      const [sH, sM] = shift.start.split(':').map(Number);
+      const [eH, eM] = shift.end.split(':').map(Number);
       const startMins = sH * 60 + sM;
       const endMins = eH * 60 + eM;
-      isOpen = nowMins >= startMins && nowMins < endMins;
-  }
+      return nowMins >= startMins && nowMins < endMins;
+  });
 
-  if (isOpen) return { isAgentAvailable: true, message: "Agentes Disponibles" };
-  return { isAgentAvailable: false, message: "Cerrado ahora" };
+  return { isAgentAvailable: isOpen, message: isOpen ? "Agentes Disponibles" : "Cerrado ahora" };
 };
 
 async function fetchGeminiWithRetry(payload) {
@@ -138,13 +131,66 @@ function useInactivityTimer(action, timeout = 600000) {
 // ================= COMPONENTES =================
 
 function LandingView({ onStartChat, onOpenLogin, isAdmin, onGoToAdmin }) {
+  const testimonials = [
+      { text: "Me ayudaron a encontrar justo lo que necesitaba para mi familia.", author: "María G." },
+      { text: "Excelente atención, muy rápidos y amables.", author: "José R." },
+      { text: "Me siento mucho más tranquila con mi cobertura.", author: "Ana P." },
+      { text: "Muy fácil de usar, ¡recomendado!", author: "Carlos M." },
+      { text: "La mejor asesoría que he recibido.", author: "Sofia L." }
+  ];
+  const [index, setIndex] = useState(0);
+  const [itemsToShow, setItemsToShow] = useState(1);
+
+  // Responsive items count
+  useEffect(() => {
+      const handleResize = () => {
+          if (window.innerWidth >= 1024) setItemsToShow(3); // Desktop
+          else if (window.innerWidth >= 768) setItemsToShow(2); // Tablet
+          else setItemsToShow(1); // Mobile
+      };
+      handleResize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Auto-rotation
+  useEffect(() => {
+      const interval = setInterval(() => {
+          setIndex((prevIndex) => (prevIndex + 1) % testimonials.length);
+      }, 4000);
+      return () => clearInterval(interval);
+  }, [testimonials.length]);
+
+  const getVisibleTestimonials = () => {
+      let visible = [];
+      for (let i = 0; i < itemsToShow; i++) {
+          visible.push(testimonials[(index + i) % testimonials.length]);
+      }
+      return visible;
+  };
+
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-white">
-      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-2xl mx-auto space-y-8 animate-in slide-up">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-4xl mx-auto space-y-8 animate-in slide-up">
         <div className="relative mb-4"><div className="absolute inset-0 bg-rose-200 rounded-full blur-2xl opacity-30 animate-pulse"></div><LucyAvatar className="w-28 h-28 md:w-32 md:h-32 border-4 border-white shadow-xl relative z-10" /><div className="absolute bottom-0 right-0 bg-white p-1.5 rounded-full shadow-md z-20"><Heart size={20} className="text-rose-500 fill-current animate-bounce" /></div></div>
-        <div className="space-y-3"><h1 className="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">Hola, soy Lucy 👋</h1><p className="text-slate-500 text-lg md:text-xl font-medium max-w-md mx-auto leading-relaxed">Su asistente <span className="text-rose-500 font-bold">AI</span> experta en <span className="text-rose-500 font-semibold">Protección Familiar</span>.</p><p className="text-slate-400 text-sm md:text-base max-w-lg mx-auto">Estoy aquí para escucharle y explicarle los beneficios de protección disponibles para usted.</p></div>
+        <div className="space-y-3"><h1 className="text-3xl md:text-5xl font-bold text-slate-900 tracking-tight">Hola, soy Lucy 👋</h1><p className="text-slate-500 text-lg md:text-xl font-medium max-w-md mx-auto leading-relaxed">Su asistente <span className="text-rose-500 font-bold">AI</span> experta en <span className="text-rose-500 font-semibold">Protección Familiar</span>.</p><p className="text-slate-400 text-sm md:text-base max-w-lg mx-auto">Estoy aquí para escucharle y explicarle los beneficios de protección disponibles para usted.</p></div>
+        
         <button onClick={onStartChat} className="group relative inline-flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-semibold text-lg shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 w-full md:w-auto justify-center"><span>Hablar con Lucy</span><MessageSquare size={20} /></button>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 w-full max-w-md pt-6 border-t border-slate-100">
+        
+        {/* CARRUSEL DE TESTIMONIOS MEJORADO */}
+        <div className="w-full mt-8 overflow-hidden">
+            <div className="flex gap-4 justify-center transition-all duration-500 ease-in-out">
+                {getVisibleTestimonials().map((t, i) => (
+                    <div key={`${index}-${i}`} className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex-1 min-w-[280px] max-w-xs shadow-sm animate-in fade-in">
+                        <div className="flex gap-1 text-yellow-400 mb-2 justify-center"><Star size={12} fill="currentColor"/><Star size={12} fill="currentColor"/><Star size={12} fill="currentColor"/><Star size={12} fill="currentColor"/><Star size={12} fill="currentColor"/></div>
+                        <p className="text-sm text-slate-600 italic mb-3">"{t.text}"</p>
+                        <div className="text-xs font-bold text-slate-800">- {t.author}</div>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 w-full max-w-md pt-8 border-t border-slate-100">
             <div className="flex flex-col items-center gap-1"><div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><UserCheck size={18} /></div><span className="text-[9px] font-bold text-slate-400 uppercase">Licenciados</span></div>
             <div className="flex flex-col items-center gap-1"><div className="p-2 bg-red-50 text-red-600 rounded-xl"><PhoneOff size={18} /></div><span className="text-[9px] font-bold text-slate-400 uppercase">Seguro</span></div>
             <div className="flex flex-col items-center gap-1"><div className="p-2 bg-green-50 text-green-600 rounded-xl"><ShieldCheck size={18} /></div><span className="text-[9px] font-bold text-slate-400 uppercase">Privado</span></div>
@@ -310,6 +356,14 @@ function LeadsList({ leads, agents, onDeleteLead, onUpdateStatus, onAssignAgent,
   };
 
   const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
+
+  const copyLeadToClipboard = (lead) => {
+      if (!lead) return;
+      const text = [`📋 FICHA`, `Nombre: ${lead.nombre}`, `Email: ${lead.email}`, `Tel: ${lead.telefono}`, `Resumen: ${lead.resumen_ai}`].join('\n');
+      const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.select();
+      try { document.execCommand('copy'); setCopyFeedback(true); setTimeout(() => setCopyFeedback(false), 2000); } catch (err) {}
+      document.body.removeChild(textArea);
+  };
   
   return (
     <div className="animate-in fade-in duration-500">
@@ -707,17 +761,56 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
   const callGemini = async (history, extra = "") => {
     try {
         let availabilityInstruction = "";
-        if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA: Estamos en vacaciones hasta el ${resumeDate.toLocaleDateString()}. SI PIDEN LLAMADA, di que podemos agendar a partir de esa fecha.`;
+        
+        // 1. INYECTAR HORARIO FORMATEADO
+        const scheduleText = formatScheduleForAI(aiConfig.schedule);
+        
+        // 2. INYECTAR REGLAS DE VACACIONES
+        if (isVacation && resumeDate) {
+            availabilityInstruction = `NOTA CRÍTICA: Estamos en vacaciones hasta el ${resumeDate.toLocaleDateString()}. NO AGENDES CITAS ANTES DE ESA FECHA. Di que podemos agendar a partir de entonces.`;
+        }
 
         const prompt = `
-          FECHA: ${new Date().toLocaleString()}. ${aiConfig.systemPrompt} ${availabilityInstruction}
-          HISTORIAL: ${history.map(m=>m.role+': '+m.content).join('\n')} ${extra}
+          FECHA Y HORA ACTUAL: ${new Date().toLocaleString()}.
           
-          OBJETIVO: Recolectar 7 datos: Nombre, Edad, Salud, Estado, Tabaco, Presupuesto, EMAIL.
-          * IMPORTANTE: Pide el EMAIL explicando que es para enviarle la FOTO y LICENCIA del agente por seguridad.
-          * SI TIENES LOS 7 DATOS: Responde SOLO JSON: { "action": "show_options", "text": "Excelente, tengo su perfil completo. ¿Cómo prefiere continuar?" }
-          * SI ELIGEN OPCION: Si "Hablar" pide Telefono. Si "Programar" pide Telefono y Horario.
-          * FINAL: Si confirman todo, responde SOLO JSON: { "action": "save_lead", "nombre": "...", "email": "...", "telefono": "...", "resumen": "...", "text": "¡Perfecto! Un agente le contactará pronto." }
+          ${aiConfig.systemPrompt}
+          
+          --- REGLAS DE HORARIO ---
+          ${availabilityInstruction}
+          HORARIO DE ATENCIÓN VÁLIDO:
+          ${scheduleText}
+          
+          IMPORTANTE:
+          1. Si el usuario pide "Programar Llamada", VERIFICA que la hora solicitada esté dentro del horario de atención del día correspondiente. Si no lo está, dile amablemente que está cerrado y sugiere un horario válido.
+          2. NUNCA confirmes una cita fuera del horario de atención.
+          
+          --- HISTORIAL DE CONVERSACIÓN ---
+          ${history.map(m=>m.role+': '+m.content).join('\n')}
+          ${extra}
+          
+          --- OBJETIVO ACTUAL ---
+          Recolectar 7 datos: Nombre, Edad, Salud, Estado, Tabaco, Presupuesto, EMAIL.
+          * EMAIL: Explica que es para enviarle la FOTO y LICENCIA del agente.
+          * Si tienes los 7 datos -> Responde SOLO JSON: { "action": "show_options", "text": "Excelente, tengo su perfil completo. ¿Cómo prefiere continuar?" }
+          * Si eligen "Hablar Ahora" -> Pide Teléfono.
+          * Si eligen "Programar" -> Pide Teléfono y Horario. (RECUERDA VALIDAR EL HORARIO).
+          
+          --- FINALIZACIÓN ---
+          Si el usuario confirma los datos finales (y el horario es válido si aplica), responde SOLO con este JSON:
+          { 
+            "action": "save_lead", 
+            "nombre": "...", 
+            "edad": "...", 
+            "telefono": "...", 
+            "email": "...",
+            "estado": "...", 
+            "fuma": "...", 
+            "salud": "...", 
+            "presupuesto": "...", 
+            "horario": "...", 
+            "resumen": "...", 
+            "text": "¡Perfecto! Un agente le contactará pronto." 
+          }
         `;
         
         const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
@@ -728,7 +821,12 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
 
         if (json) {
             if (json.action === 'show_options') { setShowOptions(true); reply = json.text; }
-            if (json.action === 'save_lead') { onSaveLead({ ...json, metodo_contacto: 'finalizado', fullChat: history }); setEnded(true); reply = json.text; }
+            if (json.action === 'save_lead') { 
+                // GUARDADO ROBUSTO: Incluso si es programada, guardamos el lead.
+                onSaveLead({ ...json, metodo_contacto: 'finalizado', fullChat: history }); 
+                setEnded(true); 
+                reply = json.text; 
+            }
         }
         setMsgs([...history, { role: 'assistant', content: cleanAiMessage(reply) }]);
     } catch (e) { console.error(e); }
