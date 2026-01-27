@@ -57,7 +57,7 @@ const RichText = ({ content }) => {
 
 const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
 
-// NUEVA ESTRUCTURA DE HORARIO: Soporta múltiples turnos (shifts)
+// ESTRUCTURA ACTUALIZADA: Soporta array de turnos (shifts)
 const DEFAULT_SCHEDULE = { 
     lunes: { enabled: true, shifts: [{start: '09:00', end: '18:00'}] }, 
     martes: { enabled: true, shifts: [{start: '09:00', end: '18:00'}] }, 
@@ -68,7 +68,53 @@ const DEFAULT_SCHEDULE = {
     domingo: { enabled: false, shifts: [{start: '10:00', end: '14:00'}] } 
 };
 
-// --- API IA ---
+// LÓGICA DE ESTADO CORREGIDA PARA MÚLTIPLES TURNOS
+const getAgentStatus = (config) => {
+  const now = new Date();
+  
+  // Modo Vacaciones
+  if (config.vacationMode && config.vacationStart && config.vacationEnd) {
+     const vStart = new Date(config.vacationStart + 'T00:00:00'); 
+     const vEnd = new Date(config.vacationEnd + 'T23:59:59'); 
+     if (now >= vStart && now <= vEnd) {
+         return { isAgentAvailable: false, isVacation: true, resumeDate: new Date(vEnd.setDate(vEnd.getDate() + 1)) };
+     }
+  }
+
+  const day = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'][now.getDay()];
+  const sch = config.schedule?.[day];
+  
+  // Si no existe configuración para el día o está deshabilitado
+  if (!sch || !sch.enabled) return { isAgentAvailable: false, message: "Cerrado hoy" };
+
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  // Verificar turnos (shifts)
+  // Soporta estructura antigua (start/end directos) y nueva (array shifts) para evitar crash
+  let isOpen = false;
+
+  if (sch.shifts && Array.isArray(sch.shifts)) {
+      isOpen = sch.shifts.some(shift => {
+          if (!shift.start || !shift.end) return false;
+          const [sH, sM] = shift.start.split(':').map(Number);
+          const [eH, eM] = shift.end.split(':').map(Number);
+          const startMins = sH * 60 + sM;
+          const endMins = eH * 60 + eM;
+          return nowMins >= startMins && nowMins < endMins;
+      });
+  } else if (sch.start && sch.end) {
+      // Fallback para estructura antigua
+      const [sH, sM] = sch.start.split(':').map(Number);
+      const [eH, eM] = sch.end.split(':').map(Number);
+      const startMins = sH * 60 + sM;
+      const endMins = eH * 60 + eM;
+      isOpen = nowMins >= startMins && nowMins < endMins;
+  }
+
+  if (isOpen) return { isAgentAvailable: true, message: "Agentes Disponibles" };
+  return { isAgentAvailable: false, message: "Cerrado ahora" };
+};
+
 async function fetchGeminiWithRetry(payload) {
   if (!rateLimit.check()) throw new Error("Espera unos segundos.");
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GOOGLE_API_KEY}`;
@@ -156,16 +202,16 @@ function LeadModal({ lead, onClose }) {
     );
 }
 
-// --- REPORTES ---
 function ReportsView({ leads, agents, initialAgent }) {
-    // (Código de Reportes igual que antes)
     const [dateRange, setDateRange] = useState('month'); 
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
     const [selectedAgentStats, setSelectedAgentStats] = useState(null); 
     const [viewLead, setViewLead] = useState(null);
 
-    useEffect(() => { if (initialAgent && agents.length > 0) setSelectedAgentStats({ name: initialAgent.name, count: 0 }); }, [initialAgent]);
+    useEffect(() => {
+        if (initialAgent && agents.length > 0) setSelectedAgentStats({ name: initialAgent.name, count: 0 });
+    }, [initialAgent]);
 
     const filteredLeads = useMemo(() => {
         const now = new Date();
@@ -236,9 +282,7 @@ function ReportsView({ leads, agents, initialAgent }) {
     );
 }
 
-// --- LISTAS Y AGENTES ---
 function LeadsList({ leads, agents, onDeleteLead, onUpdateStatus, onAssignAgent, onUnassign, isArchive, searchTerm }) {
-  // (Código de LeadsList igual que antes)
   const [selectedLead, setSelectedLead] = useState(null);
   const [leadToDelete, setLeadToDelete] = useState(null); 
   const [selectedIds, setSelectedIds] = useState([]); 
@@ -249,6 +293,7 @@ function LeadsList({ leads, agents, onDeleteLead, onUpdateStatus, onAssignAgent,
   const [agentSearch, setAgentSearch] = useState('');
 
   const filteredLeads = leads.filter(l => String(l.nombre||'').toLowerCase().includes(searchTerm.toLowerCase()));
+
   const handleSelectAll = (e) => { if (e.target.checked) setSelectedIds(filteredLeads.map(l => l.id)); else setSelectedIds([]); };
   const handleSelectOne = (id) => { setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); };
   const handleBulkDelete = () => { if (selectedIds.length > 0) setLeadToDelete(selectedIds); };
@@ -357,9 +402,17 @@ function AgentsManager({ agents, onViewReport }) {
     const [currentAgent, setCurrentAgent] = useState({ name: '', phone: '', email: '', licenses: '', photoUrl: '', bio: '' });
     const [saving, setSaving] = useState(false);
     const [agentToDelete, setAgentToDelete] = useState(null);
+    const [userId, setUserId] = useState(null);
+
+    useEffect(() => {
+        const u = getAuth().currentUser;
+        if(u) setUserId(u.uid);
+    }, []);
 
     const handleSaveAgent = async (e) => {
-        e.preventDefault(); setSaving(true);
+        e.preventDefault(); 
+        if(!userId) return;
+        setSaving(true);
         try {
             const agentData = { ...currentAgent };
             if (currentAgent.id) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'agents', currentAgent.id), agentData);
@@ -370,7 +423,7 @@ function AgentsManager({ agents, onViewReport }) {
     };
 
     const confirmDeleteAgent = async () => {
-        if (!agentToDelete) return;
+        if (!agentToDelete || !userId) return;
         try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'agents', agentToDelete.id)); setAgentToDelete(null); } catch (error) {}
     };
 
@@ -436,7 +489,6 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
           const newState = { ...prev };
           if (!newState.schedule[day]) newState.schedule[day] = { enabled: false, shifts: [] };
           newState.schedule[day].enabled = !newState.schedule[day].enabled;
-          // Si activamos y no tiene turnos, añadir uno por defecto
           if (newState.schedule[day].enabled && (!newState.schedule[day].shifts || newState.schedule[day].shifts.length === 0)) {
               newState.schedule[day].shifts = [{ start: '09:00', end: '18:00' }];
           }
@@ -505,14 +557,12 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
         
         <div className="space-y-8">
            
-           {/* 1. PROMPT (Instrucciones Base) */}
            <div>
                <h3 className="font-semibold text-[#1d1d1f] mb-4 text-lg flex items-center gap-2">Cerebro de Lucy</h3>
                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wide block mb-2">Instrucciones Base (Prompt)</label>
                <textarea value={c.systemPrompt} onChange={(e)=>setC({...c, systemPrompt:e.target.value})} className="w-full h-48 p-4 bg-[#F5F5F7] border border-gray-200 rounded-2xl text-sm font-mono text-[#1d1d1f] focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all shadow-inner leading-relaxed resize-none" placeholder="Escribe aquí cómo debe comportarse Lucy..." />
            </div>
 
-           {/* 2. SCHEDULE (Horario) */}
            <div>
                <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wide block mb-3">Horario de Atención</label>
                <div className="bg-[#F5F5F7] p-5 rounded-2xl border border-gray-100">
@@ -567,7 +617,6 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
                </div>
            </div>
 
-           {/* 3. WEBHOOKS (Integraciones) */}
            <div className="pt-4 border-t border-gray-100">
                <div className="flex justify-between items-center mb-4">
                    <label className="text-[10px] font-bold text-[#86868b] uppercase tracking-wide flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div> Integraciones (Webhooks)</label>
@@ -756,21 +805,18 @@ function App() {
 
   useEffect(() => {
     const init = async () => { 
-        // 100% PRODUCCION: Autenticación anónima para clientes
         await signInAnonymously(auth); 
     };
     init();
     return onAuthStateChanged(auth, (u) => { 
         if (u) { 
             setUser(u); 
-            // En producción real, la distinción de Admin se hace por login explícito o custom claims.
-            // Aquí lo manejamos con el estado local isAdmin seteado en handleLogin.
         } 
     });
   }, []);
 
   useEffect(() => {
-    // RUTA PUBLICA COMPARTIDA: Clave para que el Admin vea los leads de los Clientes Anónimos
+    // RUTA PUBLICA GLOBAL PARA PERSISTENCIA ENTRE CLIENTE Y ADMIN
     const leadsRef = collection(db, 'artifacts', appId, 'public', 'data', 'leads');
     const agentsRef = collection(db, 'artifacts', appId, 'public', 'data', 'agents');
     
@@ -778,8 +824,9 @@ function App() {
     const u2 = onSnapshot(query(agentsRef), (s) => setAgents(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config')).then(s => s.exists() && setAiConfig(prev => ({...prev, ...s.data()})));
     return () => { u1(); u2(); };
-  }, []); // Dependencia vacía para que corra al montar, independiente del usuario (ruta pública)
+  }, []); // Carga global al inicio
 
+  // LOGIN REAL DE FIREBASE (PRODUCCIÓN)
   const handleLogin = async (e) => { 
       e.preventDefault(); 
       setLoginError(null);
@@ -889,6 +936,7 @@ function App() {
                  <AdminBrain aiConfig={aiConfig} onSaveConfig={saveConfig} />}
             </div>
         ) : (
+            // Fallback para no-admins intentando acceder a rutas protegidas
             <LandingView onStartChat={() => setView('chat')} onOpenLogin={() => setShowLogin(true)} isAdmin={false} />
         )}
       </main>
@@ -903,7 +951,9 @@ function App() {
               {loginError && <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg font-medium">{loginError}</div>}
               <button type="submit" className="w-full bg-black text-white font-medium py-3 rounded-xl hover:bg-gray-800 transition-all text-sm shadow-lg disabled:opacity-50">Iniciar Sesión</button>
             </form>
-            <div className="mt-4 text-center"><p className="text-[10px] text-slate-400">Este sistema monitorea todos los accesos.</p></div>
+            <div className="mt-4 text-center">
+                <p className="text-[10px] text-slate-400">Este sistema monitorea todos los accesos.</p>
+            </div>
           </div>
         </div>
       )}
