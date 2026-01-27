@@ -761,19 +761,28 @@ function App() {
     return () => { u1(); u2(); };
   }, [user]);
 
-  // MODIFIED: Simulated Login for persistence
-  const handleLogin = (e) => { 
+  // LOGIN REAL DE FIREBASE (PRODUCCIÓN)
+  const handleLogin = async (e) => { 
       e.preventDefault(); 
-      if (email === 'admin@demo.com' && password === '123456') { // Accepts specific email, strict password for demo feel
+      setLoginError(null);
+      try { 
+          await signInWithEmailAndPassword(auth, email, password); 
           setIsAdmin(true); 
           setShowLogin(false); 
           setView('admin'); 
-      } else { 
-          setLoginError("Credenciales inválidas (Prueba: admin@demo.com / 123456)"); 
+      } catch (err) { 
+          console.error(err);
+          setLoginError("Credenciales inválidas. Verifica tu correo y contraseña."); 
       } 
   };
   
-  const handleLogout = async () => { setIsAdmin(false); setView('landing'); };
+  const handleLogout = async () => { 
+      await signOut(auth); 
+      setIsAdmin(false); 
+      setView('landing'); 
+      // Reiniciar como anónimo para permitir chat
+      await signInAnonymously(auth);
+  };
   
   const saveLeadToDb = async (d) => { if(!user) return; await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'leads'), { ...d, createdAt: serverTimestamp(), status: 'active' }); };
   const saveConfig = async (c) => { if(!user) return; await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), c); setAiConfig(c); };
@@ -882,7 +891,6 @@ function App() {
             </form>
             <div className="mt-4 text-center">
                 <p className="text-[10px] text-slate-400">Este sistema monitorea todos los accesos.</p>
-                <p className="text-[9px] text-slate-300 mt-1">Demo Login: admin@demo.com / 123456</p>
             </div>
           </div>
         </div>
