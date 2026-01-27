@@ -6,9 +6,9 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebas
 import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch, query, deleteField } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut, signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
 
-// ==================================================================================
-// 1. CONFIGURACIÓN DE FIREBASE (TUS DATOS REALES)
-// ==================================================================================
+// ==========================================
+// 1. TUS CREDENCIALES REALES
+// ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyCh_eweHfWdALF3VtFHh1UM0AkiH-8I9Uo",
   authDomain: "lucy-ai-11572.firebaseapp.com",
@@ -23,17 +23,15 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Identificador para organizar los datos en tu base de datos
-const appId = 'lucy-production'; 
+// ID fijo para que siempre encuentres tus datos en producción
+const appId = 'lucy-production-v1'; 
 
-// ==================================================================================
-// 2. CONFIGURACIÓN DE INTELIGENCIA ARTIFICIAL
-// ==================================================================================
+// CLAVE DE IA (Dividida por seguridad básica)
 const partA = "AIzaSyCMPSIf7ocyb8DzoRt5izDH3";
 const partB = "-5zcLu5ojM";
 const GOOGLE_API_KEY = partA + partB;
 
-// --- ASSETS Y UTILIDADES ---
+// --- UTILIDADES ---
 const IMAGES = { lucy: "https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" };
 
 const LucyAvatar = ({ className = "w-10 h-10" }) => (
@@ -629,10 +627,10 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
   };
 
   const send = async (e) => {
-    e.preventDefault(); if(!input.trim() || loading || ended) return;
-    const newM = [...msgs, {role:'user', content:input}]; setMsgs(newM); setInput(''); setLoading(true);
-    callGemini(newM);
-  };
+            e.preventDefault(); if(!input.trim() || loading || ended) return;
+            const newM = [...msgs, {role:'user', content:input}]; setMsgs(newM); setInput(''); setLoading(true);
+            callGemini(newM);
+          };
 
   const callGemini = async (history, extra = "") => {
     try {
@@ -893,6 +891,3 @@ function App() {
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
-    </script>
-</body>
-</html>
