@@ -30,8 +30,8 @@ const appId = 'lucy-production-v1';
 // 2. API KEY DE IA (OFUSCADA)
 // ==========================================
 // Dividimos la clave en dos partes para despistar a los bots simples
-const partA = "AIzaSyCMPSIf7ocyb8DzoRt5izDH3";
-const partB = "-5zcLu5ojM";
+const partA = "AIzaSyB9qP1gjlqrrdANqvh";
+const partB = "I2hY5KAirqByeI9Q";
 const GOOGLE_API_KEY = partA + partB;
 
 // --- ASSETS Y UTILIDADES ---
@@ -751,52 +751,41 @@ function App() {
 
   useEffect(() => {
     if (!user) return;
-    // RUTA SEGURA: Los datos viven bajo el ID del usuario autenticado (sea anónimo o admin real)
-    // Sin embargo, para que el Admin vea los datos de TODOS, en una app real se usa una colección global 'leads' con reglas de seguridad.
-    // Como pediste una app "100% lista" y sencilla, usaré una ruta global protegida por el appId para facilitar la gestión.
-    
-    const leadsRef = collection(db, 'artifacts', appId, 'public', 'data', 'leads');
-    const agentsRef = collection(db, 'artifacts', appId, 'public', 'data', 'agents');
+    // CRITICAL: Strict PRIVATE path to allow persistence between Client/Admin views without Auth change
+    const leadsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'leads');
+    const agentsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'agents');
     
     const u1 = onSnapshot(query(leadsRef), (s) => setLeads(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0))));
     const u2 = onSnapshot(query(agentsRef), (s) => setAgents(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config')).then(s => s.exists() && setAiConfig(prev => ({...prev, ...s.data()})));
+    getDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config')).then(s => s.exists() && setAiConfig(prev => ({...prev, ...s.data()})));
     return () => { u1(); u2(); };
   }, [user]);
 
-  // LOGIN REAL DE FIREBASE (PRODUCCIÓN)
-  const handleLogin = async (e) => { 
+  // MODIFIED: Simulated Login for persistence
+  const handleLogin = (e) => { 
       e.preventDefault(); 
-      setLoginError(null);
-      try { 
-          await signInWithEmailAndPassword(auth, email, password); 
+      if (email === 'admin@demo.com' && password === '123456') { // Accepts specific email, strict password for demo feel
           setIsAdmin(true); 
           setShowLogin(false); 
           setView('admin'); 
-      } catch (err) { 
-          console.error(err);
-          setLoginError("Credenciales inválidas. Verifica tu correo y contraseña."); 
+      } else { 
+          setLoginError("Credenciales inválidas (Prueba: admin@demo.com / 123456)"); 
       } 
   };
   
-  const handleLogout = async () => { 
-      await signOut(auth); 
-      setIsAdmin(false); 
-      setView('landing'); 
-      // Reiniciar como anónimo para permitir chat
-      await signInAnonymously(auth);
-  };
+  const handleLogout = async () => { setIsAdmin(false); setView('landing'); };
   
-  const saveLeadToDb = async (d) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'leads'), { ...d, createdAt: serverTimestamp(), status: 'active' }); };
-  const saveConfig = async (c) => { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), c); setAiConfig(c); };
+  const saveLeadToDb = async (d) => { if(!user) return; await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'leads'), { ...d, createdAt: serverTimestamp(), status: 'active' }); };
+  const saveConfig = async (c) => { if(!user) return; await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), c); setAiConfig(c); };
   
-  const deleteLead = async (ids) => { const batch = writeBatch(db); (Array.isArray(ids)?ids:[ids]).forEach(id => batch.delete(doc(db, 'artifacts', appId, 'public', 'data', 'leads', id))); await batch.commit(); };
-  const updateStatus = async (ids, st) => { const batch = writeBatch(db); (Array.isArray(ids)?ids:[ids]).forEach(id => batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'leads', id), { status: st })); await batch.commit(); };
+  const deleteLead = async (ids) => { if(!user) return; const batch = writeBatch(db); (Array.isArray(ids)?ids:[ids]).forEach(id => batch.delete(doc(db, 'artifacts', appId, 'users', user.uid, 'leads', id))); await batch.commit(); };
+  const updateStatus = async (ids, st) => { if(!user) return; const batch = writeBatch(db); (Array.isArray(ids)?ids:[ids]).forEach(id => batch.update(doc(db, 'artifacts', appId, 'users', user.uid, 'leads', id), { status: st })); await batch.commit(); };
   
   const assignAgent = async (ids, agent) => {
+      if(!user) return;
       const batch = writeBatch(db);
       (Array.isArray(ids)?ids:[ids]).forEach(id => {
-          batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'leads', id), { assignedAgentId: agent.id, assignedAgentName: agent.name, assignedAt: serverTimestamp(), status: 'assigned' });
+          batch.update(doc(db, 'artifacts', appId, 'users', user.uid, 'leads', id), { assignedAgentId: agent.id, assignedAgentName: agent.name, assignedAt: serverTimestamp(), status: 'assigned' });
           const l = leads.find(x => x.id === id);
           if (l) {
               const url = aiConfig.assignmentWebhookUrl || aiConfig.webhookUrl;
@@ -807,9 +796,10 @@ function App() {
   };
 
   const unassignAgent = async (ids) => {
+      if(!user) return;
       const batch = writeBatch(db);
       (Array.isArray(ids)?ids:[ids]).forEach(id => {
-          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'leads', id);
+          const ref = doc(db, 'artifacts', appId, 'users', user.uid, 'leads', id);
           batch.update(ref, { 
               assignedAgentId: deleteField(), 
               assignedAgentName: deleteField(),
@@ -892,6 +882,7 @@ function App() {
             </form>
             <div className="mt-4 text-center">
                 <p className="text-[10px] text-slate-400">Este sistema monitorea todos los accesos.</p>
+                <p className="text-[9px] text-slate-300 mt-1">Demo Login: admin@demo.com / 123456</p>
             </div>
           </div>
         </div>
