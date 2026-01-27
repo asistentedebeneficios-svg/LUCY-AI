@@ -6,26 +6,35 @@
     <title>Asistente de Beneficios | Lucy</title>
     <link rel="icon" type="image/jpeg" href="https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg">
     
-    <!-- Hoja de Estilos Personalizada -->
+    <!-- Hoja de Estilos -->
     <link rel="stylesheet" href="styles.css">
 
-    <!-- Tailwind CSS (Framework de diseño) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
-            theme: { extend: { fontFamily: { sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'] } } }
+            theme: { 
+                extend: { 
+                    fontFamily: { 
+                        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'] 
+                    } 
+                } 
+            }
         }
     </script>
     
-    <!-- Compilador Babel (Para que funcione React en el navegador sin build) -->
+    <!-- Babel para React -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- React & ReactDOM -->
+    <!-- Nota: En producción real, considera usar versiones de producción (.production.min.js) para mejor rendimiento -->
+    <!-- Pero para este setup simple, estas versiones de desarrollo son más fáciles de depurar si algo falla -->
 </head>
 <body>
-    <!-- Contenedor Principal de la App -->
     <div id="root"></div>
 
-    <!-- Carga del Código Lógico (JavaScript/React) -->
-    <!-- Nota: data-type="module" es importante para los imports -->
+    <!-- Carga de la App -->
+    <!-- data-type="module" es crucial para que los imports dentro de app.js funcionen -->
     <script type="text/babel" data-type="module" src="app.js"></script>
 </body>
 </html>
