@@ -1,35 +1,101 @@
-import React, { useState, useEffect, useMemo, useRef } from 'https://esm.sh/react@18.2.0';
-import { MessageSquare, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, Calendar, Copy, Clock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share, Link as LinkIcon, Power, Briefcase, Plus, Mail, UserMinus, BarChart3, TrendingUp, Filter, ArrowLeft, Printer, MinusCircle, PlusCircle } from 'https://esm.sh/lucide-react@0.344.0';
-import { collection, addDoc, doc, updateDoc, serverTimestamp, deleteDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
-import { db } from './services.js';
-import { IMAGES, APP_ID } from './config.js';
-import { formatFirestoreDate, getJsDate, cleanAiMessage, getAgentStatus, fetchGeminiWithRetry, formatScheduleForAI } from './services.js';
+import React, { useState, useEffect, useMemo } from 'https://esm.sh/react@18.2.0';
+import { MessageSquare, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share, Link as LinkIcon, Power, Briefcase, Plus, Mail, UserMinus, BarChart3, TrendingUp, Filter, ArrowLeft, Printer, AlertCircle, MinusCircle, PlusCircle } from 'https://esm.sh/lucide-react@0.344.0';
+import { collection, addDoc, doc, updateDoc, serverTimestamp, deleteDoc, writeBatch, deleteField, query, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
-// --- ELEMENTOS DE UI REUTILIZABLES ---
+// Importamos la configuración y lógica desde data.js
+import { db, auth, APP_ID, IMAGES, DEFAULT_SCHEDULE, formatFirestoreDate, getJsDate, cleanAiMessage, getAgentStatus, fetchGeminiWithRetry, formatScheduleForAI } from './data.js';
+
+// --- ELEMENTOS UI ---
 export const LucyAvatar = ({ className = "w-10 h-10" }) => (
   <img src={IMAGES.lucy} alt="Lucy" className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"; }} />
 );
 
 export const ProtectionLogo = ({ size = 24 }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
 export const BrainAvatar = ({ className = "w-10 h-10" }) => (<div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}><Sparkles size={20} strokeWidth={2} /></div>);
-const RichText = ({ content }) => <span className="text-sm leading-relaxed">{content.split(/(\*\*.*?\*\*)/g).map((part, i) => part.startsWith('**') ? <strong key={i} className="text-slate-900 font-bold">{part.slice(2, -2)}</strong> : part)}</span>;
 
 // --- VISTAS ---
 
 export function LandingView({ onStartChat, onOpenLogin, isAdmin, onGoToAdmin }) {
-  // (Código de LandingView completo - mismo que tenías)
-  const testimonials = [{ text: "Me ayudaron a encontrar justo lo que necesitaba para mi familia.", author: "María G." }, { text: "Excelente atención, muy rápidos y amables.", author: "José R." }, { text: "Me siento mucho más tranquila con mi cobertura.", author: "Ana P." }];
+  const testimonials = [
+      { text: "Me ayudaron a encontrar justo lo que necesitaba para mi familia.", author: "María G." },
+      { text: "Excelente atención, muy rápidos y amables.", author: "José R." },
+      { text: "Me siento mucho más tranquila con mi cobertura.", author: "Ana P." },
+      { text: "Muy fácil de usar, ¡recomendado!", author: "Carlos M." },
+      { text: "La mejor asesoría que he recibido.", author: "Sofia L." }
+  ];
+  const [index, setIndex] = useState(0);
+  const [itemsToShow, setItemsToShow] = useState(1);
+
+  // Responsive: cuantos testimonios mostrar según ancho de pantalla
+  useEffect(() => {
+      const handleResize = () => {
+          if (window.innerWidth >= 1024) setItemsToShow(3); // PC
+          else if (window.innerWidth >= 768) setItemsToShow(2); // Tablet
+          else setItemsToShow(1); // Movil
+      };
+      handleResize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Rotación automática
+  useEffect(() => {
+      const interval = setInterval(() => {
+          setIndex((prevIndex) => (prevIndex + 1) % testimonials.length);
+      }, 4000);
+      return () => clearInterval(interval);
+  }, [testimonials.length]);
+
+  const getVisibleTestimonials = () => {
+      let visible = [];
+      for (let i = 0; i < itemsToShow; i++) {
+          visible.push(testimonials[(index + i) % testimonials.length]);
+      }
+      return visible;
+  };
+
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-white">
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-5xl mx-auto space-y-10 animate-in slide-up">
+        
         <div className="space-y-6 max-w-2xl mx-auto">
-             <div className="relative mb-6 inline-block"><div className="absolute inset-0 bg-rose-200 rounded-full blur-3xl opacity-40 animate-pulse"></div><LucyAvatar className="w-32 h-32 border-4 border-white shadow-2xl relative z-10" /><div className="absolute -bottom-2 -right-2 bg-white p-2 rounded-full shadow-lg z-20"><Heart size={24} className="text-rose-500 fill-current animate-bounce" /></div></div>
-            <h1 className="text-4xl md:text-6xl font-bold text-slate-900 tracking-tight leading-tight">Hola, soy <span className="text-rose-500">Lucy</span> 👋</h1>
-            <p className="text-lg md:text-xl text-slate-600 font-medium leading-relaxed">Su asistente experta en <span className="text-slate-900 font-bold">Protección Familiar</span>.<br/><span className="text-slate-400 font-normal text-base">Hablemos con confianza.</span></p>
-            <button onClick={onStartChat} className="group relative inline-flex items-center gap-3 bg-slate-900 text-white px-10 py-5 rounded-2xl font-semibold text-xl shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 w-full md:w-auto justify-center mt-4"><span>Hablar con Lucy</span><MessageSquare size={24} /></button>
+             <div className="relative mb-6 inline-block">
+                <div className="absolute inset-0 bg-rose-200 rounded-full blur-3xl opacity-40 animate-pulse"></div>
+                <LucyAvatar className="w-32 h-32 border-4 border-white shadow-2xl relative z-10" />
+                <div className="absolute -bottom-2 -right-2 bg-white p-2 rounded-full shadow-lg z-20"><Heart size={24} className="text-rose-500 fill-current animate-bounce" /></div>
+            </div>
+            
+            <h1 className="text-4xl md:text-6xl font-bold text-slate-900 tracking-tight leading-tight">
+                Hola, soy <span className="text-rose-500">Lucy</span> 👋
+            </h1>
+            <p className="text-lg md:text-xl text-slate-600 font-medium leading-relaxed">
+                Su asistente experta en <span className="text-slate-900 font-bold">Protección Familiar</span>.
+                <br/><span className="text-slate-400 font-normal text-base">Hablemos con confianza, a su ritmo y sin complicaciones.</span>
+            </p>
+            
+            <button onClick={onStartChat} className="group relative inline-flex items-center gap-3 bg-slate-900 text-white px-10 py-5 rounded-2xl font-semibold text-xl shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 w-full md:w-auto justify-center mt-4">
+                <span>Hablar con Lucy</span>
+                <MessageSquare size={24} className="group-hover:translate-x-1 transition-transform" />
+            </button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mt-8">
-            {testimonials.map((t, i) => (<div key={i} className="bg-slate-50 p-6 rounded-3xl border border-slate-100 hover:shadow-md transition-all text-left"><div className="flex text-yellow-400 mb-3"><Star size={14} fill="currentColor"/><Star size={14} fill="currentColor"/><Star size={14} fill="currentColor"/><Star size={14} fill="currentColor"/><Star size={14} fill="currentColor"/></div><p className="text-slate-700 italic mb-4 text-sm leading-relaxed">"{t.text}"</p><div className="text-xs font-bold text-slate-900 uppercase tracking-wide">- {t.author}</div></div>))}
+
+        {/* CARRUSEL DE TESTIMONIOS */}
+        <div className="w-full mt-8 overflow-hidden">
+            <div className="flex gap-4 justify-center transition-all duration-500 ease-in-out">
+                {getVisibleTestimonials().map((t, i) => (
+                    <div key={`${index}-${i}`} className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex-1 min-w-[280px] max-w-xs shadow-sm animate-in fade-in">
+                        <div className="flex gap-1 text-yellow-400 mb-2 justify-center"><Star size={12} fill="currentColor"/><Star size={12} fill="currentColor"/><Star size={12} fill="currentColor"/><Star size={12} fill="currentColor"/><Star size={12} fill="currentColor"/></div>
+                        <p className="text-sm text-slate-600 italic mb-3">"{t.text}"</p>
+                        <div className="text-xs font-bold text-slate-800">- {t.author}</div>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 w-full max-w-md pt-8 border-t border-slate-100">
+            {[ {icon: <UserCheck size={20}/>, text: "Licenciados", color: "text-blue-600 bg-blue-50"}, {icon: <ShieldCheck size={20}/>, text: "100% Seguro", color: "text-green-600 bg-green-50"}, {icon: <Zap size={20}/>, text: "Rápido", color: "text-yellow-600 bg-yellow-50"}, {icon: <Activity size={20}/>, text: "Sin Examen", color: "text-purple-600 bg-purple-50"}, {icon: <Heart size={20}/>, text: "Soporte", color: "text-pink-600 bg-pink-50"}, {icon: <PhoneOff size={20}/>, text: "Sin Spam", color: "text-red-600 bg-red-50"} ].map((f, i) => (
+                <div key={i} className="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-slate-50 transition-colors"><div className={`p-2.5 rounded-xl ${f.color}`}>{f.icon}</div><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{f.text}</span></div>
+            ))}
         </div>
       </div>
       <div className="p-6 text-center border-t border-slate-50 bg-white">
@@ -57,13 +123,14 @@ export function LeadModal({ lead, onClose }) {
 }
 
 export function ReportsView({ leads, agents, initialAgent }) {
-    // (Mismo código de reportes que ya validaste)
     const [dateRange, setDateRange] = useState('month'); 
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
     const [selectedAgentStats, setSelectedAgentStats] = useState(null); 
     const [viewLead, setViewLead] = useState(null);
+
     useEffect(() => { if (initialAgent && agents.length > 0) setSelectedAgentStats({ name: initialAgent.name, count: 0 }); }, [initialAgent]);
+
     const filteredLeads = useMemo(() => {
         const now = new Date(); let start = new Date(0); let end = new Date(); 
         if (dateRange === 'week') { start = new Date(); start.setDate(now.getDate() - 7); } 
@@ -71,13 +138,28 @@ export function ReportsView({ leads, agents, initialAgent }) {
         else if (dateRange === 'custom' && customStart) { start = new Date(customStart); if (customEnd) end = new Date(customEnd); end.setHours(23, 59, 59); }
         return leads.filter(l => { const d = getJsDate(l.createdAt); return d >= start && d <= end; });
     }, [leads, dateRange, customStart, customEnd]);
+
     const stats = useMemo(() => {
         const total = filteredLeads.length; const assigned = filteredLeads.filter(l => l.status === 'assigned').length; const archived = filteredLeads.filter(l => l.status === 'archived').length; const active = filteredLeads.filter(l => (!l.status || l.status === 'active')).length; const conversionRate = total > 0 ? Math.round((assigned / total) * 100) : 0;
         const agentStats = {}; filteredLeads.filter(l => l.status === 'assigned' && l.assignedAgentName).forEach(l => { agentStats[l.assignedAgentName] = (agentStats[l.assignedAgentName] || 0) + 1; });
         const sortedAgents = Object.entries(agentStats).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
         return { total, assigned, archived, active, conversionRate, sortedAgents };
     }, [filteredLeads]);
-    const agentLeads = useMemo(() => { if (!selectedAgentStats) return []; return filteredLeads.filter(l => l.assignedAgentName === selectedAgentStats.name); }, [filteredLeads, selectedAgentStats]);
+
+    const agentLeads = useMemo(() => {
+        if (!selectedAgentStats) return [];
+        return filteredLeads.filter(l => l.assignedAgentName === selectedAgentStats.name);
+    }, [filteredLeads, selectedAgentStats]);
+
+    const copyAgentReport = () => {
+        if (!selectedAgentStats) return;
+        let report = `REPORTE DE ASIGNACIÓN\nAGENTE: ${selectedAgentStats.name}\nTOTAL: ${agentLeads.length}\n\nDETALLE:\n`;
+        agentLeads.forEach((l, i) => { const date = l.assignedAt ? new Date(l.assignedAt.seconds * 1000).toLocaleDateString() : 'N/A'; report += `${i+1}. ${l.nombre || 'Anónimo'} | Asignado: ${date} | Tel: ${l.telefono || 'N/A'}\n`; });
+        const textArea = document.createElement("textarea"); textArea.value = report; document.body.appendChild(textArea); textArea.select();
+        try { document.execCommand('copy'); alert("¡Reporte copiado!"); } catch (e) {}
+        document.body.removeChild(textArea);
+    };
+
     return (
         <div className="max-w-5xl mx-auto animate-in fade-in space-y-6">
             {viewLead && <LeadModal lead={viewLead} onClose={() => setViewLead(null)} />}
@@ -85,55 +167,47 @@ export function ReportsView({ leads, agents, initialAgent }) {
                 <div className="flex items-center gap-2"><div className="bg-blue-100 text-blue-600 p-2 rounded-xl"><BarChart3 size={20}/></div><h2 className="text-lg font-bold text-slate-800">Reportes de Rendimiento</h2></div>
                 <div className="flex flex-wrap gap-2 items-center"><select value={dateRange} onChange={(e) => setDateRange(e.target.value)} className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-lg p-2 outline-none"><option value="week">Últimos 7 días</option><option value="month">Este Mes</option><option value="all">Todo el Historial</option><option value="custom">Rango Personalizado</option></select>{dateRange === 'custom' && (<div className="flex gap-2 items-center animate-in fade-in"><input type="date" value={customStart} onChange={(e)=>setCustomStart(e.target.value)} className="bg-white border rounded px-2 py-1 text-xs"/><span className="text-slate-400">-</span><input type="date" value={customEnd} onChange={(e)=>setCustomEnd(e.target.value)} className="bg-white border rounded px-2 py-1 text-xs"/></div>)}</div>
             </div>
-            {selectedAgentStats ? (
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-in slide-up">
-                    <div className="flex justify-between items-start mb-6"><div><button onClick={() => setSelectedAgentStats(null)} className="text-xs text-slate-500 hover:text-black mb-2 flex items-center gap-1 transition-colors"><ArrowLeft size={14}/> Volver al ranking</button><h2 className="text-2xl font-bold text-slate-800">{selectedAgentStats.name}</h2><p className="text-sm text-slate-500 mt-1">Total Asignados: <strong className="text-black text-lg">{agentLeads.length}</strong></p></div></div>
-                    <div className="overflow-hidden border border-gray-100 rounded-xl"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-[10px] uppercase text-slate-400 font-bold border-b border-gray-100"><tr><th className="px-6 py-3">Fecha Asignación</th><th className="px-6 py-3">Nombre Lead</th><th className="px-6 py-3">Contacto</th></tr></thead><tbody className="divide-y divide-gray-50 bg-white">{agentLeads.map((l, idx) => (<tr key={l.id} onClick={() => setViewLead(l)} className="hover:bg-blue-50/50 transition-colors cursor-pointer group"><td className="px-6 py-4 text-slate-500 font-mono text-xs">{l.assignedAt ? new Date(l.assignedAt.seconds * 1000).toLocaleDateString() : '-'}</td><td className="px-6 py-4 font-bold text-slate-800">{l.nombre || 'Anónimo'}</td><td className="px-6 py-4 text-slate-500">{l.telefono || '-'}</td></tr>))}</tbody></table>{agentLeads.length === 0 && <div className="p-10 text-center text-slate-400 text-sm italic">No hay leads.</div>}</div>
-                </div>
-            ) : (
+            {selectedAgentStats ? (<div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 animate-in slide-up"><div className="flex justify-between items-start mb-6"><div><button onClick={() => setSelectedAgentStats(null)} className="text-xs text-slate-500 hover:text-black mb-2 flex items-center gap-1 transition-colors"><ArrowLeft size={14}/> Volver al ranking</button><h2 className="text-2xl font-bold text-slate-800">{selectedAgentStats.name}</h2><p className="text-sm text-slate-500 mt-1">Total Asignados: <strong className="text-black text-lg">{agentLeads.length}</strong></p></div><button onClick={copyAgentReport} className="flex items-center gap-2 px-5 py-2.5 bg-black text-white rounded-xl text-xs font-bold hover:bg-slate-800 shadow-md transition-all active:scale-95"><Copy size={14}/> Copiar Reporte</button></div><div className="overflow-hidden border border-gray-100 rounded-xl"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-[10px] uppercase text-slate-400 font-bold border-b border-gray-100"><tr><th className="px-6 py-3">Fecha Asignación</th><th className="px-6 py-3">Nombre Lead</th><th className="px-6 py-3">Contacto</th><th className="px-6 py-3 text-center">Detalles</th></tr></thead><tbody className="divide-y divide-gray-50 bg-white">{agentLeads.map((l, idx) => (<tr key={l.id} onClick={() => setViewLead(l)} className="hover:bg-blue-50/50 transition-colors cursor-pointer group"><td className="px-6 py-4 text-slate-500 font-mono text-xs">{l.assignedAt ? new Date(l.assignedAt.seconds * 1000).toLocaleDateString() : '-'}</td><td className="px-6 py-4 font-bold text-slate-800">{l.nombre || 'Anónimo'}</td><td className="px-6 py-4 text-slate-500">{l.telefono || '-'}</td><td className="px-6 py-4 text-center"><span className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-700 transition-colors">Ver Ficha</span></td></tr>))}</tbody></table>{agentLeads.length === 0 && <div className="p-10 text-center text-slate-400 text-sm italic">No hay leads asignados.</div>}</div></div>) : (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="text-xs font-bold text-slate-400 uppercase mb-1">Total Leads</div><div className="text-3xl font-bold text-slate-800">{stats.total}</div></div>
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="text-xs font-bold text-slate-400 uppercase mb-1">Asignados</div><div className="text-3xl font-bold text-blue-600">{stats.assigned}</div></div>
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="text-xs font-bold text-slate-400 uppercase mb-1">Activos</div><div className="text-3xl font-bold text-orange-500">{stats.active}</div></div>
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="text-xs font-bold text-slate-400 uppercase mb-1">Archivados</div><div className="text-3xl font-bold text-slate-400">{stats.archived}</div></div>
+                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="text-xs font-bold text-slate-400 uppercase mb-1">Total Leads</div><div className="text-3xl font-bold text-slate-800">{stats.total}</div></div><div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="text-xs font-bold text-slate-400 uppercase mb-1">Asignados</div><div className="text-3xl font-bold text-blue-600">{stats.assigned}</div></div><div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="text-xs font-bold text-slate-400 uppercase mb-1">Activos</div><div className="text-3xl font-bold text-orange-500">{stats.active}</div></div><div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="text-xs font-bold text-slate-400 uppercase mb-1">Archivados</div><div className="text-3xl font-bold text-slate-400">{stats.archived}</div></div>
                 </div>
+            )}
+            {!selectedAgentStats && (
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="md:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-100"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Award size={18} className="text-yellow-500"/> Ranking de Asignación</h3><div className="space-y-3">{stats.sortedAgents.map((agent, i) => (<div key={i} onClick={() => setSelectedAgentStats(agent)} className="flex items-center gap-4 group cursor-pointer hover:bg-slate-50 p-2 -mx-2 rounded-xl transition-all"><div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs bg-slate-100 text-slate-600`}>#{i+1}</div><div className="flex-1"><div className="flex justify-between mb-1.5"><span className="text-sm font-bold text-slate-700 group-hover:text-blue-600">{agent.name}</span><span className="text-xs font-bold text-slate-500">{agent.count} leads</span></div><div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{ width: `${(agent.count / stats.assigned) * 100}%` }}></div></div></div></div>))}</div></div>
+                 </div>
             )}
         </div>
     );
 }
 
 export function LeadsList({ leads, agents, onDeleteLead, onUpdateStatus, onAssignAgent, onUnassign, isArchive, searchTerm }) {
-    // (Mismo código de LeadsList)
-    const [selectedLead, setSelectedLead] = useState(null);
-    const [leadToDelete, setLeadToDelete] = useState(null); 
-    const [selectedIds, setSelectedIds] = useState([]); 
-    const [showAssignModal, setShowAssignModal] = useState(false);
-    const [selectedAgentForAssign, setSelectedAgentForAssign] = useState(null);
-    const [assignSuccess, setAssignSuccess] = useState(false);
-    const [agentSearch, setAgentSearch] = useState('');
-
-    const filteredLeads = leads.filter(l => String(l.nombre||'').toLowerCase().includes(searchTerm.toLowerCase()));
-    const handleSelectAll = (e) => { if (e.target.checked) setSelectedIds(filteredLeads.map(l => l.id)); else setSelectedIds([]); };
-    const handleSelectOne = (id) => { setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); };
-    const handleOpenAssignModal = () => { if (selectedIds.length > 0) { setShowAssignModal(true); setAssignSuccess(false); setAgentSearch(''); } };
-    const handleBulkUnassign = () => { if (selectedIds.length > 0) { onUnassign(selectedIds); setSelectedIds([]); } };
-    const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
-    const handleBulkDelete = () => { if (selectedIds.length > 0) setLeadToDelete(selectedIds); };
-    const confirmAssign = async () => { if (selectedAgentForAssign && selectedIds.length > 0) { await onAssignAgent(selectedIds, selectedAgentForAssign); setAssignSuccess(true); setTimeout(() => { setShowAssignModal(false); setSelectedIds([]); setAssignSuccess(false); setSelectedAgentForAssign(null); }, 2000); } };
-    const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
-
-    return (
-        <div className="animate-in fade-in duration-500">
-             {/* Modales de Confirmacion y Asignación aqui (igual que antes) */}
-             {leadToDelete && <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center"><h3 className="font-bold text-lg mb-2">¿Eliminar?</h3><div className="flex gap-3"><button onClick={()=>setLeadToDelete(null)} className="flex-1 py-2 bg-slate-100 rounded-lg">Cancelar</button><button onClick={confirmDelete} className="flex-1 py-2 bg-red-500 text-white rounded-lg">Eliminar</button></div></div></div>}
-             {showAssignModal && <div className="fixed inset-0 z-[130] bg-black/30 backdrop-blur-sm flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-md relative flex flex-col max-h-[80vh]">{assignSuccess ? <div className="text-center py-8"><CheckCircle size={32} className="mx-auto text-green-500 mb-2"/><h3 className="font-bold text-xl">¡Asignado!</h3></div> : <><div className="flex justify-between mb-2"><h3 className="font-bold text-lg">Asignar</h3><button onClick={()=>setShowAssignModal(false)}><X size={20}/></button></div><div className="relative mb-3"><Search className="absolute left-3 top-2.5 text-gray-400" size={14}/><input autoFocus value={agentSearch} onChange={e=>setAgentSearch(e.target.value)} className="w-full pl-9 py-2 bg-slate-50 border rounded-xl text-xs outline-none" placeholder="Buscar agente..."/></div><div className="overflow-y-auto no-scrollbar flex-1 mb-4 space-y-2">{agents.filter(a=>a.name.toLowerCase().includes(agentSearch.toLowerCase())).map(agent=>(<div key={agent.id} onClick={()=>setSelectedAgentForAssign(agent)} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer border ${selectedAgentForAssign?.id===agent.id?'border-blue-500 bg-blue-50':'border-gray-100'}`}><div className="flex-1"><h4 className="font-bold text-sm">{agent.name}</h4></div></div>))}</div><button onClick={confirmAssign} disabled={!selectedAgentForAssign} className="w-full py-3 bg-black text-white rounded-xl font-medium text-sm disabled:opacity-50">Confirmar</button></>}</div></div>}
-             {selectedLead && <LeadModal lead={selectedLead} onClose={()=>setSelectedLead(null)} />}
-             
-             <div className="bg-white rounded-[24px] shadow-sm overflow-hidden border border-gray-100">
-                  {selectedIds.length > 0 && <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 flex justify-between items-center"><span className="text-xs font-bold text-blue-700">{selectedIds.length} seleccionados</span><div className="flex gap-2"><button onClick={handleOpenAssignModal} className="text-xs font-medium bg-blue-600 text-white px-3 py-1 rounded-lg">Asignar</button><button onClick={handleBulkUnassign} className="text-xs font-medium bg-orange-100 text-orange-700 px-3 py-1 rounded-lg">Desasignar</button><button onClick={handleBulkArchive} className="text-xs font-medium border border-blue-200 text-blue-600 px-3 py-1 rounded-lg">Archivar</button><button onClick={handleBulkDelete} className="text-xs font-medium border border-red-200 text-red-600 px-3 py-1 rounded-lg">Eliminar</button></div></div>}
-                  <table className="w-full text-left"><thead className="bg-[#FBFBFD] border-b border-gray-100 text-[10px] uppercase text-slate-400 font-bold"><tr><th className="px-4 py-4 w-12 text-center"><input type="checkbox" className="custom-checkbox" checked={filteredLeads.length>0 && selectedIds.length===filteredLeads.length} onChange={handleSelectAll} /></th><th className="px-4 py-4">Nombre</th><th className="px-4 py-4">Estado</th><th className="px-4 py-4">Resumen</th><th className="px-4 py-4 text-center">Acción</th></tr></thead><tbody className="divide-y divide-gray-50 text-sm">{filteredLeads.map(l=>(<tr key={l.id} onClick={()=>setSelectedLead(l)} className={`hover:bg-[#F5F5F7] cursor-pointer ${selectedIds.includes(l.id)?'bg-blue-50/50':''}`}><td className="px-4 py-4 text-center" onClick={e=>e.stopPropagation()}><input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(l.id)} onChange={()=>handleSelectOne(l.id)} /></td><td className="px-4 py-4"><div className="font-semibold text-slate-900">{l.nombre||'Anónimo'}</div><div className="text-xs text-slate-500">{l.email}</div></td><td className="px-4 py-4">{l.assignedAgentName?<span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">{l.assignedAgentName}</span>:<span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">Nuevo</span>}</td><td className="px-4 py-4 text-xs text-slate-500 truncate max-w-[200px]">{l.resumen_ai}</td><td className="px-4 py-4 text-center" onClick={e=>e.stopPropagation()}><div className="flex justify-center gap-2"><button onClick={()=>onUnassign(l.id)} className="p-2 text-slate-400 hover:text-orange-500"><UserMinus size={14}/></button><button onClick={()=>setLeadToDelete(l.id)} className="p-2 text-slate-400 hover:text-red-500"><Trash2 size={14}/></button></div></td></tr>))}</tbody></table>
-             </div>
-        </div>
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [leadToDelete, setLeadToDelete] = useState(null); 
+  const [selectedIds, setSelectedIds] = useState([]); 
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [selectedAgentForAssign, setSelectedAgentForAssign] = useState(null);
+  const [assignSuccess, setAssignSuccess] = useState(false);
+  const [agentSearch, setAgentSearch] = useState('');
+  const filteredLeads = leads.filter(l => String(l.nombre||'').toLowerCase().includes(searchTerm.toLowerCase()));
+  const handleSelectAll = (e) => { if (e.target.checked) setSelectedIds(filteredLeads.map(l => l.id)); else setSelectedIds([]); };
+  const handleSelectOne = (id) => { setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); };
+  const handleBulkDelete = () => { if (selectedIds.length > 0) setLeadToDelete(selectedIds); };
+  const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
+  const handleOpenAssignModal = () => { if (selectedIds.length > 0) { setShowAssignModal(true); setAssignSuccess(false); setAgentSearch(''); } };
+  const handleBulkUnassign = () => { if (selectedIds.length > 0) { onUnassign(selectedIds); setSelectedIds([]); } };
+  const confirmAssign = async () => { if (selectedAgentForAssign && selectedIds.length > 0) { await onAssignAgent(selectedIds, selectedAgentForAssign); setAssignSuccess(true); setTimeout(() => { setShowAssignModal(false); setSelectedIds([]); setAssignSuccess(false); setSelectedAgentForAssign(null); }, 2000); } };
+  const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
+  return (
+    <div className="animate-in fade-in duration-500">
+         {leadToDelete && <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center"><h3 className="font-bold text-lg mb-2">¿Eliminar?</h3><div className="flex gap-3"><button onClick={()=>setLeadToDelete(null)} className="flex-1 py-2 bg-slate-100 rounded-lg">Cancelar</button><button onClick={confirmDelete} className="flex-1 py-2 bg-red-500 text-white rounded-lg">Eliminar</button></div></div></div>}
+         {showAssignModal && <div className="fixed inset-0 z-[130] bg-black/30 backdrop-blur-sm flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-md relative flex flex-col max-h-[80vh]">{assignSuccess ? <div className="text-center py-8"><CheckCircle size={32} className="mx-auto text-green-500 mb-2"/><h3 className="font-bold text-xl">¡Asignado!</h3></div> : <><div className="flex justify-between mb-2"><h3 className="font-bold text-lg">Asignar</h3><button onClick={()=>setShowAssignModal(false)}><X size={20}/></button></div><div className="relative mb-3"><Search className="absolute left-3 top-2.5 text-gray-400" size={14}/><input autoFocus value={agentSearch} onChange={e=>setAgentSearch(e.target.value)} className="w-full pl-9 py-2 bg-slate-50 border rounded-xl text-xs outline-none" placeholder="Buscar agente..."/></div><div className="overflow-y-auto no-scrollbar flex-1 mb-4 space-y-2">{agents.filter(a=>a.name.toLowerCase().includes(agentSearch.toLowerCase())).map(agent=>(<div key={agent.id} onClick={()=>setSelectedAgentForAssign(agent)} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer border ${selectedAgentForAssign?.id===agent.id?'border-blue-500 bg-blue-50':'border-gray-100'}`}><div className="flex-1"><h4 className="font-bold text-sm">{agent.name}</h4></div></div>))}</div><button onClick={confirmAssign} disabled={!selectedAgentForAssign} className="w-full py-3 bg-black text-white rounded-xl font-medium text-sm disabled:opacity-50">Confirmar</button></>}</div></div>}
+         {selectedLead && <LeadModal lead={selectedLead} onClose={()=>setSelectedLead(null)} />}
+         <div className="bg-white rounded-[24px] shadow-sm overflow-hidden border border-gray-100">
+              {selectedIds.length > 0 && <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 flex justify-between items-center"><span className="text-xs font-bold text-blue-700">{selectedIds.length} seleccionados</span><div className="flex gap-2"><button onClick={handleOpenAssignModal} className="text-xs font-medium bg-blue-600 text-white px-3 py-1 rounded-lg">Asignar</button><button onClick={handleBulkUnassign} className="text-xs font-medium bg-orange-100 text-orange-700 px-3 py-1 rounded-lg">Desasignar</button><button onClick={handleBulkArchive} className="text-xs font-medium border border-blue-200 text-blue-600 px-3 py-1 rounded-lg">Archivar</button><button onClick={handleBulkDelete} className="text-xs font-medium border border-red-200 text-red-600 px-3 py-1 rounded-lg">Eliminar</button></div></div>}
+              <table className="w-full text-left"><thead className="bg-[#FBFBFD] border-b border-gray-100 text-[10px] uppercase text-slate-400 font-bold"><tr><th className="px-4 py-4 w-12 text-center"><input type="checkbox" className="custom-checkbox" checked={filteredLeads.length>0 && selectedIds.length===filteredLeads.length} onChange={handleSelectAll} /></th><th className="px-4 py-4">Nombre</th><th className="px-4 py-4">Estado</th><th className="px-4 py-4">Resumen</th><th className="px-4 py-4 text-center">Acción</th></tr></thead><tbody className="divide-y divide-gray-50 text-sm">{filteredLeads.map(l=>(<tr key={l.id} onClick={()=>setSelectedLead(l)} className={`hover:bg-[#F5F5F7] cursor-pointer ${selectedIds.includes(l.id)?'bg-blue-50/50':''}`}><td className="px-4 py-4 text-center" onClick={e=>e.stopPropagation()}><input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(l.id)} onChange={()=>handleSelectOne(l.id)} /></td><td className="px-4 py-4"><div className="font-semibold text-slate-900">{l.nombre||'Anónimo'}</div><div className="text-xs text-slate-500">{l.email}</div></td><td className="px-4 py-4">{l.assignedAgentName?<span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">{l.assignedAgentName}</span>:<span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">Nuevo</span>}</td><td className="px-4 py-4 text-xs text-slate-500 truncate max-w-[200px]">{l.resumen_ai}</td><td className="px-4 py-4 text-center" onClick={e=>e.stopPropagation()}><div className="flex justify-center gap-2"><button onClick={()=>onUnassign(l.id)} className="p-2 text-slate-400 hover:text-orange-500"><UserMinus size={14}/></button><button onClick={()=>setLeadToDelete(l.id)} className="p-2 text-slate-400 hover:text-red-500"><Trash2 size={14}/></button></div></td></tr>))}</tbody></table>
+         </div>
+    </div>
   );
 }
 
@@ -143,7 +217,7 @@ export function AgentsManager({ agents, onViewReport }) {
     const [saving, setSaving] = useState(false);
     const [agentToDelete, setAgentToDelete] = useState(null);
 
-    // Guardado corregido a ruta PÚBLICA
+    // FIXED: Save to PUBLIC path
     const handleSaveAgent = async (e) => {
         e.preventDefault(); setSaving(true);
         try {
@@ -154,15 +228,11 @@ export function AgentsManager({ agents, onViewReport }) {
         } catch (error) { console.error(error); }
         setSaving(false);
     };
-    
-    const confirmDeleteAgent = async () => {
-        if (!agentToDelete) return;
-        try { await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'agents', agentToDelete.id)); setAgentToDelete(null); } catch (error) {}
-    };
+
+    const confirmDeleteAgent = async () => { if (!agentToDelete) return; try { await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'agents', agentToDelete.id)); setAgentToDelete(null); } catch (error) {} };
 
     return (
         <div className="max-w-5xl mx-auto animate-in fade-in">
-             {/* Modales y lista de agentes (mismo código) */}
              {agentToDelete && <div className="fixed inset-0 z-[150] bg-black/20 flex items-center justify-center p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center"><h3 className="font-bold text-lg mb-4">¿Eliminar?</h3><div className="flex gap-3"><button onClick={()=>setAgentToDelete(null)} className="flex-1 py-2 bg-slate-100 rounded-lg">Cancelar</button><button onClick={confirmDeleteAgent} className="flex-1 py-2 bg-red-500 text-white rounded-lg">Eliminar</button></div></div></div>}
              <div className="flex justify-between items-center mb-6"><h3 className="font-semibold text-lg text-[#1d1d1f]">Equipo</h3><button onClick={()=>{setCurrentAgent({name:'',phone:'',email:'',licenses:'',photoUrl:'',bio:''});setIsEditing(true);}} className="bg-black text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2"><Plus size={16}/> Nuevo</button></div>
              
@@ -189,11 +259,11 @@ export function AgentsManager({ agents, onViewReport }) {
 export function AdminBrain({ aiConfig, onSaveConfig }) {
   const [c, setC] = useState(aiConfig);
   const [saving, setSaving] = useState(false);
+  const [testStatus, setTestStatus] = useState({ url: '', type: '', msg: '' }); 
   const [saveMsg, setSaveMsg] = useState(null);
   
   useEffect(() => { setC(aiConfig); }, [aiConfig]);
 
-  // Manejo de turnos múltiples
   const handleDayToggle = (day) => { setC(p => { const n={...p}; if(!n.schedule[day]) n.schedule[day]={enabled:false,shifts:[]}; n.schedule[day].enabled=!n.schedule[day].enabled; if(n.schedule[day].enabled && (!n.schedule[day].shifts || n.schedule[day].shifts.length===0)) n.schedule[day].shifts=[{start:'09:00',end:'18:00'}]; return n; }); };
   const handleAddShift = (day) => { setC(p => { const n={...p}; n.schedule[day].shifts.push({start:'09:00',end:'18:00'}); return n; }); };
   const handleRemoveShift = (day, idx) => { setC(p => { const n={...p}; n.schedule[day].shifts.splice(idx,1); return n; }); };
@@ -205,56 +275,31 @@ export function AdminBrain({ aiConfig, onSaveConfig }) {
       setSaving(false); setTimeout(()=>setSaveMsg(null), 3000); 
   };
   
+  const testWebhook = async (url) => {
+      if(!url) return;
+      setTestStatus({ url, type: 'loading', msg: 'Enviando...' });
+      try {
+          await fetch(url, { method: 'POST', mode: 'no-cors', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ event: 'TEST', date: new Date().toISOString(), message: 'Prueba de conexión exitosa desde Lucy' }) });
+          setTestStatus({ url, type: 'success', msg: '¡Enviado! Revisa Zapier.' });
+          setTimeout(() => setTestStatus({ url: '', type: '', msg: '' }), 4000);
+      } catch(e) { setTestStatus({ url, type: 'error', msg: 'Error: ' + e.message }); }
+  }
+  
   const daysList = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
   return (
     <div className="max-w-4xl mx-auto animate-in fade-in space-y-8 pb-10">
        <div className="bg-white p-8 rounded-[24px] shadow-sm border border-gray-100 space-y-6">
            <div><h3 className="font-bold text-lg mb-2">Prompt (Cerebro)</h3><textarea value={c.systemPrompt} onChange={e=>setC({...c,systemPrompt:e.target.value})} className="w-full h-40 p-4 bg-slate-50 border rounded-xl text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none" /></div>
-           
-           <div>
-               <h3 className="font-bold text-lg mb-4">Horario Laboral</h3>
-               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4">
-                   {daysList.map(day => (
-                       <div key={day} className="flex flex-col md:flex-row md:items-start gap-4 border-b border-slate-200 pb-4 last:border-0 last:pb-0">
-                           <div className="flex items-center gap-3 w-32 pt-2"><input type="checkbox" checked={c.schedule?.[day]?.enabled} onChange={()=>handleDayToggle(day)} className="accent-black w-4 h-4"/><span className={`font-bold uppercase text-xs ${c.schedule?.[day]?.enabled?'text-slate-900':'text-slate-400'}`}>{day}</span></div>
-                           <div className="flex-1 space-y-2">
-                               {c.schedule?.[day]?.enabled ? (
-                                   <>
-                                       {c.schedule[day].shifts?.map((shift, idx) => (
-                                           <div key={idx} className="flex items-center gap-2">
-                                               <input type="time" value={shift.start} onChange={e=>handleTimeChange(day,idx,'start',e.target.value)} className="bg-white border rounded p-1 text-xs w-24 text-center"/>
-                                               <span className="text-xs text-slate-400">a</span>
-                                               <input type="time" value={shift.end} onChange={e=>handleTimeChange(day,idx,'end',e.target.value)} className="bg-white border rounded p-1 text-xs w-24 text-center"/>
-                                               <button onClick={()=>handleRemoveShift(day,idx)} className="text-slate-400 hover:text-red-500"><MinusCircle size={16}/></button>
-                                           </div>
-                                       ))}
-                                       <button onClick={()=>handleAddShift(day)} className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"><PlusCircle size={12}/> Agregar Turno</button>
-                                   </>
-                               ) : <span className="text-xs text-slate-400 italic">Cerrado</span>}
-                           </div>
-                       </div>
-                   ))}
-               </div>
-           </div>
-
-           <div className="pt-4 border-t border-slate-100">
-               <h3 className="font-bold text-lg mb-4">Webhooks</h3>
-               <div className="grid md:grid-cols-2 gap-4">
-                   <input placeholder="Webhook Nuevo Lead" value={c.webhookUrl || ''} onChange={e=>setC({...c,webhookUrl:e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl text-xs"/>
-                   <input placeholder="Webhook Asignación Agente" value={c.assignmentWebhookUrl || ''} onChange={e=>setC({...c,assignmentWebhookUrl:e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl text-xs"/>
-               </div>
-           </div>
-
-           <button onClick={save} disabled={saving} className="w-full bg-black text-white font-bold py-4 rounded-xl shadow-lg hover:bg-slate-800 transition-all">{saving ? "Guardando..." : "Guardar Cambios"}</button>
-           {saveMsg && <div className="text-center text-green-600 text-xs font-bold animate-in fade-in">{saveMsg}</div>}
+           <div><h3 className="font-bold text-lg mb-4">Horario Laboral</h3><div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4">{daysList.map(day => (<div key={day} className="flex flex-col md:flex-row md:items-start gap-4 border-b border-slate-200 pb-4 last:border-0 last:pb-0"><div className="flex items-center gap-3 w-32 pt-2"><input type="checkbox" checked={c.schedule?.[day]?.enabled} onChange={()=>handleDayToggle(day)} className="accent-black w-4 h-4"/><span className={`font-bold uppercase text-xs ${c.schedule?.[day]?.enabled?'text-slate-900':'text-slate-400'}`}>{day}</span></div><div className="flex-1 space-y-2">{c.schedule?.[day]?.enabled ? (<>{c.schedule[day].shifts?.map((shift, idx) => (<div key={idx} className="flex items-center gap-2"><input type="time" value={shift.start} onChange={e=>handleTimeChange(day,idx,'start',e.target.value)} className="bg-white border rounded p-1 text-xs w-24 text-center"/><span className="text-xs text-slate-400">a</span><input type="time" value={shift.end} onChange={e=>handleTimeChange(day,idx,'end',e.target.value)} className="bg-white border rounded p-1 text-xs w-24 text-center"/><button onClick={()=>handleRemoveShift(day,idx)} className="text-slate-400 hover:text-red-500"><MinusCircle size={16}/></button></div>))}<button onClick={()=>handleAddShift(day)} className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"><PlusCircle size={12}/> Agregar Turno</button></>) : <span className="text-xs text-slate-400 italic">Cerrado</span>}</div></div>))}</div></div>
+           <div className="pt-4 border-t border-slate-100"><h3 className="font-bold text-lg mb-4">Webhooks</h3><div className="grid md:grid-cols-2 gap-4"><div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase">Nuevo Lead</label><div className="flex gap-2"><input placeholder="https://..." value={c.webhookUrl || ''} onChange={e=>setC({...c,webhookUrl:e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl text-xs"/><button onClick={()=>testWebhook(c.webhookUrl)} disabled={!c.webhookUrl} className="px-3 py-2 bg-slate-100 rounded-lg text-xs font-bold">Probar</button></div></div><div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase">Asignación Agente</label><div className="flex gap-2"><input placeholder="https://..." value={c.assignmentWebhookUrl || ''} onChange={e=>setC({...c,assignmentWebhookUrl:e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl text-xs"/><button onClick={()=>testWebhook(c.assignmentWebhookUrl)} disabled={!c.assignmentWebhookUrl} className="px-3 py-2 bg-slate-100 rounded-lg text-xs font-bold">Probar</button></div></div></div>{testStatus.msg && <div className={`text-center mt-2 text-xs font-bold ${testStatus.type==='error'?'text-red-500':'text-green-600'}`}>{testStatus.msg}</div>}</div>
+           <button onClick={save} disabled={saving} className="w-full bg-black text-white font-bold py-4 rounded-xl shadow-lg hover:bg-slate-800 transition-all">{saving ? "Guardando..." : "Guardar Cambios"}</button>{saveMsg && <div className="text-center text-green-600 text-xs font-bold animate-in fade-in">{saveMsg}</div>}
        </div>
     </div>
   );
 }
 
 export function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
-  // (Mismo código del chat, ahora conecta a la DB pública también para que el admin vea los leads)
   const [activeUsers, setActiveUsers] = useState(18);
   const [msgs, setMsgs] = useState([{ role: 'assistant', content: 'Hola, soy Lucy, su asistente personal. ¿En qué puedo ayudarle hoy?' }]);
   const [input, setInput] = useState('');
@@ -305,7 +350,7 @@ export function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
   return (
     <div className="max-w-[480px] mx-auto flex flex-col h-full bg-white rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden relative font-sans">
         <div className="bg-white/90 backdrop-blur-xl p-5 border-b border-gray-100 flex items-center justify-between z-10 sticky top-0">
-            <div className="flex items-center gap-4"><div className="relative"><LucyAvatar className="w-12 h-12" /></div><div><h2 className="font-bold text-[#1d1d1f] text-lg tracking-tight">Lucy</h2><div className="flex items-center gap-2"><div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full bg-green-500 animate-pulse ${ended ? 'bg-gray-400' : ''}`}></span><p className="text-xs text-[#86868b] font-medium">{ended ? 'Desconectado' : 'En Línea'}</p></div></div></div></div>
+            <div className="flex items-center gap-4"><div className="relative"><LucyAvatar className="w-12 h-12" /></div><div><h2 className="font-bold text-[#1d1d1f] text-lg tracking-tight">Lucy</h2><div className="flex items-center gap-2"><div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full bg-green-500 animate-pulse ${ended ? 'bg-gray-400' : ''}`}></span><p className="text-xs text-[#86868b] font-medium">{ended ? 'Desconectado' : 'En Línea'}</p></div>{!ended && <><span className="text-[#86868b] text-[10px]">•</span><p className="text-xs text-blue-600 font-medium">{activeUsers} personas consultando</p></>}</div></div></div>
             <button onClick={() => setShowShareModal(true)} className="text-slate-400 hover:text-blue-600 transition-colors p-2 flex flex-col items-center"><LinkIcon size={20} /><span className="text-[9px] uppercase font-bold">Link</span></button>
         </div>
 
@@ -334,7 +379,7 @@ export function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
 }
 
 // --- APP PRINCIPAL ---
-function App() {
+export function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('landing'); 
   const [isAdmin, setIsAdmin] = useState(false); 
@@ -366,12 +411,19 @@ function App() {
     const u2 = onSnapshot(query(agentsRef), (s) => setAgents(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     getDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config')).then(s => s.exists() && setAiConfig(prev => ({...prev, ...s.data()})));
     return () => { u1(); u2(); };
-  }, []); // Carga inicial única
+  }, []); 
 
   const handleLogin = async (e) => { 
       e.preventDefault(); 
-      try { await signInWithEmailAndPassword(auth, email, password); setIsAdmin(true); setShowLogin(false); setView('admin'); } 
-      catch (err) { setLoginError("Credenciales inválidas."); } 
+      setLoginError(null);
+      try { 
+          await signInWithEmailAndPassword(auth, email, password); 
+          setIsAdmin(true); 
+          setShowLogin(false); 
+          setView('admin'); 
+      } catch (err) { 
+          setLoginError("Credenciales inválidas."); 
+      } 
   };
   
   const handleLogout = async () => { await signOut(auth); setIsAdmin(false); setView('landing'); await signInAnonymously(auth); };
@@ -427,7 +479,12 @@ function App() {
 
       <main className="flex-1 relative overflow-hidden flex flex-col w-full max-w-7xl mx-auto">
         {view === 'landing' ? (
-            <LandingView onStartChat={() => setView('chat')} onOpenLogin={() => isAdmin ? setView('admin') : setShowLogin(true)} isAdmin={isAdmin} onGoToAdmin={() => setView('admin')} />
+            <LandingView 
+                onStartChat={() => setView('chat')} 
+                onOpenLogin={() => isAdmin ? setView('admin') : setShowLogin(true)} 
+                isAdmin={isAdmin}
+                onGoToAdmin={() => setView('admin')}
+            />
         ) : view === 'chat' ? (
             <div className="flex-1 flex flex-col p-4 md:p-6 overflow-hidden"><ClientChat aiConfig={aiConfig} onSaveLead={saveLeadToDb} onOpenLogin={() => setShowLogin(true)} /></div>
         ) : isAdmin ? (
@@ -440,6 +497,7 @@ function App() {
                     </div>
                     {adminTab!=='brain' && adminTab!=='team' && adminTab!=='reports' && <div className="relative group w-full md:w-auto"><Search className="absolute left-3 top-2.5 text-gray-400" size={14} /><input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-4 py-2 bg-white border-0 rounded-xl text-sm w-full md:w-64 outline-none shadow-sm" /></div>}
                 </div>
+                
                 {adminTab === 'active' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active'))} agents={agents} onDeleteLead={deleteLead} onUpdateStatus={updateStatus} onAssignAgent={assignAgent} onUnassign={unassignAgent} isArchive={false} searchTerm={searchTerm} /> : 
                  adminTab === 'assigned' ? <LeadsList leads={leads.filter(l => l.status === 'assigned')} agents={agents} onDeleteLead={deleteLead} onUpdateStatus={updateStatus} onAssignAgent={assignAgent} onUnassign={unassignAgent} isArchive={false} searchTerm={searchTerm} /> :
                  adminTab === 'archived' ? <LeadsList leads={leads.filter(l => l.status === 'archived')} agents={agents} onDeleteLead={deleteLead} onUpdateStatus={updateStatus} onAssignAgent={assignAgent} onUnassign={unassignAgent} isArchive={true} searchTerm={searchTerm} /> : 
@@ -469,6 +527,3 @@ function App() {
     </div>
   );
 }
-
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
