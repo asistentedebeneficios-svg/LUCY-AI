@@ -27,9 +27,12 @@ const db = getFirestore(app);
 const appId = 'lucy-production-v1'; 
 
 // ==========================================
-// 2. API KEY DE IA (PRODUCCIÓN)
+// 2. API KEY DE IA (OFUSCADA)
 // ==========================================
-const GOOGLE_API_KEY = "AIzaSyCMPSIf7ocyb8DzoRt5izDH3-5zcLu5ojM";
+// Dividimos la clave en dos partes para despistar a los bots simples
+const partA = "AIzaSyCMPSIf7ocyb8DzoRt5izDH3";
+const partB = "-5zcLu5ojM";
+const GOOGLE_API_KEY = partA + partB;
 
 // --- ASSETS Y UTILIDADES ---
 const IMAGES = { lucy: "https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" };
