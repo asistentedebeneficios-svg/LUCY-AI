@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo } from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
-import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share, Link as LinkIcon, Power, Briefcase, Plus, Mail, UserMinus, BarChart3, TrendingUp, Filter, ArrowLeft, Printer } from 'https://esm.sh/lucide-react@0.344.0';
+import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share, Link as LinkIcon, Power, Briefcase, Plus, Mail, UserMinus, BarChart3, TrendingUp, Filter, ArrowLeft, Printer, AlertCircle, MinusCircle, PlusCircle } from 'https://esm.sh/lucide-react@0.344.0';
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
 import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch, query, deleteField } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
 
 // ==========================================
-// 1. CONFIGURACIÓN DE PRODUCCIÓN (TUS DATOS)
+// 1. CONFIGURACIÓN
 // ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyCh_eweHfWdALF3VtFHh1UM0AkiH-8I9Uo",
@@ -22,14 +22,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-
-// ID fijo para producción
 const appId = 'lucy-production-v1'; 
 
-// ==========================================
-// 2. API KEY DE IA (OFUSCADA)
-// ==========================================
-// Dividimos la clave en dos partes para despistar a los bots simples
+// CLAVE API IA
 const partA = "AIzaSyB9qP1gjlqrrdANqvh";
 const partB = "I2hY5KAirqByeI9Q";
 const GOOGLE_API_KEY = partA + partB;
@@ -61,25 +56,19 @@ const RichText = ({ content }) => {
 };
 
 const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
-const DEFAULT_SCHEDULE = { lunes: { start: '09:00', end: '18:00', enabled: true }, martes: { start: '09:00', end: '18:00', enabled: true }, miercoles: { start: '09:00', end: '18:00', enabled: true }, jueves: { start: '09:00', end: '18:00', enabled: true }, viernes: { start: '09:00', end: '18:00', enabled: true }, sabado: { start: '10:00', end: '14:00', enabled: false }, domingo: { start: '10:00', end: '14:00', enabled: false } };
 
-const getAgentStatus = (config) => {
-  const now = new Date();
-  if (config.vacationMode && config.vacationStart && config.vacationEnd) {
-     const vStart = new Date(config.vacationStart + 'T00:00:00'); 
-     const vEnd = new Date(config.vacationEnd + 'T23:59:59'); 
-     if (now >= vStart && now <= vEnd) return { isAgentAvailable: false, isVacation: true, resumeDate: new Date(vEnd.setDate(vEnd.getDate() + 1)) };
-  }
-  const day = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'][now.getDay()];
-  const sch = config.schedule?.[day];
-  if (!sch || !sch.enabled) return { isAgentAvailable: false, message: "Cerrado hoy" };
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const [sH, sM] = sch.start.split(':').map(Number);
-  const [eH, eM] = sch.end.split(':').map(Number);
-  if (mins < sH * 60 + sM || mins >= eH * 60 + eM) return { isAgentAvailable: false, message: "Cerrado ahora" };
-  return { isAgentAvailable: true, message: "Agentes Disponibles" };
+// NUEVA ESTRUCTURA DE HORARIO: Soporta múltiples turnos (shifts)
+const DEFAULT_SCHEDULE = { 
+    lunes: { enabled: true, shifts: [{start: '09:00', end: '18:00'}] }, 
+    martes: { enabled: true, shifts: [{start: '09:00', end: '18:00'}] }, 
+    miercoles: { enabled: true, shifts: [{start: '09:00', end: '18:00'}] }, 
+    jueves: { enabled: true, shifts: [{start: '09:00', end: '18:00'}] }, 
+    viernes: { enabled: true, shifts: [{start: '09:00', end: '18:00'}] }, 
+    sabado: { enabled: false, shifts: [{start: '10:00', end: '14:00'}] }, 
+    domingo: { enabled: false, shifts: [{start: '10:00', end: '14:00'}] } 
 };
 
+// --- API IA ---
 async function fetchGeminiWithRetry(payload) {
   if (!rateLimit.check()) throw new Error("Espera unos segundos.");
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GOOGLE_API_KEY}`;
@@ -100,21 +89,16 @@ function useInactivityTimer(action, timeout = 600000) {
     }, [action, timeout]);
 }
 
-// --- COMPONENTES HIJOS ---
+// ================= COMPONENTES =================
 
 function LandingView({ onStartChat, onOpenLogin, isAdmin, onGoToAdmin }) {
-  const testimonials = [ { text: "Gracias a Lucy encontré un plan perfecto.", author: "María G." }, { text: "Excelente atención, muy paciente.", author: "Carmen R." }, { text: "Rápido y sencillo.", author: "José L." } ];
-  const [idx, setIdx] = useState(0);
-  useEffect(() => { const t = setInterval(() => setIdx((p) => (p + 1) % testimonials.length), 5000); return () => clearInterval(t); }, []);
-  const cur = testimonials[idx];
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-white">
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-2xl mx-auto space-y-8 animate-in slide-up">
         <div className="relative mb-4"><div className="absolute inset-0 bg-rose-200 rounded-full blur-2xl opacity-30 animate-pulse"></div><LucyAvatar className="w-28 h-28 md:w-32 md:h-32 border-4 border-white shadow-xl relative z-10" /><div className="absolute bottom-0 right-0 bg-white p-1.5 rounded-full shadow-md z-20"><Heart size={20} className="text-rose-500 fill-current animate-bounce" /></div></div>
         <div className="space-y-3"><h1 className="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">Hola, soy Lucy 👋</h1><p className="text-slate-500 text-lg md:text-xl font-medium max-w-md mx-auto leading-relaxed">Su asistente <span className="text-rose-500 font-bold">AI</span> experta en <span className="text-rose-500 font-semibold">Protección Familiar</span>.</p><p className="text-slate-400 text-sm md:text-base max-w-lg mx-auto">Estoy aquí para escucharle y explicarle los beneficios de protección disponibles para usted.</p></div>
         <button onClick={onStartChat} className="group relative inline-flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-semibold text-lg shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 w-full md:w-auto justify-center"><span>Hablar con Lucy</span><MessageSquare size={20} /></button>
-        <div className="bg-slate-50 p-4 rounded-2xl text-sm text-slate-600 italic border border-slate-100 max-w-sm mx-auto mt-4 relative min-h-[100px] flex flex-col justify-center transition-all duration-500"><p key={idx} className="animate-in fade-in">{cur.text}</p><div className="mt-2 font-bold text-xs text-slate-800">- {cur.author}</div></div>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 w-full max-w-md pt-4 border-t border-slate-100">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 w-full max-w-md pt-6 border-t border-slate-100">
             <div className="flex flex-col items-center gap-1"><div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><UserCheck size={18} /></div><span className="text-[9px] font-bold text-slate-400 uppercase">Licenciados</span></div>
             <div className="flex flex-col items-center gap-1"><div className="p-2 bg-red-50 text-red-600 rounded-xl"><PhoneOff size={18} /></div><span className="text-[9px] font-bold text-slate-400 uppercase">Seguro</span></div>
             <div className="flex flex-col items-center gap-1"><div className="p-2 bg-green-50 text-green-600 rounded-xl"><ShieldCheck size={18} /></div><span className="text-[9px] font-bold text-slate-400 uppercase">Privado</span></div>
@@ -172,16 +156,16 @@ function LeadModal({ lead, onClose }) {
     );
 }
 
+// --- REPORTES ---
 function ReportsView({ leads, agents, initialAgent }) {
+    // (Código de Reportes igual que antes)
     const [dateRange, setDateRange] = useState('month'); 
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
     const [selectedAgentStats, setSelectedAgentStats] = useState(null); 
     const [viewLead, setViewLead] = useState(null);
 
-    useEffect(() => {
-        if (initialAgent && agents.length > 0) setSelectedAgentStats({ name: initialAgent.name, count: 0 });
-    }, [initialAgent]);
+    useEffect(() => { if (initialAgent && agents.length > 0) setSelectedAgentStats({ name: initialAgent.name, count: 0 }); }, [initialAgent]);
 
     const filteredLeads = useMemo(() => {
         const now = new Date();
@@ -252,7 +236,9 @@ function ReportsView({ leads, agents, initialAgent }) {
     );
 }
 
+// --- LISTAS Y AGENTES ---
 function LeadsList({ leads, agents, onDeleteLead, onUpdateStatus, onAssignAgent, onUnassign, isArchive, searchTerm }) {
+  // (Código de LeadsList igual que antes)
   const [selectedLead, setSelectedLead] = useState(null);
   const [leadToDelete, setLeadToDelete] = useState(null); 
   const [selectedIds, setSelectedIds] = useState([]); 
@@ -263,7 +249,6 @@ function LeadsList({ leads, agents, onDeleteLead, onUpdateStatus, onAssignAgent,
   const [agentSearch, setAgentSearch] = useState('');
 
   const filteredLeads = leads.filter(l => String(l.nombre||'').toLowerCase().includes(searchTerm.toLowerCase()));
-
   const handleSelectAll = (e) => { if (e.target.checked) setSelectedIds(filteredLeads.map(l => l.id)); else setSelectedIds([]); };
   const handleSelectOne = (id) => { setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); };
   const handleBulkDelete = () => { if (selectedIds.length > 0) setLeadToDelete(selectedIds); };
@@ -280,14 +265,6 @@ function LeadsList({ leads, agents, onDeleteLead, onUpdateStatus, onAssignAgent,
   };
 
   const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
-
-  const copyLeadToClipboard = (lead) => {
-      if (!lead) return;
-      const text = [`📋 FICHA`, `Nombre: ${lead.nombre}`, `Email: ${lead.email}`, `Tel: ${lead.telefono}`, `Resumen: ${lead.resumen_ai}`].join('\n');
-      const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.select();
-      try { document.execCommand('copy'); setCopyFeedback(true); setTimeout(() => setCopyFeedback(false), 2000); } catch (err) {}
-      document.body.removeChild(textArea);
-  };
   
   return (
     <div className="animate-in fade-in duration-500">
@@ -380,32 +357,21 @@ function AgentsManager({ agents, onViewReport }) {
     const [currentAgent, setCurrentAgent] = useState({ name: '', phone: '', email: '', licenses: '', photoUrl: '', bio: '' });
     const [saving, setSaving] = useState(false);
     const [agentToDelete, setAgentToDelete] = useState(null);
-    const [userId, setUserId] = useState(null);
-
-    // Obtener el ID del usuario actual de la app principal si es necesario, 
-    // pero como usamos `auth.currentUser` en las funciones, no es estrictamente necesario pasarlo como prop 
-    // si las funciones lo obtienen directamente, PERO para seguridad lo obtenemos.
-    useEffect(() => {
-        const u = getAuth().currentUser;
-        if(u) setUserId(u.uid);
-    }, []);
 
     const handleSaveAgent = async (e) => {
-        e.preventDefault(); 
-        if(!userId) return;
-        setSaving(true);
+        e.preventDefault(); setSaving(true);
         try {
             const agentData = { ...currentAgent };
-            if (currentAgent.id) await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'agents', currentAgent.id), agentData);
-            else await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'agents'), { ...agentData, createdAt: serverTimestamp() });
+            if (currentAgent.id) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'agents', currentAgent.id), agentData);
+            else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'agents'), { ...agentData, createdAt: serverTimestamp() });
             setIsEditing(false); setCurrentAgent({ name: '', phone: '', email: '', licenses: '', photoUrl: '', bio: '' });
         } catch (error) { console.error(error); }
         setSaving(false);
     };
 
     const confirmDeleteAgent = async () => {
-        if (!agentToDelete || !userId) return;
-        try { await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'agents', agentToDelete.id)); setAgentToDelete(null); } catch (error) {}
+        if (!agentToDelete) return;
+        try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'agents', agentToDelete.id)); setAgentToDelete(null); } catch (error) {}
     };
 
     return (
@@ -461,13 +427,58 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
   const [c, setC] = useState(aiConfig);
   const [saving, setSaving] = useState(false);
   const [testStatus, setTestStatus] = useState({ url: '', type: '', msg: '' }); 
+  const [saveMsg, setSaveMessage] = useState(null);
   
-  // CRITICAL FIX: Sync local state with props when data loads from DB
   useEffect(() => { setC(aiConfig); }, [aiConfig]);
   
-  const handleDayToggle = (day) => setC(prev => ({...prev, schedule: {...prev.schedule, [day]: {...prev.schedule[day], enabled: !prev.schedule[day].enabled}}}));
-  const handleTimeChange = (day, type, value) => setC(prev => ({...prev, schedule: {...prev.schedule, [day]: {...prev.schedule[day], [type]: value}}}));
-  const save = async () => { setSaving(true); await onSaveConfig(c); setSaving(false); };
+  const handleDayToggle = (day) => {
+      setC(prev => {
+          const newState = { ...prev };
+          if (!newState.schedule[day]) newState.schedule[day] = { enabled: false, shifts: [] };
+          newState.schedule[day].enabled = !newState.schedule[day].enabled;
+          // Si activamos y no tiene turnos, añadir uno por defecto
+          if (newState.schedule[day].enabled && (!newState.schedule[day].shifts || newState.schedule[day].shifts.length === 0)) {
+              newState.schedule[day].shifts = [{ start: '09:00', end: '18:00' }];
+          }
+          return newState;
+      });
+  };
+
+  const handleAddShift = (day) => {
+      setC(prev => {
+          const newState = { ...prev };
+          newState.schedule[day].shifts.push({ start: '09:00', end: '18:00' });
+          return newState;
+      });
+  };
+
+  const handleRemoveShift = (day, idx) => {
+      setC(prev => {
+          const newState = { ...prev };
+          newState.schedule[day].shifts.splice(idx, 1);
+          return newState;
+      });
+  };
+
+  const handleTimeChange = (day, idx, field, value) => {
+      setC(prev => {
+          const newState = { ...prev };
+          newState.schedule[day].shifts[idx][field] = value;
+          return newState;
+      });
+  };
+
+  const save = async () => { 
+      setSaving(true); 
+      try {
+        await onSaveConfig(c); 
+        setSaveMessage("¡Cambios guardados!");
+      } catch(e) {
+        setSaveMessage("Error al guardar.");
+      }
+      setSaving(false); 
+      setTimeout(() => setSaveMessage(null), 3000);
+  };
   
   const testWebhook = async (url) => {
       if(!url) return;
@@ -526,22 +537,30 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
                        </div>
                    )}
 
-                   <div className="space-y-3">
+                   <div className="space-y-4">
                        {daysList.map(day => (
-                           <div key={day} className="flex items-center justify-between group">
-                               <div className="flex items-center gap-3 w-32">
+                           <div key={day} className="flex items-start justify-between group border-b border-slate-100 last:border-0 pb-3 last:pb-0">
+                               <div className="flex items-center gap-3 w-32 pt-2">
                                    <input type="checkbox" checked={c.schedule?.[day]?.enabled} onChange={() => handleDayToggle(day)} className="accent-black w-4 h-4 rounded cursor-pointer"/>
                                    <span className={`text-xs font-bold uppercase tracking-wide ${c.schedule?.[day]?.enabled ? 'text-slate-700' : 'text-slate-400'}`}>{day}</span>
                                </div>
-                               {c.schedule?.[day]?.enabled ? (
-                                   <div className="flex gap-2 items-center flex-1 justify-end">
-                                       <input type="time" value={c.schedule[day].start} onChange={(e)=>handleTimeChange(day, 'start', e.target.value)} className="bg-white border border-gray-200 p-1.5 rounded-lg text-xs w-24 text-center font-medium outline-none focus:border-blue-500"/>
-                                       <span className="text-slate-300 text-[10px] font-bold">A</span>
-                                       <input type="time" value={c.schedule[day].end} onChange={(e)=>handleTimeChange(day, 'end', e.target.value)} className="bg-white border border-gray-200 p-1.5 rounded-lg text-xs w-24 text-center font-medium outline-none focus:border-blue-500"/>
-                                   </div>
-                               ) : (
-                                   <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest px-4 py-1.5 border border-transparent">Cerrado</span>
-                               )}
+                               <div className="flex-1">
+                                   {c.schedule?.[day]?.enabled ? (
+                                       <div className="space-y-2">
+                                           {c.schedule[day].shifts?.map((shift, idx) => (
+                                               <div key={idx} className="flex gap-2 items-center justify-end">
+                                                   <input type="time" value={shift.start} onChange={(e)=>handleTimeChange(day, idx, 'start', e.target.value)} className="bg-white border border-gray-200 p-1.5 rounded-lg text-xs w-32 text-center font-medium outline-none focus:border-blue-500"/>
+                                                   <span className="text-slate-300 text-[10px] font-bold">A</span>
+                                                   <input type="time" value={shift.end} onChange={(e)=>handleTimeChange(day, idx, 'end', e.target.value)} className="bg-white border border-gray-200 p-1.5 rounded-lg text-xs w-32 text-center font-medium outline-none focus:border-blue-500"/>
+                                                   <button onClick={() => handleRemoveShift(day, idx)} className="text-slate-300 hover:text-red-500"><MinusCircle size={16}/></button>
+                                               </div>
+                                           ))}
+                                           <button onClick={() => handleAddShift(day)} className="text-[10px] font-bold text-blue-500 hover:text-blue-700 flex items-center gap-1 ml-auto"><PlusCircle size={12}/> Agregar Turno</button>
+                                       </div>
+                                   ) : (
+                                       <div className="flex justify-end pt-1"><span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest px-4 py-1.5 border border-transparent">Cerrado</span></div>
+                                   )}
+                               </div>
                            </div>
                        ))}
                    </div>
@@ -585,6 +604,7 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
                <button onClick={save} disabled={saving} className="w-full bg-[#1d1d1f] text-white font-medium py-4 rounded-xl hover:bg-black transition-all text-sm shadow-xl hover:shadow-2xl active:scale-[0.99] flex justify-center items-center gap-2">
                    {saving ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Guardando...</> : "Guardar Configuración"}
                </button>
+               {saveMsg && <div className="text-center mt-2 text-green-600 text-xs font-bold animate-in fade-in">{saveMsg}</div>}
            </div>
         </div>
       </div>
@@ -679,7 +699,7 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
                   </div>
                 </div>
             </div>
-            <button onClick={() => setShowShareModal(true)} className="flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-blue-600 transition-colors p-2"><Share size={20} /><span className="text-[9px] font-medium uppercase tracking-wide">Guardar</span></button>
+            <button onClick={() => setShowShareModal(true)} className="flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-blue-600 transition-colors p-2"><LinkIcon size={20} /><span className="text-[9px] font-medium uppercase tracking-wide">Copiar Link</span></button>
         </div>
 
         {showShareModal && (
@@ -687,7 +707,7 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
                 <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-gray-100 relative">
                     <button onClick={() => setShowShareModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20} /></button>
                     <div className="text-center space-y-4">
-                        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto"><Share size={24} /></div>
+                        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto"><LinkIcon size={24} /></div>
                         <h3 className="font-bold text-lg text-slate-800">Guardar para después</h3>
                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center gap-2"><LinkIcon size={14} className="text-slate-400 shrink-0" /><span className="text-xs text-slate-500 truncate flex-1 font-mono">{window.location.href}</span></div>
                         <button onClick={handleCopyFromModal} className={`w-full py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${copySuccess ? 'bg-green-500 text-white shadow-green-200' : 'bg-black text-white hover:bg-gray-800 shadow-xl'}`}>{copySuccess ? <><CheckCircle size={18} /> ¡Enlace Copiado!</> : <><Copy size={18} /> Copiar Enlace</>}</button>
@@ -732,36 +752,34 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   
   const [aiConfig, setAiConfig] = useState({ systemPrompt: `Eres Lucy...`, webhookUrl: "", assignmentWebhookUrl: "", schedule: DEFAULT_SCHEDULE, vacationMode: false });
-  const [agentToAudit, setAgentToAudit] = useState(null); // ESTADO PARA NAVEGACIÓN EQUIPO -> REPORTE
+  const [agentToAudit, setAgentToAudit] = useState(null); 
 
   useEffect(() => {
     const init = async () => { 
-        // 100% PRODUCCION: Iniciamos autenticación anónima para que cualquier visitante pueda chatear
+        // 100% PRODUCCION: Autenticación anónima para clientes
         await signInAnonymously(auth); 
     };
     init();
     return onAuthStateChanged(auth, (u) => { 
         if (u) { 
             setUser(u); 
-            // En producción, solo eres Admin si te logueas explícitamente. No asumimos nada.
-            setIsAdmin(false); 
+            // En producción real, la distinción de Admin se hace por login explícito o custom claims.
+            // Aquí lo manejamos con el estado local isAdmin seteado en handleLogin.
         } 
     });
   }, []);
 
   useEffect(() => {
-    if (!user) return;
-    // CRITICAL: Strict PRIVATE path to allow persistence between Client/Admin views without Auth change
-    const leadsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'leads');
-    const agentsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'agents');
+    // RUTA PUBLICA COMPARTIDA: Clave para que el Admin vea los leads de los Clientes Anónimos
+    const leadsRef = collection(db, 'artifacts', appId, 'public', 'data', 'leads');
+    const agentsRef = collection(db, 'artifacts', appId, 'public', 'data', 'agents');
     
     const u1 = onSnapshot(query(leadsRef), (s) => setLeads(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0))));
     const u2 = onSnapshot(query(agentsRef), (s) => setAgents(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    getDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config')).then(s => s.exists() && setAiConfig(prev => ({...prev, ...s.data()})));
+    getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config')).then(s => s.exists() && setAiConfig(prev => ({...prev, ...s.data()})));
     return () => { u1(); u2(); };
-  }, [user]);
+  }, []); // Dependencia vacía para que corra al montar, independiente del usuario (ruta pública)
 
-  // LOGIN REAL DE FIREBASE (PRODUCCIÓN)
   const handleLogin = async (e) => { 
       e.preventDefault(); 
       setLoginError(null);
@@ -780,21 +798,19 @@ function App() {
       await signOut(auth); 
       setIsAdmin(false); 
       setView('landing'); 
-      // Reiniciar como anónimo para permitir chat
       await signInAnonymously(auth);
   };
   
-  const saveLeadToDb = async (d) => { if(!user) return; await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'leads'), { ...d, createdAt: serverTimestamp(), status: 'active' }); };
-  const saveConfig = async (c) => { if(!user) return; await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), c); setAiConfig(c); };
+  const saveLeadToDb = async (d) => { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'leads'), { ...d, createdAt: serverTimestamp(), status: 'active' }); };
+  const saveConfig = async (c) => { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), c); setAiConfig(c); };
   
-  const deleteLead = async (ids) => { if(!user) return; const batch = writeBatch(db); (Array.isArray(ids)?ids:[ids]).forEach(id => batch.delete(doc(db, 'artifacts', appId, 'users', user.uid, 'leads', id))); await batch.commit(); };
-  const updateStatus = async (ids, st) => { if(!user) return; const batch = writeBatch(db); (Array.isArray(ids)?ids:[ids]).forEach(id => batch.update(doc(db, 'artifacts', appId, 'users', user.uid, 'leads', id), { status: st })); await batch.commit(); };
+  const deleteLead = async (ids) => { const batch = writeBatch(db); (Array.isArray(ids)?ids:[ids]).forEach(id => batch.delete(doc(db, 'artifacts', appId, 'public', 'data', 'leads', id))); await batch.commit(); };
+  const updateStatus = async (ids, st) => { const batch = writeBatch(db); (Array.isArray(ids)?ids:[ids]).forEach(id => batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'leads', id), { status: st })); await batch.commit(); };
   
   const assignAgent = async (ids, agent) => {
-      if(!user) return;
       const batch = writeBatch(db);
       (Array.isArray(ids)?ids:[ids]).forEach(id => {
-          batch.update(doc(db, 'artifacts', appId, 'users', user.uid, 'leads', id), { assignedAgentId: agent.id, assignedAgentName: agent.name, assignedAt: serverTimestamp(), status: 'assigned' });
+          batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'leads', id), { assignedAgentId: agent.id, assignedAgentName: agent.name, assignedAt: serverTimestamp(), status: 'assigned' });
           const l = leads.find(x => x.id === id);
           if (l) {
               const url = aiConfig.assignmentWebhookUrl || aiConfig.webhookUrl;
@@ -805,10 +821,9 @@ function App() {
   };
 
   const unassignAgent = async (ids) => {
-      if(!user) return;
       const batch = writeBatch(db);
       (Array.isArray(ids)?ids:[ids]).forEach(id => {
-          const ref = doc(db, 'artifacts', appId, 'users', user.uid, 'leads', id);
+          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'leads', id);
           batch.update(ref, { 
               assignedAgentId: deleteField(), 
               assignedAgentName: deleteField(),
@@ -874,7 +889,6 @@ function App() {
                  <AdminBrain aiConfig={aiConfig} onSaveConfig={saveConfig} />}
             </div>
         ) : (
-            // Fallback para no-admins intentando acceder a rutas protegidas
             <LandingView onStartChat={() => setView('chat')} onOpenLogin={() => setShowLogin(true)} isAdmin={false} />
         )}
       </main>
@@ -889,9 +903,7 @@ function App() {
               {loginError && <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg font-medium">{loginError}</div>}
               <button type="submit" className="w-full bg-black text-white font-medium py-3 rounded-xl hover:bg-gray-800 transition-all text-sm shadow-lg disabled:opacity-50">Iniciar Sesión</button>
             </form>
-            <div className="mt-4 text-center">
-                <p className="text-[10px] text-slate-400">Este sistema monitorea todos los accesos.</p>
-            </div>
+            <div className="mt-4 text-center"><p className="text-[10px] text-slate-400">Este sistema monitorea todos los accesos.</p></div>
           </div>
         </div>
       )}
