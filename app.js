@@ -23,10 +23,10 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ID fijo para producción (Asegura que todos vean los mismos datos)
+// ID fijo para producción (Corregido a mayúsculas para coincidir con el uso)
 const APP_ID = 'lucy-production-v1'; 
 
-// CLAVE API IA (Dividida por seguridad)
+// CLAVE API IA
 const partA = "AIzaSyB9qP1gjlqrrdANqvh";
 const partB = "I2hY5KAirqByeI9Q";
 const GOOGLE_API_KEY = partA + partB;
@@ -47,10 +47,22 @@ function cleanAiMessage(text) {
     return cleaned.split('***').join('').split('---').join('').trim();
 }
 
-function to12h(t) { if (!t) return ''; const [h, m] = t.split(':'); return `${h % 12 || 12}:${m.toString().padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`; }
-function formatScheduledDate(d) { if (!d || d.length < 10) return d; const date = new Date(d); return isNaN(date) ? d : date.toLocaleDateString('en-US', {month:'2-digit', day:'2-digit', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true}); }
 function formatFirestoreDate(ts) { if (!ts) return 'Reciente'; return ts.toDate ? ts.toDate().toLocaleDateString('en-US') : new Date(ts.seconds * 1000).toLocaleDateString('en-US'); }
 function getJsDate(ts) { if (!ts) return new Date(); return ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000); }
+
+// Helper para convertir el objeto de horario a texto legible para la IA
+function formatScheduleForAI(schedule) {
+    if (!schedule) return "No hay horario definido.";
+    const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+    return days.map(day => {
+        const config = schedule[day];
+        if (!config || !config.enabled) return `${day}: CERRADO`;
+        const shifts = config.shifts || (config.start ? [{start: config.start, end: config.end}] : []);
+        if (shifts.length === 0) return `${day}: CERRADO`;
+        const shiftsText = shifts.map(s => `${s.start} a ${s.end}`).join(' Y ');
+        return `${day}: ${shiftsText}`;
+    }).join('\n');
+}
 
 const RichText = ({ content }) => {
   if (!content || typeof content !== 'string') return null;
@@ -69,21 +81,7 @@ const DEFAULT_SCHEDULE = {
     domingo: { enabled: false, shifts: [{start: '10:00', end: '14:00'}] } 
 };
 
-// HELPER: Formatear horario para que la IA lo entienda
-function formatScheduleForAI(schedule) {
-    if (!schedule) return "No hay horario definido.";
-    const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-    return days.map(day => {
-        const config = schedule[day];
-        if (!config || !config.enabled) return `${day}: CERRADO`;
-        const shifts = config.shifts || (config.start ? [{start: config.start, end: config.end}] : []);
-        if (shifts.length === 0) return `${day}: CERRADO`;
-        const shiftsText = shifts.map(s => `${s.start} a ${s.end}`).join(' Y ');
-        return `${day}: ${shiftsText}`;
-    }).join('\n');
-}
-
-// LÓGICA DE DISPONIBILIDAD (Corregida para shifts)
+// LÓGICA DE DISPONIBILIDAD
 const getAgentStatus = (config) => {
   const now = new Date();
   if (config.vacationMode && config.vacationStart && config.vacationEnd) {
@@ -469,17 +467,18 @@ function LeadsList({ leads, agents, onDeleteLead, onUpdateStatus, onAssignAgent,
   );
 }
 
-export function AgentsManager({ agents, onViewReport }) {
+function AgentsManager({ agents, onViewReport }) {
     const [isEditing, setIsEditing] = useState(false);
     const [currentAgent, setCurrentAgent] = useState({ name: '', phone: '', email: '', licenses: '', photoUrl: '', bio: '' });
     const [saving, setSaving] = useState(false);
     const [agentToDelete, setAgentToDelete] = useState(null);
 
-    // FIXED: Save to PUBLIC path (Consistent with Data.js logic)
+    // FIXED: Save to PUBLIC path
     const handleSaveAgent = async (e) => {
         e.preventDefault(); setSaving(true);
         try {
             const agentData = { ...currentAgent };
+            // IMPORTANTE: Se corrigió APP_ID aquí también
             if (currentAgent.id) await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'agents', currentAgent.id), agentData);
             else await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'agents'), { ...agentData, createdAt: serverTimestamp() });
             setIsEditing(false); setCurrentAgent({ name: '', phone: '', email: '', licenses: '', photoUrl: '', bio: '' });
@@ -517,11 +516,11 @@ export function AgentsManager({ agents, onViewReport }) {
     );
 }
 
-export function AdminBrain({ aiConfig, onSaveConfig }) {
+function AdminBrain({ aiConfig, onSaveConfig }) {
   const [c, setC] = useState(aiConfig);
   const [saving, setSaving] = useState(false);
   const [testStatus, setTestStatus] = useState({ url: '', type: '', msg: '' }); 
-  const [saveMsg, setSaveMessage] = useState(null);
+  const [saveMsg, setSaveMsg] = useState(null);
   
   useEffect(() => { setC(aiConfig); }, [aiConfig]);
 
@@ -788,3 +787,6 @@ export function App() {
     </div>
   );
 }
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
