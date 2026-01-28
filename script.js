@@ -327,7 +327,7 @@ function App() {
   );
 }
 
-// --- LANDING VIEW ---
+// --- LANDING VIEW (MODIFICADO: Testimonios arriba) ---
 function LandingView({ onStartChat, onOpenLogin }) {
   const testimonials = [ { text: "Gracias a Lucy encontré un plan perfecto para mi mamá sin gastar de más. Fue muy fácil.", author: "María G. - Florida" }, { text: "Excelente atención, muy paciente y clara. Me sentí muy segura con la información.", author: "Carmen R. - Texas" }, { text: "Rápido y sencillo. Encontré justo lo que necesitaba para mi tranquilidad.", author: "José L. - California" } ];
   const [idx, setIdx] = useState(0);
@@ -337,9 +337,17 @@ function LandingView({ onStartChat, onOpenLogin }) {
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-white">
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-2xl mx-auto space-y-8 animate-in slide-up">
+        {/* Encabezado y Avatar */}
         <div className="relative mb-4"><div className="absolute inset-0 bg-rose-200 rounded-full blur-2xl opacity-30 animate-pulse"></div><LucyAvatar className="w-28 h-28 md:w-32 md:h-32 border-4 border-white shadow-xl relative z-10" /><div className="absolute bottom-0 right-0 bg-white p-1.5 rounded-full shadow-md z-20"><Heart size={20} className="text-rose-500 fill-current animate-bounce" /></div></div>
         <div className="space-y-3"><h1 className="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">Hola, soy Lucy 👋</h1><p className="text-slate-500 text-lg md:text-xl font-medium max-w-md mx-auto leading-relaxed">Su asistente <span className="text-rose-500 font-bold">AI</span> experta en <span className="text-rose-500 font-semibold">Protección Familiar</span>.</p><p className="text-slate-400 text-sm md:text-base max-w-lg mx-auto">Estoy aquí para escucharle y explicarle los beneficios de protección disponibles para usted. Hablemos con confianza, a su ritmo y sin complicaciones.</p></div>
+        
+        {/* Botón Principal */}
         <button onClick={onStartChat} className="group relative inline-flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-semibold text-lg shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 w-full md:w-auto justify-center"><span>Hablar con Lucy</span><MessageSquare size={20} className="group-hover:translate-x-1 transition-transform" /></button>
+        
+        {/* --- CAMBIO AQUI: TESTIMONIOS MOVIDOS ARRIBA --- */}
+        <div className="bg-slate-50 p-4 rounded-2xl text-sm text-slate-600 italic border border-slate-100 max-w-sm mx-auto mt-2 relative min-h-[100px] flex flex-col justify-center transition-all duration-500 shadow-sm"><span className="absolute -top-3 left-4 text-3xl text-slate-200">"</span><p className="animate-in fade-in duration-500" key={idx}>{cur.text}</p><div className="mt-2 flex items-center justify-center gap-2 not-italic font-semibold text-slate-800 text-xs animate-in fade-in duration-500" key={`author-${idx}`}><div className="w-5 h-5 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">{cur.author.charAt(0)}</div>{cur.author}</div></div>
+
+        {/* Grid de Iconos (Ahora abajo de testimonios) */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 w-full max-w-md pt-4 border-t border-slate-100">
            <div className="flex flex-col items-center gap-1.5"><div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><UserCheck size={20} /></div><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center">Solo agentes licenciados</span></div>
            <div className="flex flex-col items-center gap-1.5"><div className="p-2 bg-red-50 text-red-600 rounded-xl"><PhoneOff size={20} /></div><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center">No más llamadas inesperadas</span></div>
@@ -348,7 +356,6 @@ function LandingView({ onStartChat, onOpenLogin }) {
            <div className="flex flex-col items-center gap-1.5"><div className="p-2 bg-purple-50 text-purple-600 rounded-xl"><Activity size={20} /></div><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center">Sin examén médico</span></div>
            <div className="flex flex-col items-center gap-1.5"><div className="p-2 bg-pink-50 text-pink-600 rounded-xl"><Heart size={20} /></div><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center">Soporte Familiar</span></div>
         </div>
-        <div className="bg-slate-50 p-4 rounded-2xl text-sm text-slate-600 italic border border-slate-100 max-w-sm mx-auto mt-4 relative min-h-[120px] flex flex-col justify-center transition-all duration-500"><span className="absolute -top-3 left-4 text-3xl text-slate-200">"</span><p className="animate-in fade-in duration-500" key={idx}>{cur.text}</p><div className="mt-2 flex items-center justify-center gap-2 not-italic font-semibold text-slate-800 text-xs animate-in fade-in duration-500" key={`author-${idx}`}><div className="w-5 h-5 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">{cur.author.charAt(0)}</div>{cur.author}</div></div>
       </div>
       <div className="p-4 text-center"><p className="text-[10px] text-slate-300">&copy; 2024 Asistente de Beneficios. Privacidad Garantizada.</p><button onClick={onOpenLogin} className="mt-2 text-[9px] text-slate-200 hover:text-slate-400 transition-colors">Acceso Corporativo</button></div>
     </div>
