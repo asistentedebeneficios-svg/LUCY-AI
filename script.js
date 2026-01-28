@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
-import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square } from 'https://esm.sh/lucide-react@0.344.0';
-
+import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2 } from 'https://esm.sh/lucide-react@0.344.0';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
@@ -660,19 +659,22 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
   );
 }
 
-// --- CLIENT CHAT (RESTAURADO CON LOGICA DE LEADS) ---
+// --- CLIENT CHAT (MODIFICADO: Botón compartir URL) ---
 function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
   const [activeUsers, setActiveUsers] = useState(Math.floor(Math.random() * (28 - 18 + 1)) + 18);
-  // MENSAJE INICIAL RESTAURADO (LARGO Y EMPÁTICO)
   const [msgs, setMsgs] = useState([
     { role: 'assistant', content: 'Hola, soy Lucy, su asistente personal experta en **Gastos Finales**. Mi misión es brindarle la información que necesita para su tranquilidad y la de su familia.\n\nTenga la plena seguridad de que **todo lo que hablemos es confidencial**; nada será divulgado sin su expresa autorización. Mi único objetivo es ayudarle, y si al final de nuestra charla usted lo desea, podré conectarle directamente con un **agente acreditado por su estado**.\n\n¿Cómo le podemos servir el día de hoy?' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
-  const [pendingLeadData, setPendingLeadData] = useState(null); // Datos esperando confirmación
+  const [pendingLeadData, setPendingLeadData] = useState(null);
+  
+  // --- NUEVO: Estados para el Modal de Compartir ---
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [urlCopied, setUrlCopied] = useState(false);
+  
   const scrollRef = useRef(null);
-
   const { isAgentAvailable, message: statusMessage, isVacation, resumeDate } = getAgentStatus(aiConfig);
 
   useEffect(()=>{ 
@@ -682,17 +684,25 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
 
   useEffect(()=>{ if(scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; },[msgs, loading, showOptions]);
 
+  // --- NUEVO: Función para copiar URL ---
+  const handleCopyLink = () => {
+      const url = window.location.href;
+      navigator.clipboard.writeText(url).then(() => {
+          setUrlCopied(true);
+          setTimeout(() => setUrlCopied(false), 2500);
+      });
+  };
+
   const handleOptionClick = (type) => {
       if (pendingLeadData) {
-          // Guardar el lead AHORA
           const finalLead = {
               ...pendingLeadData,
               metodo_contacto: type,
               horario_preferido: type === 'ahora' ? 'Inmediata' : 'Pendiente'
           };
           onSaveLead(finalLead);
-          setPendingLeadData(null); // Limpiar datos pendientes
-          setShowOptions(false); // Ocultar botones
+          setPendingLeadData(null); 
+          setShowOptions(false); 
        
           const responseMsg = type === 'ahora' 
               ? "¡Perfecto! Un agente se comunicará con usted en breve al número proporcionado." 
@@ -706,7 +716,6 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
     e.preventDefault(); if(!input.trim() || loading) return;
     const newM = [...msgs, {role:'user', content:input}]; setMsgs(newM); setInput(''); setLoading(true);
     try {
-        // MODIFICADO: Prompt para detectar fin de conversación e inyectar contexto de vacaciones
         let availabilityInstruction = "";
         if (isVacation && resumeDate) {
             availabilityInstruction = `NOTA CRÍTICA DEL SISTEMA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}. Sé muy amable y profesional, NO digas "vacaciones".`;
@@ -739,7 +748,6 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
                const jsonStr = jsonMatch[1];
                const data = JSON.parse(jsonStr);
                if (data.action === 'data_ready') {
-                   // NO GUARDAR TODAVÍA. Mostrar botones.
                    setPendingLeadData({
                        nombre: data.nombre || 'Anonimo',
                        edad: data.edad || '',
@@ -748,7 +756,6 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
                        fullChat: newM
                    });
                    setShowOptions(true);
-                   // Limpiar el JSON de la respuesta visible
                    reply = rawText.replace(jsonMatch[0], '').trim();
                }
             } catch(jsonErr) { console.error("Error parsing JSON", jsonErr); }
@@ -762,19 +769,27 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
 
   return (
     <div className="max-w-[480px] mx-auto flex flex-col h-full bg-white rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden relative font-sans">
-        <div className="bg-white/90 backdrop-blur-xl p-5 border-b border-gray-100 flex items-center gap-4 z-10 sticky top-0">
-            <div className="relative"><LucyAvatar className="w-12 h-12" /></div>
-            <div>
-              <h2 className="font-bold text-[#1d1d1f] text-lg tracking-tight">Lucy</h2>
-              <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full bg-green-500 animate-pulse`}></span>
-                    <p className="text-xs text-[#86868b] font-medium">En Línea</p>
+        
+        {/* Header Modificado con Botón Share */}
+        <div className="bg-white/90 backdrop-blur-xl p-5 border-b border-gray-100 flex items-center justify-between z-10 sticky top-0">
+            <div className="flex items-center gap-4">
+                <div className="relative"><LucyAvatar className="w-12 h-12" /></div>
+                <div>
+                  <h2 className="font-bold text-[#1d1d1f] text-lg tracking-tight">Lucy</h2>
+                  <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full bg-green-500 animate-pulse`}></span>
+                        <p className="text-xs text-[#86868b] font-medium">En Línea</p>
+                      </div>
+                      <span className="text-[#86868b] text-[10px]">•</span>
+                      <p className="text-xs text-blue-600 font-medium">{activeUsers} personas</p>
                   </div>
-                  <span className="text-[#86868b] text-[10px]">•</span>
-                  <p className="text-xs text-blue-600 font-medium">{activeUsers} personas consultando</p>
-              </div>
+                </div>
             </div>
+            {/* Botón Nuevo */}
+            <button onClick={() => setShowShareModal(true)} className="p-2 bg-slate-50 text-slate-400 rounded-full hover:bg-slate-100 hover:text-blue-600 transition-colors" title="Guardar enlace">
+                <Share2 size={20} />
+            </button>
         </div>
       
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-6 bg-white no-scrollbar">
@@ -788,14 +803,9 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
             ))}
             {loading && <div className="flex justify-start pl-10"><div className="bg-[#F2F2F7] px-4 py-3 rounded-2xl rounded-bl-none flex gap-1.5 items-center w-fit"><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span></div></div>}
       
-            {/* Botones de Cierre (Solo visibles cuando showOptions es true) */}
             {showOptions && (
                 <div className="flex flex-col gap-2 pt-2 animate-in zoom-in px-8">
-                    <button 
-                      onClick={() => handleOptionClick('ahora')} 
-                      disabled={!isAgentAvailable} 
-                      className={`w-full font-medium py-3.5 rounded-xl transition-all text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 ${isAgentAvailable ? 'bg-[#007AFF] text-white hover:bg-[#0062cc]' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}
-                    >
+                    <button onClick={() => handleOptionClick('ahora')} disabled={!isAgentAvailable} className={`w-full font-medium py-3.5 rounded-xl transition-all text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 ${isAgentAvailable ? 'bg-[#007AFF] text-white hover:bg-[#0062cc]' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}>
                       {isAgentAvailable ? <Zap size={16} fill="currentColor"/> : <Moon size={16}/>} {isAgentAvailable ? 'Hablar con un Agente Ahora' : 'Agentes no disponibles'}
                     </button>
                     <button onClick={() => handleOptionClick('programada')} className="w-full bg-[#F2F2F7] text-[#007AFF] font-medium py-3.5 rounded-xl hover:bg-[#E5E5EA] transition-all text-sm flex items-center justify-center gap-2 active:scale-95">
@@ -807,16 +817,38 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
       
         <form onSubmit={send} className="p-4 bg-white/90 backdrop-blur-xl border-t border-gray-100 flex gap-3">
             <input value={input} onChange={e=>setInput(e.target.value)} placeholder="Escribe un mensaje..." className="flex-1 bg-[#F2F2F7] border-0 rounded-full px-5 py-3 text-[16px] focus:ring-2 focus:ring-[#007AFF]/20 text-[#1d1d1f] placeholder:text-[#86868b] outline-none transition-all"/>
-            {/* Botón Circular Corregido */}
             <button disabled={loading} className="w-12 h-12 bg-[#007AFF] text-white rounded-full hover:bg-[#0062cc] transition-all active:scale-90 disabled:opacity-50 disabled:scale-100 flex items-center justify-center shrink-0 shadow-md">
                 <Send size={20} fill="currentColor" className="ml-0.5" />
             </button>
         </form>
 
-        {/* Footer Link en Chat - Ahora discreto abajo */}
         <div className="text-center py-2 bg-white border-t border-gray-50">
             <button onClick={onOpenLogin} className="text-[9px] text-slate-300 hover:text-slate-400 transition-colors">Acceso Corporativo</button>
         </div>
+
+        {/* --- NUEVO: Modal de Compartir / Guardar --- */}
+        {showShareModal && (
+            <div className="absolute inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
+                <div className="bg-white rounded-[24px] shadow-2xl p-6 w-full max-w-sm animate-in zoom-in-95">
+                    <div className="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-800">Guardar conversación</h3>
+                            <p className="text-xs text-slate-500 mt-1">Copie este enlace para volver a hablar con Lucy más tarde sin perder el contacto.</p>
+                        </div>
+                        <button onClick={() => setShowShareModal(false)} className="p-1 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full"><X size={16}/></button>
+                    </div>
+                    
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center gap-2 mb-4">
+                        <input type="text" readOnly value={window.location.href} className="bg-transparent border-0 text-xs text-slate-600 w-full outline-none font-mono truncate" />
+                    </div>
+
+                    <button onClick={handleCopyLink} className={`w-full py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 shadow-lg ${urlCopied ? 'bg-green-500 text-white' : 'bg-black text-white hover:bg-slate-800'}`}>
+                        {urlCopied ? <CheckCircle size={16}/> : <Copy size={16}/>}
+                        {urlCopied ? '¡Enlace Copiado!' : 'Copiar Enlace'}
+                    </button>
+                </div>
+            </div>
+        )}
     </div>
   );
 }
