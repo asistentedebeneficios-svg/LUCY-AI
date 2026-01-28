@@ -782,7 +782,7 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
                         <p className="text-xs text-[#86868b] font-medium">En Línea</p>
                       </div>
                       <span className="text-[#86868b] text-[10px]">•</span>
-                      <p className="text-xs text-blue-600 font-medium">{activeUsers} personas</p>
+                      <p className="text-xs text-blue-600 font-medium">{activeUsers} personas están consultando</p>
                   </div>
                 </div>
             </div>
