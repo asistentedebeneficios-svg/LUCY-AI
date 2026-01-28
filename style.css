@@ -1,0 +1,42 @@
+body { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background-color: #F5F5F7; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.animate-in { animation: fade-in 0.3s ease-out; }
+.zoom-in { animation: zoomIn 0.2s ease-out; }
+@keyframes zoomIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* Checkbox personalizado estilo Apple */
+.custom-checkbox {
+    appearance: none;
+    background-color: #fff;
+    margin: 0;
+    font: inherit;
+    color: currentColor;
+    width: 1.15em;
+    height: 1.15em;
+    border: 1px solid #d1d5db;
+    border-radius: 0.25em;
+    display: grid;
+    place-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.custom-checkbox::before {
+    content: "";
+    width: 0.65em;
+    height: 0.65em;
+    transform: scale(0);
+    transition: 120ms transform ease-in-out;
+    box-shadow: inset 1em 1em white;
+    background-color: white;
+    transform-origin: center;
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+.custom-checkbox:checked {
+    background-color: #2563EB;
+    border-color: #2563EB;
+}
+.custom-checkbox:checked::before {
+    transform: scale(1);
+}
