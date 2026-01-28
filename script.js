@@ -832,7 +832,7 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
                 <div className="bg-white rounded-[24px] shadow-2xl p-6 w-full max-w-sm animate-in zoom-in-95">
                     <div className="flex justify-between items-start mb-4">
                         <div>
-                            <h3 className="text-lg font-bold text-slate-800">Guardar link del Chat</h3>
+                            <h3 className="text-lg font-bold text-slate-800">Guarde esta página</h3>
                             <p className="text-xs text-slate-500 mt-1">Copie este enlace para volver a hablar con Lucy más tarde sin perder el contacto.</p>
                         </div>
                         <button onClick={() => setShowShareModal(false)} className="p-1 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full"><X size={16}/></button>
