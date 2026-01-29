@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
-import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, Mail, UserMinus } from 'https://esm.sh/lucide-react@0.344.0';
+import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, Mail, UserMinus, UserPlus } from 'https://esm.sh/lucide-react@0.344.0';
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
@@ -201,7 +201,7 @@ function App() {
   // Asignar Agente (Individual)
   const assignAgentToLead = async (leadId, agentId) => { if(!isAdmin) return; await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', leadId), { assignedAgentId: agentId || null, assignedAt: agentId ? serverTimestamp() : null }); };
 
-  // NUEVO: Asignación Masiva
+  // Asignación Masiva
   const bulkAssignAgent = async (leadIds, agentId) => {
       if(!isAdmin) return;
       const batch = writeBatch(db);
@@ -521,11 +521,16 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
     );
 }
 
-// --- LEADS LIST (MODIFICADO: Con Asignación Masiva) ---
+// --- LEADS LIST (MODIFICADO: Con Modal de Asignación Masiva) ---
 function LeadsList({ leads, agents, onAssignAgent, onBulkAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
   const [selectedLead, setSelectedLead] = useState(null);
   const [leadToDelete, setLeadToDelete] = useState(null); 
   const [selectedIds, setSelectedIds] = useState([]); 
+  
+  // NUEVO: Estado para el Modal de Asignación Masiva
+  const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
+  const [bulkSearchTerm, setBulkSearchTerm] = useState('');
+
   const filteredLeads = leads.filter(l => String(l.nombre||'').toLowerCase().includes(searchTerm.toLowerCase()));
 
   const handleSelectAll = (e) => e.target.checked ? setSelectedIds(filteredLeads.map(l => l.id)) : setSelectedIds([]);
@@ -533,20 +538,77 @@ function LeadsList({ leads, agents, onAssignAgent, onBulkAssign, onDeleteLead, o
   const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
   const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
 
-  const handleBulkAssignChange = (e) => {
-      const val = e.target.value;
-      if (!val) return;
-      if (confirm(val === 'unassign' ? `¿Desasignar ${selectedIds.length} leads?` : `¿Asignar ${selectedIds.length} leads al agente?`)) {
-          onBulkAssign(selectedIds, val);
-          setSelectedIds([]);
-          e.target.value = ""; // Reset
-      } else {
-          e.target.value = "";
-      }
+  // Filtrado de agentes en el modal
+  const filteredAgentsForBulk = agents.filter(a => a.nombre.toLowerCase().includes(bulkSearchTerm.toLowerCase()));
+
+  const handleBulkAssignAction = (agentId) => {
+      // Si agentId es 'unassign', liberamos. Si es un ID, asignamos.
+      const actionText = agentId === 'unassign' ? 'Desasignar' : 'Asignar';
+      
+      onBulkAssign(selectedIds, agentId);
+      setShowBulkAssignModal(false);
+      setSelectedIds([]);
+      setBulkSearchTerm('');
   };
 
   return (
     <div className="animate-in fade-in duration-500">
+        
+        {/* MODAL DE ASIGNACIÓN MASIVA */}
+        {showBulkAssignModal && (
+            <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden flex flex-col max-h-[80vh]">
+                    <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white">
+                        <h3 className="font-bold text-gray-800">Asignar {selectedIds.length} Leads</h3>
+                        <button onClick={() => setShowBulkAssignModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X size={18}/></button>
+                    </div>
+                    
+                    <div className="p-4 bg-gray-50 border-b border-gray-100">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                            <input 
+                                autoFocus
+                                type="text" 
+                                placeholder="Buscar agente..." 
+                                className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-100"
+                                value={bulkSearchTerm}
+                                onChange={(e) => setBulkSearchTerm(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="overflow-y-auto flex-1 p-2 space-y-1">
+                        {/* Opción Especial: Desasignar */}
+                        <button onClick={() => handleBulkAssignAction('unassign')} className="w-full flex items-center gap-3 p-3 hover:bg-red-50 rounded-xl transition-colors text-left group">
+                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 group-hover:bg-red-200"><UserMinus size={18}/></div>
+                            <div>
+                                <p className="font-bold text-red-600 text-sm">Desasignar / Liberar</p>
+                                <p className="text-[10px] text-red-400">Dejar estos leads sin agente</p>
+                            </div>
+                        </button>
+                        
+                        <div className="h-px bg-gray-100 my-1 mx-4"></div>
+
+                        {/* Lista de Agentes */}
+                        {filteredAgentsForBulk.length > 0 ? filteredAgentsForBulk.map(agent => (
+                            <button key={agent.id} onClick={() => handleBulkAssignAction(agent.id)} className="w-full flex items-center gap-3 p-3 hover:bg-blue-50 rounded-xl transition-colors text-left">
+                                <img src={agent.foto || "https://ui-avatars.com/api/?name=" + agent.nombre} className="w-10 h-10 rounded-full object-cover border border-gray-200" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-gray-800 text-sm truncate">{agent.nombre}</p>
+                                    <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                                        <span className="flex items-center gap-1"><MapPin size={10}/> {agent.estados || 'N/A'}</span>
+                                    </div>
+                                </div>
+                                <div className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold">Asignar</div>
+                            </button>
+                        )) : (
+                            <p className="text-center text-gray-400 text-sm py-4">No se encontraron agentes.</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
+
         {leadToDelete && (
             <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                 <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm border border-gray-100 text-center">
@@ -566,16 +628,31 @@ function LeadsList({ leads, agents, onAssignAgent, onBulkAssign, onDeleteLead, o
                         <button onClick={() => setSelectedLead(null)} className="p-2 bg-[#F5F5F7] hover:bg-[#E8E8ED] rounded-full transition-colors text-[#86868b]"><X size={18}/></button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-white">
+                        
+                        {/* Selector de Asignación Individual (Mantenemos este también) */}
                         <div className="bg-blue-50 p-4 rounded-xl flex items-center justify-between border border-blue-100">
-                             <div className="flex items-center gap-2 text-blue-800 font-medium text-sm"><Briefcase size={16}/><span>Asignar a Agente:</span></div>
+                             <div className="flex items-center gap-2 text-blue-800 font-medium text-sm">
+                                 <Briefcase size={16}/>
+                                 <span>Asignar a Agente:</span>
+                             </div>
                              <div className="relative">
-                                 <select className="bg-white border border-blue-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 pr-8 appearance-none outline-none cursor-pointer" value={selectedLead.assignedAgentId || ""} onChange={(e) => { onAssignAgent(selectedLead.id, e.target.value); setSelectedLead(prev => ({...prev, assignedAgentId: e.target.value})); }}>
+                                 <select 
+                                    className="bg-white border border-blue-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 pr-8 appearance-none outline-none cursor-pointer"
+                                    value={selectedLead.assignedAgentId || ""}
+                                    onChange={(e) => {
+                                        onAssignAgent(selectedLead.id, e.target.value);
+                                        setSelectedLead(prev => ({...prev, assignedAgentId: e.target.value})); 
+                                    }}
+                                 >
                                      <option value="">-- Sin Asignar --</option>
-                                     {agents && agents.map(agent => (<option key={agent.id} value={agent.id}>{agent.nombre}</option>))}
+                                     {agents && agents.map(agent => (
+                                         <option key={agent.id} value={agent.id}>{agent.nombre}</option>
+                                     ))}
                                  </select>
                                  <ChevronDown size={14} className="absolute right-3 top-3 text-gray-400 pointer-events-none"/>
                              </div>
                         </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span><a href={`https://wa.me/${String(selectedLead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(selectedLead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
                             <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Programado</span><p className="font-medium text-[#1d1d1f]">{formatScheduledDate(String(selectedLead.horario_preferido || 'Inmediata'))}</p></div>
@@ -599,18 +676,13 @@ function LeadsList({ leads, agents, onAssignAgent, onBulkAssign, onDeleteLead, o
                   <span className="text-xs font-bold text-blue-700">{selectedIds.length} seleccionados</span>
                   <div className="flex gap-2 items-center">
                       
-                      {/* NUEVO: Dropdown de Asignación Masiva */}
-                      <div className="relative">
-                          <select 
-                              onChange={handleBulkAssignChange} 
-                              className="appearance-none bg-white border border-blue-200 text-blue-700 text-xs font-medium rounded-lg pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-200 cursor-pointer"
-                          >
-                              <option value="">Asignar Agente...</option>
-                              <option value="unassign">-- Desasignar / Liberar --</option>
-                              {agents.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-                          </select>
-                          <ChevronDown size={14} className="absolute right-2 top-2 text-blue-400 pointer-events-none"/>
-                      </div>
+                      {/* NUEVO: Botón que abre el Modal */}
+                      <button 
+                          onClick={() => setShowBulkAssignModal(true)} 
+                          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"
+                      >
+                          <UserPlus size={14}/> Asignar Agente...
+                      </button>
 
                       <button onClick={handleBulkArchive} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors">
                           {isArchive ? <RotateCcw size={14}/> : <Archive size={14}/>}
