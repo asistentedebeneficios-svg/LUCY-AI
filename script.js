@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
-import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, Mail, UserMinus, UserPlus, Link } from 'https://esm.sh/lucide-react@0.344.0';
+// Importamos Link como LinkIcon para evitar conflictos de nombre
+import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, Mail, UserMinus, UserPlus, Link as LinkIcon } from 'https://esm.sh/lucide-react@0.344.0';
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
@@ -36,27 +37,44 @@ if (!OFFLINE_MODE) {
     } catch (e) { console.error("Firebase init error", e); }
 }
 
-// --- ESTÉTICA ---
-const IMAGES = { lucy: "https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" };
-
-const LucyAvatar = ({ className = "w-10 h-10" }) => (
-  <img src={IMAGES.lucy} alt="Lucy" className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"; }} />
-);
-const BrainAvatar = ({ className = "w-10 h-10" }) => (<div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}><Sparkles size={20} strokeWidth={2} /></div>);
-const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
-
 // --- UTILIDADES ---
+// Generador de ID robusto (funciona en todos los navegadores)
+const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
+
 function cleanAiMessage(text) { if (!text) return ''; let cleaned = text.replace(new RegExp('\\[Botón:.*?\\]', 'gi'), '').replace(new RegExp('\\[Button:.*?\\]', 'gi'), ''); return cleaned.split('***').join('').split('---').join('').trim(); }
 function formatScheduledDate(d) { if (!d || d.length < 10) return d; const date = new Date(d); return isNaN(date) ? d : date.toLocaleDateString('en-US', {month:'2-digit', day:'2-digit', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true}); }
 function formatFirestoreDate(ts) { if (!ts) return 'Reciente'; if (OFFLINE_MODE && typeof ts === 'string') return new Date(ts).toLocaleDateString('en-US'); return ts.toDate ? ts.toDate().toLocaleDateString('en-US') : new Date(ts.seconds * 1000).toLocaleDateString('en-US'); }
 const RichText = ({ content }) => { if (!content || typeof content !== 'string') return null; return <span className="text-sm leading-relaxed">{content.split(/(\*\*.*?\*\*)/g).map((part, i) => part.startsWith('**') ? <strong key={i} className="text-slate-900 font-bold">{part.slice(2, -2)}</strong> : part)}</span>; };
 const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
 const DEFAULT_SCHEDULE = { lunes: { start: '09:00', end: '18:00', enabled: true }, martes: { start: '09:00', end: '18:00', enabled: true }, miercoles: { start: '09:00', end: '18:00', enabled: true }, jueves: { start: '09:00', end: '18:00', enabled: true }, viernes: { start: '09:00', end: '18:00', enabled: true }, sabado: { start: '10:00', end: '14:00', enabled: false }, domingo: { start: '10:00', end: '14:00', enabled: false } };
-const getAgentStatus = (config) => { const now = new Date(); if (config.vacationMode && config.vacationStart && config.vacationEnd) { const vStart = new Date(config.vacationStart + 'T00:00:00'); const vEnd = new Date(config.vacationEnd + 'T23:59:59'); if (now >= vStart && now <= vEnd) return { isAgentAvailable: false, isVacation: true, resumeDate: new Date(vEnd.setDate(vEnd.getDate() + 1)) }; } const day = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'][now.getDay()]; const sch = config.schedule?.[day]; if (!sch || !sch.enabled) return { isAgentAvailable: false, message: "Cerrado hoy" }; const mins = now.getHours() * 60 + now.getMinutes(); const [sH, sM] = sch.start.split(':').map(Number); const [eH, eM] = sch.end.split(':').map(Number); if (mins < sH * 60 + sM || mins >= eH * 60 + eM) return { isAgentAvailable: false, message: "Cerrado ahora" }; return { isAgentAvailable: true, message: "Agentes Disponibles" }; };
+
+const getAgentStatus = (config) => { 
+    const now = new Date(); 
+    if (config?.vacationMode && config?.vacationStart && config?.vacationEnd) { 
+        const vStart = new Date(config.vacationStart + 'T00:00:00'); 
+        const vEnd = new Date(config.vacationEnd + 'T23:59:59'); 
+        if (now >= vStart && now <= vEnd) return { isAgentAvailable: false, isVacation: true, resumeDate: new Date(vEnd.setDate(vEnd.getDate() + 1)) }; 
+    } 
+    const day = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'][now.getDay()]; 
+    const sch = config?.schedule?.[day]; 
+    if (!sch || !sch.enabled) return { isAgentAvailable: false, message: "Cerrado hoy" }; 
+    const mins = now.getHours() * 60 + now.getMinutes(); 
+    const [sH, sM] = sch.start.split(':').map(Number); 
+    const [eH, eM] = sch.end.split(':').map(Number); 
+    if (mins < sH * 60 + sM || mins >= eH * 60 + eM) return { isAgentAvailable: false, message: "Cerrado ahora" }; 
+    return { isAgentAvailable: true, message: "Agentes Disponibles" }; 
+};
+
 async function fetchGeminiWithRetry(payload) { if (!rateLimit.check()) throw new Error("Espera unos segundos."); if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; } const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`; try { const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if (res.ok) return await res.json(); } catch (e) { throw e; } throw new Error("Error conexión"); }
 function useInactivityTimer(action, timeout = 600000) { useEffect(() => { let timer; const resetTimer = () => { clearTimeout(timer); timer = setTimeout(action, timeout); }; window.addEventListener('mousemove', resetTimer); window.addEventListener('keypress', resetTimer); window.addEventListener('click', resetTimer); window.addEventListener('touchstart', resetTimer); resetTimer(); return () => { clearTimeout(timer); window.removeEventListener('mousemove', resetTimer); window.removeEventListener('keypress', resetTimer); window.removeEventListener('click', resetTimer); window.removeEventListener('touchstart', resetTimer); }; }, [action, timeout]); }
 
-// --- COMPONENTES AUXILIARES ---
+// --- ESTÉTICA ---
+const IMAGES = { lucy: "https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" };
+const LucyAvatar = ({ className = "w-10 h-10" }) => (<img src={IMAGES.lucy} alt="Lucy" className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"; }} />);
+const BrainAvatar = ({ className = "w-10 h-10" }) => (<div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}><Sparkles size={20} strokeWidth={2} /></div>);
+const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
+
+// --- MODALES ---
 
 const LeadDetailModal = ({ lead, agents, onClose, onUpdateStatus, isArchive }) => {
     if (!lead) return null;
@@ -125,7 +143,7 @@ const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
     );
 };
 
-// --- COMPONENTE PRINCIPAL ---
+// --- COMPONENTE PRINCIPAL APP ---
 function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('landing'); 
@@ -193,16 +211,12 @@ function App() {
   const deleteLead = async (ids) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.delete(ref); }); await batch.commit(); }
   const updateLeadStatus = async (ids, status) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.update(ref, { status: status }); }); await batch.commit(); }
   
-  // --- ASIGNACIÓN UNIFICADA + WEBHOOK TRIGGER ---
   const handleAssignAgent = async (agentId) => {
       if(!isAdmin) return;
       const targetIds = assignModalData.targetIds;
       if (targetIds.length === 0) return;
 
-      // 1. Encontrar el Agente (si se está asignando)
       const assignedAgent = agentId !== 'unassign' ? agents.find(a => a.id === agentId) : null;
-
-      // 2. Preparar el Batch de Firebase
       const batch = writeBatch(db);
       targetIds.forEach(id => {
           const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id);
@@ -213,35 +227,15 @@ function App() {
       });
       await batch.commit();
 
-      // 3. Disparar Webhook de Asignación (Si hay URL configurada y es una asignación)
       if (assignedAgent && aiConfig.assignmentWebhookUrl) {
           const targetLeads = leads.filter(l => targetIds.includes(l.id));
-          
           targetLeads.forEach(lead => {
-              // Solo enviamos si el lead tiene email
               if (lead.email) { 
-                  // Payload que enviamos a Zapier
-                  const payload = {
-                      leadName: lead.nombre,
-                      leadEmail: lead.email,
-                      leadPhone: lead.telefono,
-                      agentName: assignedAgent.nombre,
-                      agentEmail: assignedAgent.email,
-                      agentPhone: assignedAgent.telefono,
-                      agentPhoto: assignedAgent.foto,
-                      assignedAt: new Date().toISOString()
-                  };
-
-                  fetch(aiConfig.assignmentWebhookUrl, {
-                      method: 'POST',
-                      mode: 'no-cors', // Importante para evitar errores de CORS con webhooks simples
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(payload)
-                  }).catch(err => console.error("Error webhook asignación:", err));
+                  const payload = { leadName: lead.nombre, leadEmail: lead.email, leadPhone: lead.telefono, agentName: assignedAgent.nombre, agentEmail: assignedAgent.email, agentPhone: assignedAgent.telefono, agentPhoto: assignedAgent.foto, assignedAt: new Date().toISOString() };
+                  fetch(aiConfig.assignmentWebhookUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(err => console.error("Error webhook asignación:", err));
               }
           });
       }
-
       setAssignModalData({ isOpen: false, targetIds: [] });
   };
 
@@ -250,7 +244,7 @@ function App() {
   const saveAgent = async (agentData) => { 
       if(!isAdmin) return; const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list'); const docSnap = await getDoc(agentsRef); let currentList = docSnap.exists() ? (docSnap.data().list || []) : [];
       if (agentData.id) { currentList = currentList.map(a => a.id === agentData.id ? { ...agentData, updatedAt: Date.now() } : a); } 
-      else { const newAgent = { ...agentData, id: crypto.randomUUID(), createdAt: Date.now() }; currentList.push(newAgent); }
+      else { const newAgent = { ...agentData, id: generateId(), createdAt: Date.now() }; currentList.push(newAgent); }
       await setDoc(agentsRef, { list: currentList });
   };
   const deleteAgent = async (ids) => { 
@@ -353,7 +347,7 @@ function LandingView({ onStartChat, onOpenLogin }) {
            <div className="flex flex-col items-center gap-1.5"><div className="p-2 bg-pink-50 text-pink-600 rounded-xl"><Heart size={20} /></div><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center">Soporte Familiar</span></div>
         </div>
       </div>
-      <div className="p-4 text-center"><p className="text-[10px] text-slate-300">&copy; 2024 Asistente de Beneficios. Privacidad Garantizada.</p><button onClick={onOpenLogin} className="mt-2 text-[9px] text-slate-200 hover:text-slate-400 transition-colors">Acceso Corporativo</button></div>
+      <div className="p-4 text-center"><p className="text-[10px] text-slate-300">&copy; 2024 Asistente de Beneficios. Privacidad Garantizada.</p>{onOpenLogin && <button onClick={onOpenLogin} className="mt-2 text-[9px] text-slate-200 hover:text-slate-400 transition-colors">Acceso Corporativo</button>}</div>
     </div>
   );
 }
@@ -632,52 +626,19 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false); 
   const [isEditingWebhook, setIsEditingWebhook] = useState(false);
-  const [isEditingAssignmentWebhook, setIsEditingAssignmentWebhook] = useState(false); // NUEVO
+  const [isEditingAssignmentWebhook, setIsEditingAssignmentWebhook] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [targetWebhook, setTargetWebhook] = useState(''); // 'main' or 'assignment'
+  const [targetWebhook, setTargetWebhook] = useState(''); 
   const [authPassword, setAuthPassword] = useState('');
   const [authError, setAuthError] = useState(null);
 
   const handleDayToggle = (day) => setC(prev => ({...prev, schedule: {...prev.schedule, [day]: {...prev.schedule[day], enabled: !prev.schedule[day].enabled}}}));
   const handleTimeChange = (day, type, value) => setC(prev => ({...prev, schedule: {...prev.schedule, [day]: {...prev.schedule[day], [type]: value}}}));
 
-  const handleSave = async () => { 
-      setIsSaving(true); 
-      await onSaveConfig(c); 
-      setIsSaving(false); 
-      setIsEditingWebhook(false); 
-      setIsEditingAssignmentWebhook(false);
-      setShowSuccess(true); 
-      setTimeout(() => setShowSuccess(false), 3000); 
-  }; 
-
+  const handleSave = async () => { setIsSaving(true); await onSaveConfig(c); setIsSaving(false); setIsEditingWebhook(false); setIsEditingAssignmentWebhook(false); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000); }; 
   const daysList = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
-
-  const handleEditWebhookClick = (target) => { 
-      setTargetWebhook(target);
-      setShowAuthModal(true); 
-      setAuthPassword(''); 
-      setAuthError(null); 
-  };
-
-  const handleAuthSubmit = async (e) => {
-     e.preventDefault();
-     setAuthError(null);
-     try {
-         const user = auth.currentUser;
-         if (user && user.email) {
-             await signInWithEmailAndPassword(auth, user.email, authPassword);
-             setShowAuthModal(false);
-             if (targetWebhook === 'main') setIsEditingWebhook(true);
-             if (targetWebhook === 'assignment') setIsEditingAssignmentWebhook(true);
-         } else {
-             setAuthError("No se pudo verificar la sesión.");
-         }
-     } catch (error) {
-         console.error("Auth check failed", error);
-         setAuthError("Contraseña incorrecta.");
-     }
-  };
+  const handleEditWebhookClick = (target) => { setTargetWebhook(target); setShowAuthModal(true); setAuthPassword(''); setAuthError(null); };
+  const handleAuthSubmit = async (e) => { e.preventDefault(); setAuthError(null); try { const user = auth.currentUser; if (user && user.email) { await signInWithEmailAndPassword(auth, user.email, authPassword); setShowAuthModal(false); if (targetWebhook === 'main') setIsEditingWebhook(true); if (targetWebhook === 'assignment') setIsEditingAssignmentWebhook(true); } else { setAuthError("No se pudo verificar la sesión."); } } catch (error) { console.error("Auth check failed", error); setAuthError("Contraseña incorrecta."); } };
 
   return (
     <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -695,20 +656,15 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
           </div>
         </div>
         <div className="md:w-72 space-y-6">
-          
-          {/* Webhook 1: Nuevo Lead */}
           <div>
               <div className="flex justify-between items-center mb-2"><label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide">Webhook: Nuevo Lead</label>{!isEditingWebhook && (<button onClick={() => handleEditWebhookClick('main')} className="text-blue-500 hover:text-blue-700 transition-colors" title="Editar Webhook"><Pencil size={12} /></button>)}</div>
               <input type={isEditingWebhook ? "text" : "password"} placeholder="https://hooks.zapier.com/..." value={c.webhookUrl || ""} onChange={(e)=>setC({...c, webhookUrl:e.target.value})} disabled={!isEditingWebhook} className={`w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-medium text-[#1d1d1f] focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all shadow-sm ${!isEditingWebhook ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} />
           </div>
-
-          {/* Webhook 2: Asignación */}
           <div>
               <div className="flex justify-between items-center mb-2"><label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide">Webhook: Notificar Cliente</label>{!isEditingAssignmentWebhook && (<button onClick={() => handleEditWebhookClick('assignment')} className="text-blue-500 hover:text-blue-700 transition-colors" title="Editar Webhook"><Pencil size={12} /></button>)}</div>
               <input type={isEditingAssignmentWebhook ? "text" : "password"} placeholder="https://hooks.zapier.com/..." value={c.assignmentWebhookUrl || ""} onChange={(e)=>setC({...c, assignmentWebhookUrl:e.target.value})} disabled={!isEditingAssignmentWebhook} className={`w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-medium text-[#1d1d1f] focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all shadow-sm ${!isEditingAssignmentWebhook ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} />
               <p className="text-[9px] text-gray-400 mt-1">Se dispara al asignar un agente.</p>
           </div>
-
           <button onClick={handleSave} disabled={isSaving} className="w-full bg-black text-white font-medium py-3 rounded-xl hover:bg-gray-800 transition-all text-xs shadow-lg relative overflow-hidden">{isSaving ? "Guardando..." : "Guardar Cambios"}</button>
           {showSuccess && (<div className="animate-in fade-in bg-green-50 text-green-700 border border-green-100 rounded-xl p-3 flex items-center justify-center gap-2 text-xs font-medium shadow-sm mt-2"><CheckCircle size={14} /> Cambios guardados correctamente</div>)}
         </div>
@@ -726,6 +682,144 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
               </div>
           </div>
       )}
+    </div>
+  );
+}
+
+// --- CLIENT CHAT (MODIFICADO: Botón compartir URL) ---
+function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
+  const [activeUsers, setActiveUsers] = useState(Math.floor(Math.random() * (28 - 18 + 1)) + 18);
+  const [msgs, setMsgs] = useState([
+    { role: 'assistant', content: 'Hola, soy Lucy, su asistente personal experta en **Gastos Finales**. Mi misión es brindarle la información que necesita para su tranquilidad y la de su familia.\n\nTenga la plena seguridad de que **todo lo que hablemos es confidencial**; nada será divulgado sin su expresa autorización. Mi único objetivo es ayudarle, y si al final de nuestra charla usted lo desea, podré conectarle directamente con un **agente acreditado por su estado**.\n\n¿Cómo le podemos servir el día de hoy?' }
+  ]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
+  const [pendingLeadData, setPendingLeadData] = useState(null);
+  
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [urlCopied, setUrlCopied] = useState(false);
+  
+  const scrollRef = useRef(null);
+  const { isAgentAvailable, message: statusMessage, isVacation, resumeDate } = getAgentStatus(aiConfig);
+
+  useEffect(()=>{ 
+      const i = setInterval(() => setActiveUsers(p => p + (Math.random() > 0.5 ? 1 : -1)), 5000);
+      return () => clearInterval(i);
+  },[]);
+
+  useEffect(()=>{ if(scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; },[msgs, loading, showOptions]);
+
+  const handleCopyLink = () => {
+      const url = window.location.href;
+      navigator.clipboard.writeText(url).then(() => {
+          setUrlCopied(true);
+          setTimeout(() => setUrlCopied(false), 2500);
+      });
+  };
+
+  const handleOptionClick = (type) => {
+      if (pendingLeadData) {
+          const finalLead = {
+              ...pendingLeadData,
+              metodo_contacto: type,
+              horario_preferido: type === 'ahora' ? 'Inmediata' : 'Pendiente'
+          };
+          onSaveLead(finalLead);
+          setPendingLeadData(null); 
+          setShowOptions(false); 
+          const responseMsg = type === 'ahora' ? "¡Perfecto! Un agente se comunicará con usted en breve al número proporcionado." : "Excelente. Un agente le llamará para programar la cita en el horario que mejor le convenga.";
+          setMsgs(prev => [...prev, {role: 'assistant', content: responseMsg}]);
+      }
+  };
+
+  const send = async (e) => {
+    e.preventDefault(); if(!input.trim() || loading) return;
+    const newM = [...msgs, {role:'user', content:input}]; setMsgs(newM); setInput(''); setLoading(true);
+    try {
+        let availabilityInstruction = "";
+        if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA DEL SISTEMA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}. Sé muy amable y profesional, NO digas "vacaciones".`;
+
+        const prompt = `
+          ${aiConfig?.systemPrompt || ""}
+          ${availabilityInstruction}
+          HISTORIAL:
+          ${newM.map(m=>`${m.role}: ${m.content}`).join('\n')}
+          INSTRUCCIÓN TÉCNICA CRÍTICA:
+          Si el usuario YA ha proporcionado Nombre, Edad, Email y algún dato de contacto, y consideras que la etapa de recolección de datos ha terminado, TU RESPUESTA DEBE INCLUIR UN BLOQUE JSON AL FINAL con este formato:
+          \`\`\`json
+          { "action": "data_ready", "nombre": "...", "edad": "...", "email": "...", "telefono": "...", "resumen_ai": "..." }
+          \`\`\`
+          IMPORTANTE: NO te despidas definitivamente todavía. Solo di que tienes opciones disponibles.
+          Si no, responde normalmente como Lucy.
+        `;
+
+        const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
+        const rawText = res.candidates[0].content.parts[0].text;
+        let reply = rawText;
+        const jsonMatch = rawText.match(/```json([\s\S]*?)```/);
+        if (jsonMatch) {
+            try {
+               const jsonStr = jsonMatch[1];
+               const data = JSON.parse(jsonStr);
+               if (data.action === 'data_ready') {
+                   setPendingLeadData({ nombre: data.nombre || 'Anonimo', edad: data.edad || '', email: data.email || '', telefono: data.telefono || '', resumen_ai: data.resumen_ai || 'Lead capturado por Lucy', fullChat: newM });
+                   setShowOptions(true);
+                   reply = rawText.replace(jsonMatch[0], '').trim();
+               }
+            } catch(jsonErr) { console.error("Error parsing JSON", jsonErr); }
+        }
+        reply = cleanAiMessage(reply);
+        setMsgs([...newM, {role:'assistant', content:reply}]);
+    } catch(e){ console.error(e); }
+    setLoading(false);
+  };
+
+  return (
+    <div className="max-w-[480px] mx-auto flex flex-col h-full bg-white rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden relative font-sans">
+        <div className="bg-white/90 backdrop-blur-xl p-5 border-b border-gray-100 flex items-center justify-between z-10 sticky top-0">
+            <div className="flex items-center gap-4">
+                <div className="relative"><LucyAvatar className="w-12 h-12" /></div>
+                <div>
+                  <h2 className="font-bold text-[#1d1d1f] text-lg tracking-tight">Lucy</h2>
+                  <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full bg-green-500 animate-pulse`}></span><p className="text-xs text-[#86868b] font-medium">En Línea</p></div>
+                      <span className="text-[#86868b] text-[10px]">•</span>
+                      <p className="text-xs text-blue-600 font-medium">{activeUsers} personas</p>
+                  </div>
+                </div>
+            </div>
+            <button onClick={() => setShowShareModal(true)} className="p-2 bg-slate-50 text-slate-400 rounded-full hover:bg-slate-100 hover:text-blue-600 transition-colors" title="Guardar enlace"><Share2 size={20} /></button>
+        </div>
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-6 bg-white no-scrollbar">
+            {msgs.map((m,i)=>(
+                <div key={i} className={`flex ${m.role==='user'?'justify-end':'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                    {m.role === 'assistant' && <LucyAvatar className="w-8 h-8 mr-2 mt-auto shrink-0" />}
+                    <div className={`w-fit max-w-[75%] px-5 py-3 rounded-2xl text-[16px] leading-relaxed shadow-sm text-left ${m.role==='user'?'bg-[#007AFF] text-white rounded-br-none':'bg-[#F2F2F7] text-[#1d1d1f] rounded-bl-none'}`}><RichText content={m.content}/></div>
+                </div>
+            ))}
+            {loading && <div className="flex justify-start pl-10"><div className="bg-[#F2F2F7] px-4 py-3 rounded-2xl rounded-bl-none flex gap-1.5 items-center w-fit"><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span></div></div>}
+            {showOptions && (
+                <div className="flex flex-col gap-2 pt-2 animate-in zoom-in px-8">
+                    <button onClick={() => handleOptionClick('ahora')} disabled={!isAgentAvailable} className={`w-full font-medium py-3.5 rounded-xl transition-all text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 ${isAgentAvailable ? 'bg-[#007AFF] text-white hover:bg-[#0062cc]' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}>{isAgentAvailable ? <Zap size={16} fill="currentColor"/> : <Moon size={16}/>} {isAgentAvailable ? 'Hablar con un Agente Ahora' : 'Agentes no disponibles'}</button>
+                    <button onClick={() => handleOptionClick('programada')} className="w-full bg-[#F2F2F7] text-[#007AFF] font-medium py-3.5 rounded-xl hover:bg-[#E5E5EA] transition-all text-sm flex items-center justify-center gap-2 active:scale-95"><Calendar size={16}/> Programar Llamada</button>
+                </div>
+            )}
+        </div>
+        <form onSubmit={send} className="p-4 bg-white/90 backdrop-blur-xl border-t border-gray-100 flex gap-3">
+            <input value={input} onChange={e=>setInput(e.target.value)} placeholder="Escribe un mensaje..." className="flex-1 bg-[#F2F2F7] border-0 rounded-full px-5 py-3 text-[16px] focus:ring-2 focus:ring-[#007AFF]/20 text-[#1d1d1f] placeholder:text-[#86868b] outline-none transition-all"/>
+            <button disabled={loading} className="w-12 h-12 bg-[#007AFF] text-white rounded-full hover:bg-[#0062cc] transition-all active:scale-90 disabled:opacity-50 disabled:scale-100 flex items-center justify-center shrink-0 shadow-md"><Send size={20} fill="currentColor" className="ml-0.5" /></button>
+        </form>
+        <div className="text-center py-2 bg-white border-t border-gray-50">{onOpenLogin && <button onClick={onOpenLogin} className="text-[9px] text-slate-300 hover:text-slate-400 transition-colors">Acceso Corporativo</button>}</div>
+        {showShareModal && (
+            <div className="absolute inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
+                <div className="bg-white rounded-[24px] shadow-2xl p-6 w-full max-w-sm animate-in zoom-in-95">
+                    <div className="flex justify-between items-start mb-4"><div><h3 className="text-lg font-bold text-slate-800">Guardar conversación</h3><p className="text-xs text-slate-500 mt-1">Copie este enlace para volver a hablar con Lucy más tarde sin perder el contacto.</p></div><button onClick={() => setShowShareModal(false)} className="p-1 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full"><X size={16}/></button></div>
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center gap-2 mb-4"><input type="text" readOnly value={window.location.href} className="bg-transparent border-0 text-xs text-slate-600 w-full outline-none font-mono truncate" /></div>
+                    <button onClick={handleCopyLink} className={`w-full py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 shadow-lg ${urlCopied ? 'bg-green-500 text-white' : 'bg-black text-white hover:bg-slate-800'}`}>{urlCopied ? <CheckCircle size={16}/> : <Copy size={16}/>}{urlCopied ? '¡Enlace Copiado!' : 'Copiar Enlace'}</button>
+                </div>
+            </div>
+        )}
     </div>
   );
 }
