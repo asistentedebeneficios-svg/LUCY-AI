@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
-import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, Mail, UserMinus, UserPlus, Link as LinkIcon, AlertTriangle } from 'https://esm.sh/lucide-react@0.344.0';
+// IMPORTANTE: Link se renombra a LinkIcon para evitar conflictos
+import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, Mail, UserMinus, UserPlus, Link as LinkIcon } from 'https://esm.sh/lucide-react@0.344.0';
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
@@ -47,6 +48,12 @@ function cleanAiMessage(text) {
     return cleaned.split('***').join('').split('---').join('').trim();
 }
 
+function to12h(t) {
+    if (!t) return '';
+    const [h, m] = t.split(':');
+    return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
 function formatScheduledDate(d) {
     if (!d || d.length < 10) return d;
     const date = new Date(d);
@@ -84,12 +91,11 @@ const getAgentStatus = (config) => {
     return { isAgentAvailable: true, message: "Agentes Disponibles" };
 };
 
-// --- API FETCH CORREGIDO (USANDO gemini-1.5-flash) ---
+// --- API FETCH (MODELO 1.5 FLASH) ---
 async function fetchGeminiWithRetry(payload) {
     if (!rateLimit.check()) throw new Error("Espera unos segundos.");
     if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; }
 
-    // CORRECCIÓN: Usamos el modelo 1.5-flash que sí está disponible en v1beta
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
     
     try {
@@ -102,9 +108,8 @@ async function fetchGeminiWithRetry(payload) {
                 const errJson = JSON.parse(errorText);
                 errorMessage = errJson.error?.message || errorMessage;
             } catch (e) {}
-            // Si el error contiene "region", es bloqueo geográfico.
             if(errorMessage.toLowerCase().includes("region")) {
-                throw new Error(`⚠️ Error de Región: Google AI no está disponible en tu ubicación actual sin VPN.`);
+                throw new Error(`⚠️ Error de Región: Google AI no está disponible en tu ubicación actual.`);
             }
             throw new Error(`⚠️ ${errorMessage}`);
         }
@@ -178,6 +183,7 @@ const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
                     </div>
                 </div>
                 <div className="overflow-y-auto flex-1 p-2 space-y-1">
+                    {/* AQUÍ ESTABA EL ERROR: Link -> LinkIcon */}
                     <button onClick={() => onAssign('unassign')} className="w-full flex items-center gap-3 p-3 hover:bg-red-50 rounded-xl transition-colors text-left group"><div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 group-hover:bg-red-200"><UserMinus size={18}/></div><div><p className="font-bold text-red-600 text-sm">Desasignar / Liberar</p><p className="text-[10px] text-red-400">Dejar sin agente</p></div></button>
                     <div className="h-px bg-gray-100 my-1 mx-4"></div>
                     {filtered.length > 0 ? filtered.map(agent => (
@@ -725,6 +731,147 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
                             {authError && <p className="text-xs text-red-500 font-medium">{authError}</p>}
                             <div className="flex justify-end gap-2 mt-2"><button type="button" onClick={() => setShowAuthModal(false)} className="px-3 py-2 text-xs font-medium text-slate-500 hover:text-slate-800">Cancelar</button><button type="submit" className="px-4 py-2 bg-black text-white text-xs font-medium rounded-lg hover:bg-gray-800">Verificar</button></div>
                         </form>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// --- CLIENT CHAT (MODIFICADO: Botón compartir URL) ---
+function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
+    const [activeUsers, setActiveUsers] = useState(Math.floor(Math.random() * (28 - 18 + 1)) + 18);
+    const [msgs, setMsgs] = useState([
+        { role: 'assistant', content: 'Hola, soy Lucy, su asistente personal experta en **Gastos Finales**. Mi misión es brindarle la información que necesita para su tranquilidad y la de su familia.\n\nTenga la plena seguridad de que **todo lo que hablemos es confidencial**; nada será divulgado sin su expresa autorización. Mi único objetivo es ayudarle, y si al final de nuestra charla usted lo desea, podré conectarle directamente con un **agente acreditado por su estado**.\n\n¿Cómo le podemos servir el día de hoy?' }
+    ]);
+    const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [showOptions, setShowOptions] = useState(false);
+    const [pendingLeadData, setPendingLeadData] = useState(null);
+
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [urlCopied, setUrlCopied] = useState(false);
+
+    const scrollRef = useRef(null);
+    const { isAgentAvailable, message: statusMessage, isVacation, resumeDate } = getAgentStatus(aiConfig);
+
+    useEffect(() => {
+        const i = setInterval(() => setActiveUsers(p => p + (Math.random() > 0.5 ? 1 : -1)), 5000);
+        return () => clearInterval(i);
+    }, []);
+
+    useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [msgs, loading, showOptions]);
+
+    const handleCopyLink = () => {
+        const url = window.location.href;
+        navigator.clipboard.writeText(url).then(() => {
+            setUrlCopied(true);
+            setTimeout(() => setUrlCopied(false), 2500);
+        });
+    };
+
+    const handleOptionClick = (type) => {
+        if (pendingLeadData) {
+            const finalLead = {
+                ...pendingLeadData,
+                metodo_contacto: type,
+                horario_preferido: type === 'ahora' ? 'Inmediata' : 'Pendiente'
+            };
+            onSaveLead(finalLead);
+            setPendingLeadData(null);
+            setShowOptions(false);
+            const responseMsg = type === 'ahora' ? "¡Perfecto! Un agente se comunicará con usted en breve al número proporcionado." : "Excelente. Un agente le llamará para programar la cita en el horario que mejor le convenga.";
+            setMsgs(prev => [...prev, { role: 'assistant', content: responseMsg }]);
+        }
+    };
+
+    const send = async (e) => {
+        e.preventDefault(); if (!input.trim() || loading) return;
+        const newM = [...msgs, { role: 'user', content: input }]; setMsgs(newM); setInput(''); setLoading(true);
+        try {
+            let availabilityInstruction = "";
+            if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA DEL SISTEMA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}. Sé muy amable y profesional, NO digas "vacaciones".`;
+
+            const prompt = `
+          ${aiConfig?.systemPrompt || ""}
+          ${availabilityInstruction}
+          HISTORIAL:
+          ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
+          INSTRUCCIÓN TÉCNICA CRÍTICA:
+          Si el usuario YA ha proporcionado Nombre, Edad, Email y algún dato de contacto, y consideras que la etapa de recolección de datos ha terminado, TU RESPUESTA DEBE INCLUIR UN BLOQUE JSON AL FINAL con este formato:
+          \`\`\`json
+          { "action": "data_ready", "nombre": "...", "edad": "...", "email": "...", "telefono": "...", "resumen_ai": "..." }
+          \`\`\`
+          IMPORTANTE: NO te despidas definitivamente todavía. Solo di que tienes opciones disponibles.
+          Si no, responde normalmente como Lucy.
+        `;
+
+            const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
+            const rawText = res.candidates[0].content.parts[0].text;
+            let reply = rawText;
+            const jsonMatch = rawText.match(/```json([\s\S]*?)```/);
+            if (jsonMatch) {
+                try {
+                    const jsonStr = jsonMatch[1];
+                    const data = JSON.parse(jsonStr);
+                    if (data.action === 'data_ready') {
+                        setPendingLeadData({ nombre: data.nombre || 'Anonimo', edad: data.edad || '', email: data.email || '', telefono: data.telefono || '', resumen_ai: data.resumen_ai || 'Lead capturado por Lucy', fullChat: newM });
+                        setShowOptions(true);
+                        reply = rawText.replace(jsonMatch[0], '').trim();
+                    }
+                } catch (jsonErr) { console.error("Error parsing JSON", jsonErr); }
+            }
+            reply = cleanAiMessage(reply);
+            setMsgs([...newM, { role: 'assistant', content: reply }]);
+        } catch (e) {
+            console.error(e);
+            setMsgs([...newM, { role: 'assistant', content: `⚠️ ${e.message}` }]);
+        }
+        setLoading(false);
+    };
+
+    return (
+        <div className="max-w-[480px] mx-auto flex flex-col h-full bg-white rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden relative font-sans">
+            <div className="bg-white/90 backdrop-blur-xl p-5 border-b border-gray-100 flex items-center justify-between z-10 sticky top-0">
+                <div className="flex items-center gap-4">
+                    <div className="relative"><LucyAvatar className="w-12 h-12" /></div>
+                    <div>
+                        <h2 className="font-bold text-[#1d1d1f] text-lg tracking-tight">Lucy</h2>
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full bg-green-500 animate-pulse`}></span><p className="text-xs text-[#86868b] font-medium">En Línea</p></div>
+                            <span className="text-[#86868b] text-[10px]">•</span>
+                            <p className="text-xs text-blue-600 font-medium">{activeUsers} personas</p>
+                        </div>
+                    </div>
+                </div>
+                <button onClick={() => setShowShareModal(true)} className="p-2 bg-slate-50 text-slate-400 rounded-full hover:bg-slate-100 hover:text-blue-600 transition-colors" title="Guardar enlace"><Share2 size={20} /></button>
+            </div>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-6 bg-white no-scrollbar">
+                {msgs.map((m, i) => (
+                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                        {m.role === 'assistant' && <LucyAvatar className="w-8 h-8 mr-2 mt-auto shrink-0" />}
+                        <div className={`w-fit max-w-[75%] px-5 py-3 rounded-2xl text-[16px] leading-relaxed shadow-sm text-left ${m.role === 'user' ? 'bg-[#007AFF] text-white rounded-br-none' : 'bg-[#F2F2F7] text-[#1d1d1f] rounded-bl-none'}`}><RichText content={m.content} /></div>
+                    </div>
+                ))}
+                {loading && <div className="flex justify-start pl-10"><div className="bg-[#F2F2F7] px-4 py-3 rounded-2xl rounded-bl-none flex gap-1.5 items-center w-fit"><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span></div></div>}
+                {showOptions && (
+                    <div className="flex flex-col gap-2 pt-2 animate-in zoom-in px-8">
+                        <button onClick={() => handleOptionClick('ahora')} disabled={!isAgentAvailable} className={`w-full font-medium py-3.5 rounded-xl transition-all text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 ${isAgentAvailable ? 'bg-[#007AFF] text-white hover:bg-[#0062cc]' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}>{isAgentAvailable ? <Zap size={16} fill="currentColor" /> : <Moon size={16} />} {isAgentAvailable ? 'Hablar con un Agente Ahora' : 'Agentes no disponibles'}</button>
+                        <button onClick={() => handleOptionClick('programada')} className="w-full bg-[#F2F2F7] text-[#007AFF] font-medium py-3.5 rounded-xl hover:bg-[#E5E5EA] transition-all text-sm flex items-center justify-center gap-2 active:scale-95"><Calendar size={16} /> Programar Llamada</button>
+                    </div>
+                )}
+            </div>
+            <form onSubmit={send} className="p-4 bg-white/90 backdrop-blur-xl border-t border-gray-100 flex gap-3">
+                <input value={input} onChange={e => setInput(e.target.value)} placeholder="Escribe un mensaje..." className="flex-1 bg-[#F2F2F7] border-0 rounded-full px-5 py-3 text-[16px] focus:ring-2 focus:ring-[#007AFF]/20 text-[#1d1d1f] placeholder:text-[#86868b] outline-none transition-all" />
+                <button disabled={loading} className="w-12 h-12 bg-[#007AFF] text-white rounded-full hover:bg-[#0062cc] transition-all active:scale-90 disabled:opacity-50 disabled:scale-100 flex items-center justify-center shrink-0 shadow-md"><Send size={20} fill="currentColor" className="ml-0.5" /></button>
+            </form>
+            <div className="text-center py-2 bg-white border-t border-gray-50">{onOpenLogin && <button onClick={onOpenLogin} className="text-[9px] text-slate-300 hover:text-slate-400 transition-colors">Acceso Corporativo</button>}</div>
+            {showShareModal && (
+                <div className="absolute inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
+                    <div className="bg-white rounded-[24px] shadow-2xl p-6 w-full max-w-sm animate-in zoom-in-95">
+                        <div className="flex justify-between items-start mb-4"><div><h3 className="text-lg font-bold text-slate-800">Guardar conversación</h3><p className="text-xs text-slate-500 mt-1">Copie este enlace para volver a hablar con Lucy más tarde sin perder el contacto.</p></div><button onClick={() => setShowShareModal(false)} className="p-1 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full"><X size={16} /></button></div>
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center gap-2 mb-4"><input type="text" readOnly value={window.location.href} className="bg-transparent border-0 text-xs text-slate-600 w-full outline-none font-mono truncate" /></div>
+                        <button onClick={handleCopyLink} className={`w-full py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 shadow-lg ${urlCopied ? 'bg-green-500 text-white' : 'bg-black text-white hover:bg-slate-800'}`}>{urlCopied ? <CheckCircle size={16} /> : <Copy size={16} />}{urlCopied ? '¡Enlace Copiado!' : 'Copiar Enlace'}</button>
                     </div>
                 </div>
             )}
