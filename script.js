@@ -316,17 +316,40 @@ function LandingView({ onStartChat, onOpenLogin }) {
   );
 }
 
-// --- AGENTS MANAGER (NUEVO COMPONENTE COMPLETO) ---
+// --- AGENTS MANAGER (CORREGIDO: Formulario estable) ---
 function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }) {
-    const [selectedAgent, setSelectedAgent] = useState(null); // Para ver detalles
-    const [isEditing, setIsEditing] = useState(false); // Para el modal de Crear/Editar
+    const [selectedAgent, setSelectedAgent] = useState(null); 
+    const [isEditing, setIsEditing] = useState(false); 
     const [editingAgent, setEditingAgent] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
     
-    // Estados de Filtro de Bitácora
-    const [dateFilter, setDateFilter] = useState('all'); // all, thisMonth, lastMonth, custom
+    // Estado del Formulario (Movido aquí para estabilidad)
+    const [formData, setFormData] = useState({ nombre: '', telefono: '', email: '', foto: '', estados: '', mensaje: '' });
+
+    // Estado Filtros
+    const [dateFilter, setDateFilter] = useState('all');
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
+
+    // Preparar formulario al abrir
+    const openForm = (agent = null) => {
+        setEditingAgent(agent);
+        setFormData(agent || { nombre: '', telefono: '', email: '', foto: '', estados: '', mensaje: '' });
+        setIsEditing(true);
+    };
+
+    // Manejar el Guardado
+    const handleFormSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            await onSaveAgent(formData);
+            setIsEditing(false);
+            setEditingAgent(null);
+        } catch (error) {
+            console.error(error);
+            alert("Error al guardar. Verifica tu conexión o permisos.");
+        }
+    };
 
     const filteredAgents = agents.filter(a => 
         (a.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -343,7 +366,6 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
         }
     };
 
-    // Lógica de Filtro de Bitácora
     const getAgentLeads = (agentId) => {
         let agentLeads = leads.filter(l => l.assignedAgentId === agentId);
         const now = new Date();
@@ -372,52 +394,12 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
         return agentLeads;
     };
 
-    // Modal de Edición
-    const AgentFormModal = () => {
-        const [formData, setFormData] = useState(editingAgent || { nombre: '', telefono: '', email: '', foto: '', estados: '', mensaje: '' });
-        
-        const handleSubmit = async (e) => {
-            e.preventDefault();
-            await onSaveAgent(formData);
-            setIsEditing(false);
-            setEditingAgent(null);
-        };
-
-        return (
-            <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-                <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg">
-                    <h3 className="text-lg font-bold mb-4">{editingAgent ? 'Editar Agente' : 'Nuevo Agente'}</h3>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                             <div><label className="text-[10px] font-bold text-gray-500 uppercase">Nombre Completo</label><input required className="w-full p-2 border rounded-lg text-sm" value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} /></div>
-                             <div><label className="text-[10px] font-bold text-gray-500 uppercase">Teléfono</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} /></div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                             <div><label className="text-[10px] font-bold text-gray-500 uppercase">Email</label><input type="email" className="w-full p-2 border rounded-lg text-sm" value={formData.email} onChange={e=>setFormData({...formData, email:e.target.value})} /></div>
-                             <div><label className="text-[10px] font-bold text-gray-500 uppercase">Foto (URL)</label><input className="w-full p-2 border rounded-lg text-sm" placeholder="https://..." value={formData.foto} onChange={e=>setFormData({...formData, foto:e.target.value})} /></div>
-                        </div>
-                        <div><label className="text-[10px] font-bold text-gray-500 uppercase">Estados (Licencias)</label><input placeholder="Ej: FL, TX, CA" className="w-full p-2 border rounded-lg text-sm" value={formData.estados} onChange={e=>setFormData({...formData, estados:e.target.value})} /></div>
-                        <div><label className="text-[10px] font-bold text-gray-500 uppercase">Mensaje Especial</label><textarea className="w-full p-2 border rounded-lg text-sm h-20" value={formData.mensaje} onChange={e=>setFormData({...formData, mensaje:e.target.value})} /></div>
-                        
-                        <div className="flex gap-2 justify-end mt-4">
-                            <button type="button" onClick={()=>{setIsEditing(false); setEditingAgent(null)}} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                            <button type="submit" className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800">Guardar</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        );
-    };
-
     // Vista de Detalle (Bitácora)
     if (selectedAgent) {
         const agentLeads = getAgentLeads(selectedAgent.id);
-        
         return (
             <div className="animate-in fade-in space-y-6">
                 <button onClick={()=>setSelectedAgent(null)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-black transition-colors mb-4"><RotateCcw size={14}/> Volver a la lista</button>
-                
-                {/* Perfil del Agente */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-6 items-center md:items-start">
                     <img src={selectedAgent.foto || "https://ui-avatars.com/api/?name=" + selectedAgent.nombre} className="w-24 h-24 rounded-full object-cover border-4 border-gray-50 shadow-md" />
                     <div className="flex-1 text-center md:text-left space-y-2">
@@ -434,13 +416,8 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
                         <span className="text-xs text-gray-500 uppercase font-bold">Leads Asignados</span>
                     </div>
                 </div>
-
-                {/* Filtros de Bitácora */}
                 <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-4 rounded-xl border border-gray-100">
-                    <div className="flex items-center gap-2">
-                        <Filter size={16} className="text-gray-400"/>
-                        <span className="text-sm font-bold text-gray-700">Filtrar Asignaciones:</span>
-                    </div>
+                    <div className="flex items-center gap-2"><Filter size={16} className="text-gray-400"/><span className="text-sm font-bold text-gray-700">Filtrar Asignaciones:</span></div>
                     <div className="flex gap-2 flex-wrap">
                         {['all', 'thisMonth', 'lastMonth', 'custom'].map(f => (
                             <button key={f} onClick={()=>setDateFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${dateFilter===f ? 'bg-black text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
@@ -448,39 +425,20 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
                             </button>
                         ))}
                     </div>
-                    {dateFilter === 'custom' && (
-                        <div className="flex gap-2 items-center animate-in fade-in">
-                            <input type="date" value={customStart} onChange={e=>setCustomStart(e.target.value)} className="bg-gray-50 border rounded p-1 text-xs" />
-                            <span className="text-gray-400">-</span>
-                            <input type="date" value={customEnd} onChange={e=>setCustomEnd(e.target.value)} className="bg-gray-50 border rounded p-1 text-xs" />
-                        </div>
-                    )}
+                    {dateFilter === 'custom' && (<div className="flex gap-2 items-center animate-in fade-in"><input type="date" value={customStart} onChange={e=>setCustomStart(e.target.value)} className="bg-gray-50 border rounded p-1 text-xs" /><span className="text-gray-400">-</span><input type="date" value={customEnd} onChange={e=>setCustomEnd(e.target.value)} className="bg-gray-50 border rounded p-1 text-xs" /></div>)}
                 </div>
-
-                {/* Tabla de Leads Asignados */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <table className="w-full text-left">
-                        <thead className="bg-gray-50 border-b border-gray-100">
-                            <tr>
-                                <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Fecha Asignación</th>
-                                <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Nombre Lead</th>
-                                <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Estado</th>
-                                <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Resumen</th>
-                            </tr>
-                        </thead>
+                        <thead className="bg-gray-50 border-b border-gray-100"><tr><th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Fecha Asignación</th><th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Nombre Lead</th><th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Estado</th><th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Resumen</th></tr></thead>
                         <tbody className="divide-y divide-gray-50">
                             {agentLeads.length > 0 ? agentLeads.map(lead => (
                                 <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 text-xs text-gray-600 font-medium">
-                                        {formatFirestoreDate(lead.assignedAt || lead.createdAt)}
-                                    </td>
+                                    <td className="px-6 py-4 text-xs text-gray-600 font-medium">{formatFirestoreDate(lead.assignedAt || lead.createdAt)}</td>
                                     <td className="px-6 py-4 text-sm font-semibold text-gray-900">{lead.nombre}</td>
                                     <td className="px-6 py-4"><span className="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase">{lead.status}</span></td>
                                     <td className="px-6 py-4 text-xs text-gray-500 truncate max-w-xs">{lead.resumen_ai}</td>
                                 </tr>
-                            )) : (
-                                <tr><td colSpan="4" className="text-center py-8 text-gray-400 text-sm">No hay leads asignados en este periodo.</td></tr>
-                            )}
+                            )) : (<tr><td colSpan="4" className="text-center py-8 text-gray-400 text-sm">No hay leads asignados en este periodo.</td></tr>)}
                         </tbody>
                     </table>
                 </div>
@@ -488,35 +446,23 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
         );
     }
 
-    // Vista Principal (Lista de Agentes)
     return (
         <div className="animate-in fade-in space-y-6">
             <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold text-gray-800">Gestión de Agentes</h2>
                 <div className="flex gap-2">
-                    {selectedIds.length > 0 && (
-                        <button onClick={handleDeleteSelected} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors flex items-center gap-2">
-                            <Trash2 size={16}/> Eliminar ({selectedIds.length})
-                        </button>
-                    )}
-                    <button onClick={()=>{setEditingAgent(null); setIsEditing(true)}} className="bg-black text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors flex items-center gap-2 shadow-lg shadow-gray-200">
-                        <UserCog size={16}/> Nuevo Agente
-                    </button>
+                    {selectedIds.length > 0 && (<button onClick={handleDeleteSelected} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors flex items-center gap-2"><Trash2 size={16}/> Eliminar ({selectedIds.length})</button>)}
+                    <button onClick={()=>openForm(null)} className="bg-black text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors flex items-center gap-2 shadow-lg shadow-gray-200"><UserCog size={16}/> Nuevo Agente</button>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredAgents.map(agent => (
                     <div key={agent.id} className={`bg-white rounded-2xl p-5 border transition-all hover:shadow-md cursor-pointer relative group ${selectedIds.includes(agent.id) ? 'border-blue-500 bg-blue-50/10' : 'border-gray-100'}`} onClick={()=>setSelectedAgent(agent)}>
-                        <div className="absolute top-4 right-4 z-10" onClick={e=>e.stopPropagation()}>
-                            <input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(agent.id)} onChange={()=>handleSelectOne(agent.id)} />
-                        </div>
+                        <div className="absolute top-4 right-4 z-10" onClick={e=>e.stopPropagation()}><input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(agent.id)} onChange={()=>handleSelectOne(agent.id)} /></div>
                         <div className="flex items-center gap-4 mb-4">
                             <img src={agent.foto || "https://ui-avatars.com/api/?name=" + agent.nombre} className="w-14 h-14 rounded-full object-cover bg-gray-200" />
-                            <div>
-                                <h3 className="font-bold text-gray-900">{agent.nombre}</h3>
-                                <p className="text-xs text-gray-500 font-medium">{agent.email}</p>
-                            </div>
+                            <div><h3 className="font-bold text-gray-900">{agent.nombre}</h3><p className="text-xs text-gray-500 font-medium">{agent.email}</p></div>
                         </div>
                         <div className="space-y-2 text-xs text-gray-600">
                              <div className="flex items-center gap-2"><Phone size={12}/> {agent.telefono || 'N/A'}</div>
@@ -524,13 +470,37 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
                         </div>
                         <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Ver Bitácora</span>
-                            <button onClick={(e)=>{e.stopPropagation(); setEditingAgent(agent); setIsEditing(true)}} className="p-2 bg-gray-50 rounded-full text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"><Pencil size={14}/></button>
+                            <button onClick={(e)=>{e.stopPropagation(); openForm(agent);}} className="p-2 bg-gray-50 rounded-full text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"><Pencil size={14}/></button>
                         </div>
                     </div>
                 ))}
             </div>
 
-            {isEditing && <AgentFormModal />}
+            {/* Modal de Formulario (Renderizado condicional pero estable) */}
+            {isEditing && (
+                <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg">
+                        <h3 className="text-lg font-bold mb-4">{editingAgent ? 'Editar Agente' : 'Nuevo Agente'}</h3>
+                        <form onSubmit={handleFormSubmit} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                 <div><label className="text-[10px] font-bold text-gray-500 uppercase">Nombre Completo</label><input required className="w-full p-2 border rounded-lg text-sm" value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} /></div>
+                                 <div><label className="text-[10px] font-bold text-gray-500 uppercase">Teléfono</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} /></div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                 <div><label className="text-[10px] font-bold text-gray-500 uppercase">Email</label><input type="email" className="w-full p-2 border rounded-lg text-sm" value={formData.email} onChange={e=>setFormData({...formData, email:e.target.value})} /></div>
+                                 <div><label className="text-[10px] font-bold text-gray-500 uppercase">Foto (URL)</label><input className="w-full p-2 border rounded-lg text-sm" placeholder="https://..." value={formData.foto} onChange={e=>setFormData({...formData, foto:e.target.value})} /></div>
+                            </div>
+                            <div><label className="text-[10px] font-bold text-gray-500 uppercase">Estados (Licencias)</label><input placeholder="Ej: FL, TX, CA" className="w-full p-2 border rounded-lg text-sm" value={formData.estados} onChange={e=>setFormData({...formData, estados:e.target.value})} /></div>
+                            <div><label className="text-[10px] font-bold text-gray-500 uppercase">Mensaje Especial</label><textarea className="w-full p-2 border rounded-lg text-sm h-20" value={formData.mensaje} onChange={e=>setFormData({...formData, mensaje:e.target.value})} /></div>
+                            
+                            <div className="flex gap-2 justify-end mt-4">
+                                <button type="button" onClick={()=>{setIsEditing(false); setEditingAgent(null)}} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
+                                <button type="submit" className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800">Guardar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
