@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
-import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, Mail } from 'https://esm.sh/lucide-react@0.344.0';
+import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, Mail, UserMinus } from 'https://esm.sh/lucide-react@0.344.0';
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
@@ -198,8 +198,22 @@ function App() {
   const deleteLead = async (ids) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.delete(ref); }); await batch.commit(); }
   const updateLeadStatus = async (ids, status) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.update(ref, { status: status }); }); await batch.commit(); }
   
-  // Asignar Agente
-  const assignAgentToLead = async (leadId, agentId) => { if(!isAdmin) return; await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', leadId), { assignedAgentId: agentId, assignedAt: serverTimestamp() }); };
+  // Asignar Agente (Individual)
+  const assignAgentToLead = async (leadId, agentId) => { if(!isAdmin) return; await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', leadId), { assignedAgentId: agentId || null, assignedAt: agentId ? serverTimestamp() : null }); };
+
+  // NUEVO: Asignación Masiva
+  const bulkAssignAgent = async (leadIds, agentId) => {
+      if(!isAdmin) return;
+      const batch = writeBatch(db);
+      leadIds.forEach(id => {
+          const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id);
+          batch.update(ref, { 
+              assignedAgentId: agentId === 'unassign' ? null : agentId, 
+              assignedAt: agentId === 'unassign' ? null : serverTimestamp() 
+          });
+      });
+      await batch.commit();
+  };
 
   // Acciones Agentes
   const saveAgent = async (agentData) => { 
@@ -269,8 +283,8 @@ function App() {
                </div>
                {adminTab !== 'brain' && <div className="relative group w-full md:w-auto"><Search className="absolute left-3 top-2.5 text-gray-400" size={14} /><input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-4 py-2 bg-white border-0 rounded-xl text-sm w-full md:w-64 outline-none shadow-sm" /></div>}
             </div>
-            {adminTab === 'active' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active'))} agents={agents} onAssignAgent={assignAgentToLead} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> : 
-             adminTab === 'archived' ? <LeadsList leads={leads.filter(l => l.status === 'archived')} agents={agents} onAssignAgent={assignAgentToLead} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={true} searchTerm={searchTerm} /> : 
+            {adminTab === 'active' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active'))} agents={agents} onAssignAgent={assignAgentToLead} onBulkAssign={bulkAssignAgent} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> : 
+             adminTab === 'archived' ? <LeadsList leads={leads.filter(l => l.status === 'archived')} agents={agents} onAssignAgent={assignAgentToLead} onBulkAssign={bulkAssignAgent} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={true} searchTerm={searchTerm} /> : 
              adminTab === 'agents' ? <AgentsManager agents={agents} leads={leads} onSaveAgent={saveAgent} onDeleteAgent={deleteAgent} searchTerm={searchTerm} /> :
              <AdminBrain aiConfig={aiConfig} onSaveConfig={saveAiConfig} />}
           </div>
@@ -332,11 +346,7 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
     const [isEditing, setIsEditing] = useState(false); 
     const [editingAgent, setEditingAgent] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
-    
-    // Estado del formulario
     const [formData, setFormData] = useState({ nombre: '', telefono: '', email: '', foto: '', estados: '', mensaje: '' });
-
-    // Filtros de bitácora
     const [dateFilter, setDateFilter] = useState('all');
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
@@ -511,8 +521,8 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
     );
 }
 
-// --- LEADS LIST (MODIFICADO: Con Selector de Agente) ---
-function LeadsList({ leads, agents, onAssignAgent, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
+// --- LEADS LIST (MODIFICADO: Con Asignación Masiva) ---
+function LeadsList({ leads, agents, onAssignAgent, onBulkAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
   const [selectedLead, setSelectedLead] = useState(null);
   const [leadToDelete, setLeadToDelete] = useState(null); 
   const [selectedIds, setSelectedIds] = useState([]); 
@@ -522,6 +532,18 @@ function LeadsList({ leads, agents, onAssignAgent, onDeleteLead, onUpdateStatus,
   const handleSelectOne = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
   const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
+
+  const handleBulkAssignChange = (e) => {
+      const val = e.target.value;
+      if (!val) return;
+      if (confirm(val === 'unassign' ? `¿Desasignar ${selectedIds.length} leads?` : `¿Asignar ${selectedIds.length} leads al agente?`)) {
+          onBulkAssign(selectedIds, val);
+          setSelectedIds([]);
+          e.target.value = ""; // Reset
+      } else {
+          e.target.value = "";
+      }
+  };
 
   return (
     <div className="animate-in fade-in duration-500">
@@ -544,31 +566,16 @@ function LeadsList({ leads, agents, onAssignAgent, onDeleteLead, onUpdateStatus,
                         <button onClick={() => setSelectedLead(null)} className="p-2 bg-[#F5F5F7] hover:bg-[#E8E8ED] rounded-full transition-colors text-[#86868b]"><X size={18}/></button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-white">
-                        
-                        {/* NUEVO: Selector de Asignación de Agente dentro del Detalle */}
                         <div className="bg-blue-50 p-4 rounded-xl flex items-center justify-between border border-blue-100">
-                             <div className="flex items-center gap-2 text-blue-800 font-medium text-sm">
-                                 <Briefcase size={16}/>
-                                 <span>Asignar a Agente:</span>
-                             </div>
+                             <div className="flex items-center gap-2 text-blue-800 font-medium text-sm"><Briefcase size={16}/><span>Asignar a Agente:</span></div>
                              <div className="relative">
-                                 <select 
-                                    className="bg-white border border-blue-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 pr-8 appearance-none outline-none cursor-pointer"
-                                    value={selectedLead.assignedAgentId || ""}
-                                    onChange={(e) => {
-                                        onAssignAgent(selectedLead.id, e.target.value);
-                                        setSelectedLead(prev => ({...prev, assignedAgentId: e.target.value})); // Optimistic UI
-                                    }}
-                                 >
+                                 <select className="bg-white border border-blue-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 pr-8 appearance-none outline-none cursor-pointer" value={selectedLead.assignedAgentId || ""} onChange={(e) => { onAssignAgent(selectedLead.id, e.target.value); setSelectedLead(prev => ({...prev, assignedAgentId: e.target.value})); }}>
                                      <option value="">-- Sin Asignar --</option>
-                                     {agents && agents.map(agent => (
-                                         <option key={agent.id} value={agent.id}>{agent.nombre}</option>
-                                     ))}
+                                     {agents && agents.map(agent => (<option key={agent.id} value={agent.id}>{agent.nombre}</option>))}
                                  </select>
                                  <ChevronDown size={14} className="absolute right-3 top-3 text-gray-400 pointer-events-none"/>
                              </div>
                         </div>
-
                         <div className="grid grid-cols-2 gap-4">
                             <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span><a href={`https://wa.me/${String(selectedLead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(selectedLead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
                             <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Programado</span><p className="font-medium text-[#1d1d1f]">{formatScheduledDate(String(selectedLead.horario_preferido || 'Inmediata'))}</p></div>
@@ -588,9 +595,23 @@ function LeadsList({ leads, agents, onAssignAgent, onDeleteLead, onUpdateStatus,
       
         <div className="bg-white rounded-[24px] shadow-sm overflow-hidden border border-gray-100/50">
           {selectedIds.length > 0 && (
-              <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 flex justify-between items-center animate-in fade-in">
+              <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 flex justify-between items-center animate-in fade-in sticky top-0 z-20">
                   <span className="text-xs font-bold text-blue-700">{selectedIds.length} seleccionados</span>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
+                      
+                      {/* NUEVO: Dropdown de Asignación Masiva */}
+                      <div className="relative">
+                          <select 
+                              onChange={handleBulkAssignChange} 
+                              className="appearance-none bg-white border border-blue-200 text-blue-700 text-xs font-medium rounded-lg pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-200 cursor-pointer"
+                          >
+                              <option value="">Asignar Agente...</option>
+                              <option value="unassign">-- Desasignar / Liberar --</option>
+                              {agents.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                          </select>
+                          <ChevronDown size={14} className="absolute right-2 top-2 text-blue-400 pointer-events-none"/>
+                      </div>
+
                       <button onClick={handleBulkArchive} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors">
                           {isArchive ? <RotateCcw size={14}/> : <Archive size={14}/>}
                           {isArchive ? 'Restaurar' : 'Archivar'}
@@ -605,30 +626,45 @@ function LeadsList({ leads, agents, onAssignAgent, onDeleteLead, onUpdateStatus,
                 <tr>
                     <th className="px-4 py-4 w-12 text-center"><input type="checkbox" className="custom-checkbox" checked={filteredLeads.length > 0 && selectedIds.length === filteredLeads.length} onChange={handleSelectAll} /></th>
                     <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/4">Nombre</th>
-                    <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/4">Preferencia</th>
+                    <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/4">Agente</th>
                     <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/3">Resumen</th>
                     <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase text-center w-32">Acción</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredLeads.map(l => (
-                <tr key={l.id} onClick={() => setSelectedLead(l)} className={`hover:bg-[#F5F5F7] transition-colors cursor-pointer group ${selectedIds.includes(l.id) ? 'bg-blue-50/30' : ''}`}>
-                  <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(l.id)} onChange={() => handleSelectOne(l.id)} />
-                  </td>
-                  <td className="px-4 py-5 truncate"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-gradient-to-b from-gray-100 to-gray-200 flex items-center justify-center font-semibold text-xs text-gray-500 shrink-0 border border-white shadow-sm">{l.nombre ? l.nombre.charAt(0).toUpperCase() : '?'}</div><div className="min-w-0"><div className="text-sm font-semibold text-[#1d1d1f] truncate">{String(l.nombre || 'Anónimo')}</div><div className="text-[11px] text-[#86868b] mt-0.5">{String(l.edad || '')} años • {String(l.estado || '')}</div></div></div></td>
-                  <td className="px-4 py-5"><div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium border ${l.metodo_contacto === 'ahora' ? 'bg-orange-50/50 text-orange-600 border-orange-100' : 'bg-blue-50/50 text-blue-600 border-blue-100'}`}>{l.metodo_contacto === 'ahora' ? <Zap size={10}/> : <CalendarClock size={10}/>}{l.metodo_contacto === 'ahora' ? 'Inmediato' : 'Programado'}</div><div className="text-[11px] text-[#86868b] mt-1.5 pl-1 truncate font-medium">{l.telefono || '...'}</div></td>
-                  <td className="px-4 py-5"><p className="text-xs text-[#1d1d1f] truncate opacity-80">"{String(l.resumen_ai || '')}"</p></td>
-                  <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                          <button onClick={() => onUpdateStatus(l.id, isArchive ? 'active' : 'archived')} className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-white rounded-lg transition-all">
-                            {isArchive ? <RotateCcw size={16} strokeWidth={1.5}/> : <Archive size={16} strokeWidth={1.5}/>}
-                          </button>
-                          <button onClick={() => setLeadToDelete(l.id)} className="p-2 text-[#86868b] hover:text-red-500 hover:bg-white rounded-lg transition-all"><Trash2 size={16} strokeWidth={1.5}/></button>
-                      </div>
-                  </td>
-                </tr>
-              ))}
+              {filteredLeads.map(l => {
+                  const assignedAgent = agents.find(a => a.id === l.assignedAgentId);
+                  return (
+                    <tr key={l.id} onClick={() => setSelectedLead(l)} className={`hover:bg-[#F5F5F7] transition-colors cursor-pointer group ${selectedIds.includes(l.id) ? 'bg-blue-50/30' : ''}`}>
+                      <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(l.id)} onChange={() => handleSelectOne(l.id)} />
+                      </td>
+                      <td className="px-4 py-5 truncate"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-gradient-to-b from-gray-100 to-gray-200 flex items-center justify-center font-semibold text-xs text-gray-500 shrink-0 border border-white shadow-sm">{l.nombre ? l.nombre.charAt(0).toUpperCase() : '?'}</div><div className="min-w-0"><div className="text-sm font-semibold text-[#1d1d1f] truncate">{String(l.nombre || 'Anónimo')}</div><div className="text-[11px] text-[#86868b] mt-0.5">{String(l.edad || '')} años • {String(l.estado || '')}</div></div></div></td>
+                      
+                      {/* Columna Agente */}
+                      <td className="px-4 py-5">
+                          {assignedAgent ? (
+                              <div className="flex items-center gap-2">
+                                  <img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-5 h-5 rounded-full object-cover"/>
+                                  <span className="text-xs font-medium text-gray-700 truncate">{assignedAgent.nombre}</span>
+                              </div>
+                          ) : (
+                              <span className="text-[10px] text-gray-400 italic">-- Sin Asignar --</span>
+                          )}
+                      </td>
+
+                      <td className="px-4 py-5"><p className="text-xs text-[#1d1d1f] truncate opacity-80">"{String(l.resumen_ai || '')}"</p></td>
+                      <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                              <button onClick={() => onUpdateStatus(l.id, isArchive ? 'active' : 'archived')} className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-white rounded-lg transition-all">
+                                {isArchive ? <RotateCcw size={16} strokeWidth={1.5}/> : <Archive size={16} strokeWidth={1.5}/>}
+                              </button>
+                              <button onClick={() => setLeadToDelete(l.id)} className="p-2 text-[#86868b] hover:text-red-500 hover:bg-white rounded-lg transition-all"><Trash2 size={16} strokeWidth={1.5}/></button>
+                          </div>
+                      </td>
+                    </tr>
+                  );
+              })}
             </tbody>
           </table>
         </div>
