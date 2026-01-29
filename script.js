@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
-import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2 } from 'https://esm.sh/lucide-react@0.344.0';
+// Agregamos Briefcase y UserCog para los Agentes
+import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, Mail } from 'https://esm.sh/lucide-react@0.344.0';
+
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
@@ -56,7 +58,6 @@ const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://ww
 // --- UTILIDADES ---
 function cleanAiMessage(text) { 
     if (!text) return ''; 
-    // Regex seguro para navegador
     let cleaned = text.replace(new RegExp('\\[Botón:.*?\\]', 'gi'), '').replace(new RegExp('\\[Button:.*?\\]', 'gi'), '');
     return cleaned.split('***').join('').split('---').join('').trim();
 }
@@ -80,52 +81,29 @@ const DEFAULT_SCHEDULE = { lunes: { start: '09:00', end: '18:00', enabled: true 
 
 const getAgentStatus = (config) => {
   const now = new Date();
-
-  // Lógica Modo Vacaciones (Rango de Fechas)
   if (config.vacationMode && config.vacationStart && config.vacationEnd) {
      const vStart = new Date(config.vacationStart + 'T00:00:00'); 
      const vEnd = new Date(config.vacationEnd + 'T23:59:59'); 
-      
-     if (now >= vStart && now <= vEnd) {
-         return { 
-              isAgentAvailable: false, 
-              isVacation: true, 
-              resumeDate: new Date(vEnd.setDate(vEnd.getDate() + 1)) 
-         };
-     }
+     if (now >= vStart && now <= vEnd) return { isAgentAvailable: false, isVacation: true, resumeDate: new Date(vEnd.setDate(vEnd.getDate() + 1)) };
   }
-
   const day = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'][now.getDay()];
   const sch = config.schedule?.[day];
-
   if (!sch || !sch.enabled) return { isAgentAvailable: false, message: "Cerrado hoy" };
-
   const mins = now.getHours() * 60 + now.getMinutes();
   const [sH, sM] = sch.start.split(':').map(Number);
   const [eH, eM] = sch.end.split(':').map(Number);
-
   if (mins < sH * 60 + sM || mins >= eH * 60 + eM) return { isAgentAvailable: false, message: "Cerrado ahora" };
-
   return { isAgentAvailable: true, message: "Agentes Disponibles" };
 };
 
 async function fetchGeminiWithRetry(payload) {
   if (!rateLimit.check()) throw new Error("Espera unos segundos.");
-
-  if (OFFLINE_MODE) {
-      await new Promise(r => setTimeout(r, 1000));
-      return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] };
-  }
-
+  if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; }
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
-  try {
-    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    if (res.ok) return await res.json();
-  } catch (e) { throw e; }
+  try { const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if (res.ok) return await res.json(); } catch (e) { throw e; }
   throw new Error("Error conexión");
 }
 
-// --- HOOK DE INACTIVIDAD ---
 function useInactivityTimer(action, timeout = 600000) {
     useEffect(() => {
         let timer;
@@ -149,16 +127,15 @@ function App() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [adminTab, setAdminTab] = useState('active'); 
   const [leads, setLeads] = useState([]);
+  const [agents, setAgents] = useState([]); // NUEVO: Estado para Agentes
   const [searchTerm, setSearchTerm] = useState('');
   const [permissionError, setPermissionError] = useState(false);
 
   const [aiConfig, setAiConfig] = useState({
     systemPrompt: `Eres Lucy...`, webhookUrl: "", schedule: DEFAULT_SCHEDULE, 
-    vacationMode: false, vacationStart: "", vacationEnd: "", 
-    personality: "Empático"
+    vacationMode: false, vacationStart: "", vacationEnd: "", personality: "Empático"
   });
 
-  // Historial del Navegador
   useEffect(() => {
       const handlePopState = (event) => { if (event.state && event.state.view) setView(event.state.view); else setView('landing'); };
       window.addEventListener('popstate', handlePopState);
@@ -166,7 +143,6 @@ function App() {
   }, []);
 
   const navigateTo = (newView) => { setView(newView); window.history.pushState({ view: newView }, '', `#${newView}`); };
-
   useInactivityTimer(() => { if (view !== 'landing') { if (isAdmin) handleLogout(); else navigateTo('landing'); } }, 600000);
 
   useEffect(() => {
@@ -179,33 +155,29 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  // Fetch Leads y Config
   useEffect(() => {
     if (OFFLINE_MODE) { setLeads([]); return; }
     if (!user) return;
-
-    let isInitialSnapshot = true; 
     const leadsRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'leads');
-
     const unsub = onSnapshot(leadsRef, (snapshot) => {
         setPermissionError(false);
         const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-
-        if (!isInitialSnapshot) {
-            snapshot.docChanges().forEach((change) => {
-                const isRecent = (Date.now() - (change.doc.data().createdAt?.toMillis?.() || Date.now())) < 30000;
-                if (change.type === "added" && isRecent) {
-                    notifyNewLead(change.doc.data());
-                }
-            });
-        }
-        isInitialSnapshot = false;
         setLeads(data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-    }, (error) => {
-        if (error.code === 'permission-denied' && isAdmin) setPermissionError(true);
-    });
-
+    }, (error) => { if (error.code === 'permission-denied' && isAdmin) setPermissionError(true); });
     getDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config')).then(s => s.exists() && setAiConfig(prev => ({...prev, ...s.data()}))).catch(e => console.log("Default Config"));
     return () => unsub();
+  }, [user, isAdmin]);
+
+  // NUEVO: Fetch Agentes
+  useEffect(() => {
+      if (OFFLINE_MODE || !user || !isAdmin) return;
+      const agentsRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'agents');
+      const unsub = onSnapshot(agentsRef, (snapshot) => {
+          const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+          setAgents(data.sort((a,b) => (a.nombre || '').localeCompare(b.nombre || '')));
+      });
+      return () => unsub();
   }, [user, isAdmin]);
 
   const handleLogin = async (e) => {
@@ -215,47 +187,31 @@ function App() {
     catch (error) { setLoginError("Credenciales no válidas."); }
     setIsLoggingIn(false);
   };
-
   const handleLogout = async () => { if (!OFFLINE_MODE) await signOut(auth); setIsAdmin(false); navigateTo('landing'); };
-
-  const notifyNewLead = (lead) => { 
-     if (Notification.permission === "granted") new Notification("¡Nuevo Lead!", { body: lead.nombre, icon: IMAGES.lucy }); 
-     if (aiConfig.webhookUrl && lead.status === 'active') {
-        fetch(aiConfig.webhookUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead) }).catch(e=>console.error(e)); 
-     }
-  };
-
-  const saveLeadToDb = async (leadData) => {
-      if (OFFLINE_MODE) { alert("Modo Offline: Lead guardado localmente"); return; }
-      await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'leads'), { ...leadData, createdAt: serverTimestamp(), status: 'active' });
-  };
-
+  const notifyNewLead = (lead) => { if (Notification.permission === "granted") new Notification("¡Nuevo Lead!", { body: lead.nombre, icon: IMAGES.lucy }); if (aiConfig.webhookUrl && lead.status === 'active') fetch(aiConfig.webhookUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead) }).catch(e=>console.error(e)); };
+  const saveLeadToDb = async (leadData) => { if (OFFLINE_MODE) { alert("Modo Offline"); return; } await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'leads'), { ...leadData, createdAt: serverTimestamp(), status: 'active' }); };
   const saveAiConfig = async (newConfig) => { if (OFFLINE_MODE) { setAiConfig(newConfig); return; } if (!user || !isAdmin) return; await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config'), newConfig); setAiConfig(newConfig); };
+  
+  // Acciones Leads
+  const deleteLead = async (ids) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.delete(ref); }); await batch.commit(); }
+  const updateLeadStatus = async (ids, status) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.update(ref, { status: status }); }); await batch.commit(); }
+  
+  // NUEVO: Asignar Agente a Lead
+  const assignAgentToLead = async (leadId, agentId) => { if(!isAdmin) return; await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', leadId), { assignedAgentId: agentId, assignedAt: serverTimestamp() }); };
 
-  // --- FUNCIONES DE LOTE (BULK ACTIONS) ---
-  const deleteLead = async (ids) => { 
-     const idArray = Array.isArray(ids) ? ids : [ids];
-     if (OFFLINE_MODE) { setLeads(prev=>prev.filter(l=>!idArray.includes(l.id))); return; }
-     if(!isAdmin) return; 
-     const batch = writeBatch(db);
-     idArray.forEach(id => {
-         const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id);
-         batch.delete(ref);
-     });
-     await batch.commit();
-  }
-
-  const updateLeadStatus = async (ids, status) => { 
-     const idArray = Array.isArray(ids) ? ids : [ids];
-     if (OFFLINE_MODE) { setLeads(prev=>prev.map(l=>idArray.includes(l.id)?{...l, status}:l)); return; }
-     if(!isAdmin) return; 
-     const batch = writeBatch(db);
-     idArray.forEach(id => {
-         const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id);
-         batch.update(ref, { status: status });
-     });
-     await batch.commit();
-  }
+  // NUEVO: Acciones Agentes
+  const saveAgent = async (agentData) => { 
+      if(!isAdmin) return; 
+      if (agentData.id) {
+          // Update
+          const { id, ...data } = agentData;
+          await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'agents', id), data);
+      } else {
+          // Create
+          await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'agents'), { ...agentData, createdAt: serverTimestamp() });
+      }
+  };
+  const deleteAgent = async (ids) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'agents', id); batch.delete(ref); }); await batch.commit(); };
 
   if (!user) return <div className="h-screen flex items-center justify-center bg-[#F5F5F7] text-slate-400">Cargando...</div>;
 
@@ -290,7 +246,8 @@ function App() {
           <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                <div className="flex gap-1 bg-[#E8E8ED]/50 p-1 rounded-xl w-fit self-start">
-                  {[{ id: 'active', icon: <Inbox size={14} />, label: 'Activos' }, { id: 'archived', icon: <Archive size={14} />, label: 'Archivo' }, { id: 'brain', icon: <BrainAvatar className="w-4 h-4 rounded-md" />, label: 'Inteligencia' }].map(tab => (
+                  {/* NUEVO: Tab de Agentes agregado aquí */}
+                  {[{ id: 'active', icon: <Inbox size={14} />, label: 'Activos' }, { id: 'archived', icon: <Archive size={14} />, label: 'Archivo' }, { id: 'agents', icon: <Briefcase size={14} />, label: 'Agentes' }, { id: 'brain', icon: <BrainAvatar className="w-4 h-4 rounded-md" />, label: 'Inteligencia' }].map(tab => (
                     <button key={tab.id} onClick={() => setAdminTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === tab.id ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}>
                       {tab.id !== 'brain' && tab.icon}{tab.id === 'brain' && <Sparkles size={14}/>}{tab.label}
                     </button>
@@ -298,8 +255,11 @@ function App() {
                </div>
                {adminTab !== 'brain' && <div className="relative group w-full md:w-auto"><Search className="absolute left-3 top-2.5 text-gray-400" size={14} /><input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-4 py-2 bg-white border-0 rounded-xl text-sm w-full md:w-64 outline-none shadow-sm" /></div>}
             </div>
-            {adminTab === 'active' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active'))} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> : 
-             adminTab === 'archived' ? <LeadsList leads={leads.filter(l => l.status === 'archived')} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={true} searchTerm={searchTerm} /> : 
+            
+            {/* Renderizado Condicional de Vistas */}
+            {adminTab === 'active' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active'))} agents={agents} onAssignAgent={assignAgentToLead} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> : 
+             adminTab === 'archived' ? <LeadsList leads={leads.filter(l => l.status === 'archived')} agents={agents} onAssignAgent={assignAgentToLead} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={true} searchTerm={searchTerm} /> : 
+             adminTab === 'agents' ? <AgentsManager agents={agents} leads={leads} onSaveAgent={saveAgent} onDeleteAgent={deleteAgent} searchTerm={searchTerm} /> :
              <AdminBrain aiConfig={aiConfig} onSaveConfig={saveAiConfig} />}
           </div>
         )}
@@ -326,7 +286,7 @@ function App() {
   );
 }
 
-// --- LANDING VIEW (MODIFICADO: Testimonios arriba) ---
+// --- LANDING VIEW ---
 function LandingView({ onStartChat, onOpenLogin }) {
   const testimonials = [ { text: "Gracias a Lucy encontré un plan perfecto para mi mamá sin gastar de más. Fue muy fácil.", author: "María G. - Florida" }, { text: "Excelente atención, muy paciente y clara. Me sentí muy segura con la información.", author: "Carmen R. - Texas" }, { text: "Rápido y sencillo. Encontré justo lo que necesitaba para mi tranquilidad.", author: "José L. - California" } ];
   const [idx, setIdx] = useState(0);
@@ -336,17 +296,12 @@ function LandingView({ onStartChat, onOpenLogin }) {
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-white">
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-2xl mx-auto space-y-8 animate-in slide-up">
-        {/* Encabezado y Avatar */}
         <div className="relative mb-4"><div className="absolute inset-0 bg-rose-200 rounded-full blur-2xl opacity-30 animate-pulse"></div><LucyAvatar className="w-28 h-28 md:w-32 md:h-32 border-4 border-white shadow-xl relative z-10" /><div className="absolute bottom-0 right-0 bg-white p-1.5 rounded-full shadow-md z-20"><Heart size={20} className="text-rose-500 fill-current animate-bounce" /></div></div>
         <div className="space-y-3"><h1 className="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">Hola, soy Lucy 👋</h1><p className="text-slate-500 text-lg md:text-xl font-medium max-w-md mx-auto leading-relaxed">Su asistente <span className="text-rose-500 font-bold">AI</span> experta en <span className="text-rose-500 font-semibold">Protección Familiar</span>.</p><p className="text-slate-400 text-sm md:text-base max-w-lg mx-auto">Estoy aquí para escucharle y explicarle los beneficios de protección disponibles para usted. Hablemos con confianza, a su ritmo y sin complicaciones.</p></div>
-        
-        {/* Botón Principal */}
         <button onClick={onStartChat} className="group relative inline-flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-semibold text-lg shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 w-full md:w-auto justify-center"><span>Hablar con Lucy</span><MessageSquare size={20} className="group-hover:translate-x-1 transition-transform" /></button>
         
-        {/* --- CAMBIO AQUI: TESTIMONIOS MOVIDOS ARRIBA --- */}
         <div className="bg-slate-50 p-4 rounded-2xl text-sm text-slate-600 italic border border-slate-100 max-w-sm mx-auto mt-2 relative min-h-[100px] flex flex-col justify-center transition-all duration-500 shadow-sm"><span className="absolute -top-3 left-4 text-3xl text-slate-200">"</span><p className="animate-in fade-in duration-500" key={idx}>{cur.text}</p><div className="mt-2 flex items-center justify-center gap-2 not-italic font-semibold text-slate-800 text-xs animate-in fade-in duration-500" key={`author-${idx}`}><div className="w-5 h-5 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">{cur.author.charAt(0)}</div>{cur.author}</div></div>
 
-        {/* Grid de Iconos (Ahora abajo de testimonios) */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 w-full max-w-md pt-4 border-t border-slate-100">
            <div className="flex flex-col items-center gap-1.5"><div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><UserCheck size={20} /></div><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center">Solo agentes licenciados</span></div>
            <div className="flex flex-col items-center gap-1.5"><div className="p-2 bg-red-50 text-red-600 rounded-xl"><PhoneOff size={20} /></div><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center">No más llamadas inesperadas</span></div>
@@ -361,75 +316,250 @@ function LandingView({ onStartChat, onOpenLogin }) {
   );
 }
 
-// --- LEADS LIST COMPLETA (CON SELECTOR LOTE Y ACCIONES) ---
-function LeadsList({ leads, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
+// --- AGENTS MANAGER (NUEVO COMPONENTE COMPLETO) ---
+function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }) {
+    const [selectedAgent, setSelectedAgent] = useState(null); // Para ver detalles
+    const [isEditing, setIsEditing] = useState(false); // Para el modal de Crear/Editar
+    const [editingAgent, setEditingAgent] = useState(null);
+    const [selectedIds, setSelectedIds] = useState([]);
+    
+    // Estados de Filtro de Bitácora
+    const [dateFilter, setDateFilter] = useState('all'); // all, thisMonth, lastMonth, custom
+    const [customStart, setCustomStart] = useState('');
+    const [customEnd, setCustomEnd] = useState('');
+
+    const filteredAgents = agents.filter(a => 
+        (a.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (a.email || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const handleSelectAll = (e) => e.target.checked ? setSelectedIds(filteredAgents.map(a => a.id)) : setSelectedIds([]);
+    const handleSelectOne = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    
+    const handleDeleteSelected = async () => {
+        if(confirm(`¿Eliminar ${selectedIds.length} agentes?`)) {
+            await onDeleteAgent(selectedIds);
+            setSelectedIds([]);
+        }
+    };
+
+    // Lógica de Filtro de Bitácora
+    const getAgentLeads = (agentId) => {
+        let agentLeads = leads.filter(l => l.assignedAgentId === agentId);
+        const now = new Date();
+        
+        if (dateFilter === 'thisMonth') {
+            agentLeads = agentLeads.filter(l => {
+                const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000);
+                return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            });
+        } else if (dateFilter === 'lastMonth') {
+             const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+             const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+             agentLeads = agentLeads.filter(l => {
+                const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000);
+                return d >= lastMonth && d <= endLastMonth;
+            });
+        } else if (dateFilter === 'custom' && customStart && customEnd) {
+             const start = new Date(customStart);
+             const end = new Date(customEnd);
+             end.setHours(23,59,59);
+             agentLeads = agentLeads.filter(l => {
+                const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000);
+                return d >= start && d <= end;
+            });
+        }
+        return agentLeads;
+    };
+
+    // Modal de Edición
+    const AgentFormModal = () => {
+        const [formData, setFormData] = useState(editingAgent || { nombre: '', telefono: '', email: '', foto: '', estados: '', mensaje: '' });
+        
+        const handleSubmit = async (e) => {
+            e.preventDefault();
+            await onSaveAgent(formData);
+            setIsEditing(false);
+            setEditingAgent(null);
+        };
+
+        return (
+            <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg">
+                    <h3 className="text-lg font-bold mb-4">{editingAgent ? 'Editar Agente' : 'Nuevo Agente'}</h3>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                             <div><label className="text-[10px] font-bold text-gray-500 uppercase">Nombre Completo</label><input required className="w-full p-2 border rounded-lg text-sm" value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} /></div>
+                             <div><label className="text-[10px] font-bold text-gray-500 uppercase">Teléfono</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} /></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                             <div><label className="text-[10px] font-bold text-gray-500 uppercase">Email</label><input type="email" className="w-full p-2 border rounded-lg text-sm" value={formData.email} onChange={e=>setFormData({...formData, email:e.target.value})} /></div>
+                             <div><label className="text-[10px] font-bold text-gray-500 uppercase">Foto (URL)</label><input className="w-full p-2 border rounded-lg text-sm" placeholder="https://..." value={formData.foto} onChange={e=>setFormData({...formData, foto:e.target.value})} /></div>
+                        </div>
+                        <div><label className="text-[10px] font-bold text-gray-500 uppercase">Estados (Licencias)</label><input placeholder="Ej: FL, TX, CA" className="w-full p-2 border rounded-lg text-sm" value={formData.estados} onChange={e=>setFormData({...formData, estados:e.target.value})} /></div>
+                        <div><label className="text-[10px] font-bold text-gray-500 uppercase">Mensaje Especial</label><textarea className="w-full p-2 border rounded-lg text-sm h-20" value={formData.mensaje} onChange={e=>setFormData({...formData, mensaje:e.target.value})} /></div>
+                        
+                        <div className="flex gap-2 justify-end mt-4">
+                            <button type="button" onClick={()=>{setIsEditing(false); setEditingAgent(null)}} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
+                            <button type="submit" className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800">Guardar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        );
+    };
+
+    // Vista de Detalle (Bitácora)
+    if (selectedAgent) {
+        const agentLeads = getAgentLeads(selectedAgent.id);
+        
+        return (
+            <div className="animate-in fade-in space-y-6">
+                <button onClick={()=>setSelectedAgent(null)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-black transition-colors mb-4"><RotateCcw size={14}/> Volver a la lista</button>
+                
+                {/* Perfil del Agente */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-6 items-center md:items-start">
+                    <img src={selectedAgent.foto || "https://ui-avatars.com/api/?name=" + selectedAgent.nombre} className="w-24 h-24 rounded-full object-cover border-4 border-gray-50 shadow-md" />
+                    <div className="flex-1 text-center md:text-left space-y-2">
+                        <h2 className="text-2xl font-bold text-gray-900">{selectedAgent.nombre}</h2>
+                        <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+                             <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-medium flex items-center gap-1"><MapPin size={12}/> {selectedAgent.estados || 'Sin estados'}</span>
+                             <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs font-medium flex items-center gap-1"><Phone size={12}/> {selectedAgent.telefono || 'Sin tel'}</span>
+                             <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-xs font-medium flex items-center gap-1"><Mail size={12}/> {selectedAgent.email || 'Sin mail'}</span>
+                        </div>
+                        <p className="text-sm text-gray-500 italic max-w-xl">"{selectedAgent.mensaje || 'Sin mensaje'}"</p>
+                    </div>
+                    <div className="text-center bg-gray-50 p-4 rounded-xl">
+                        <span className="block text-3xl font-bold text-black">{agentLeads.length}</span>
+                        <span className="text-xs text-gray-500 uppercase font-bold">Leads Asignados</span>
+                    </div>
+                </div>
+
+                {/* Filtros de Bitácora */}
+                <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-4 rounded-xl border border-gray-100">
+                    <div className="flex items-center gap-2">
+                        <Filter size={16} className="text-gray-400"/>
+                        <span className="text-sm font-bold text-gray-700">Filtrar Asignaciones:</span>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                        {['all', 'thisMonth', 'lastMonth', 'custom'].map(f => (
+                            <button key={f} onClick={()=>setDateFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${dateFilter===f ? 'bg-black text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                                {f==='all'?'Todo':f==='thisMonth'?'Este Mes':f==='lastMonth'?'Mes Pasado':'Personalizado'}
+                            </button>
+                        ))}
+                    </div>
+                    {dateFilter === 'custom' && (
+                        <div className="flex gap-2 items-center animate-in fade-in">
+                            <input type="date" value={customStart} onChange={e=>setCustomStart(e.target.value)} className="bg-gray-50 border rounded p-1 text-xs" />
+                            <span className="text-gray-400">-</span>
+                            <input type="date" value={customEnd} onChange={e=>setCustomEnd(e.target.value)} className="bg-gray-50 border rounded p-1 text-xs" />
+                        </div>
+                    )}
+                </div>
+
+                {/* Tabla de Leads Asignados */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <table className="w-full text-left">
+                        <thead className="bg-gray-50 border-b border-gray-100">
+                            <tr>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Fecha Asignación</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Nombre Lead</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Estado</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Resumen</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {agentLeads.length > 0 ? agentLeads.map(lead => (
+                                <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4 text-xs text-gray-600 font-medium">
+                                        {formatFirestoreDate(lead.assignedAt || lead.createdAt)}
+                                    </td>
+                                    <td className="px-6 py-4 text-sm font-semibold text-gray-900">{lead.nombre}</td>
+                                    <td className="px-6 py-4"><span className="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase">{lead.status}</span></td>
+                                    <td className="px-6 py-4 text-xs text-gray-500 truncate max-w-xs">{lead.resumen_ai}</td>
+                                </tr>
+                            )) : (
+                                <tr><td colSpan="4" className="text-center py-8 text-gray-400 text-sm">No hay leads asignados en este periodo.</td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        );
+    }
+
+    // Vista Principal (Lista de Agentes)
+    return (
+        <div className="animate-in fade-in space-y-6">
+            <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold text-gray-800">Gestión de Agentes</h2>
+                <div className="flex gap-2">
+                    {selectedIds.length > 0 && (
+                        <button onClick={handleDeleteSelected} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors flex items-center gap-2">
+                            <Trash2 size={16}/> Eliminar ({selectedIds.length})
+                        </button>
+                    )}
+                    <button onClick={()=>{setEditingAgent(null); setIsEditing(true)}} className="bg-black text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors flex items-center gap-2 shadow-lg shadow-gray-200">
+                        <UserCog size={16}/> Nuevo Agente
+                    </button>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredAgents.map(agent => (
+                    <div key={agent.id} className={`bg-white rounded-2xl p-5 border transition-all hover:shadow-md cursor-pointer relative group ${selectedIds.includes(agent.id) ? 'border-blue-500 bg-blue-50/10' : 'border-gray-100'}`} onClick={()=>setSelectedAgent(agent)}>
+                        <div className="absolute top-4 right-4 z-10" onClick={e=>e.stopPropagation()}>
+                            <input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(agent.id)} onChange={()=>handleSelectOne(agent.id)} />
+                        </div>
+                        <div className="flex items-center gap-4 mb-4">
+                            <img src={agent.foto || "https://ui-avatars.com/api/?name=" + agent.nombre} className="w-14 h-14 rounded-full object-cover bg-gray-200" />
+                            <div>
+                                <h3 className="font-bold text-gray-900">{agent.nombre}</h3>
+                                <p className="text-xs text-gray-500 font-medium">{agent.email}</p>
+                            </div>
+                        </div>
+                        <div className="space-y-2 text-xs text-gray-600">
+                             <div className="flex items-center gap-2"><Phone size={12}/> {agent.telefono || 'N/A'}</div>
+                             <div className="flex items-center gap-2"><MapPin size={12}/> <span className="truncate max-w-[150px]">{agent.estados || 'Sin licencias'}</span></div>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Ver Bitácora</span>
+                            <button onClick={(e)=>{e.stopPropagation(); setEditingAgent(agent); setIsEditing(true)}} className="p-2 bg-gray-50 rounded-full text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"><Pencil size={14}/></button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {isEditing && <AgentFormModal />}
+        </div>
+    );
+}
+
+// --- LEADS LIST (MODIFICADO: Con Selector de Agente) ---
+function LeadsList({ leads, agents, onAssignAgent, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
   const [selectedLead, setSelectedLead] = useState(null);
   const [leadToDelete, setLeadToDelete] = useState(null); 
-  const [selectedIds, setSelectedIds] = useState([]); // Estado para selección múltiple
+  const [selectedIds, setSelectedIds] = useState([]); 
   const filteredLeads = leads.filter(l => String(l.nombre||'').toLowerCase().includes(searchTerm.toLowerCase()));
 
-  // Lógica de Selección
-  const handleSelectAll = (e) => {
-      if (e.target.checked) {
-          setSelectedIds(filteredLeads.map(l => l.id));
-      } else {
-          setSelectedIds([]);
-      }
-  };
-
-  const handleSelectOne = (id) => {
-      setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  };
-
-  // Lógica de Acciones en Lote
-  const handleBulkDelete = () => {
-      // Usa la lógica existente pero para múltiples
-      if (selectedIds.length > 0) {
-         // Trigger modal logic could be tricky here for bulk, let's keep it simple: 
-         // We will ask confirmation for bulk too using the same modal state but storing array?
-         // Or simplify: just pass the array to delete function which handles it.
-         // Let's use leadToDelete state to store the array for bulk delete confirmation
-         setLeadToDelete(selectedIds);
-      }
-  };
-
-  const handleBulkArchive = () => {
-      if (selectedIds.length > 0) {
-          onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived');
-          setSelectedIds([]);
-      }
-  };
-
-  const confirmDelete = async () => {
-     if (leadToDelete) {
-         await onDeleteLead(leadToDelete); // Handles array or single id
-         setLeadToDelete(null);
-         setSelectedIds([]); // Clear selection after delete
-     }
-  };
+  const handleSelectAll = (e) => e.target.checked ? setSelectedIds(filteredLeads.map(l => l.id)) : setSelectedIds([]);
+  const handleSelectOne = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
+  const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
 
   return (
     <div className="animate-in fade-in duration-500">
-        {/* Modal Confirmación Borrado (Funciona para 1 o Muchos) */}
         {leadToDelete && (
             <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                 <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm border border-gray-100 text-center">
-                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
-                        <Trash2 size={24} />
-                    </div>
-                    <h3 className="font-bold text-lg text-slate-800 mb-2">
-                        {Array.isArray(leadToDelete) && leadToDelete.length > 1 ? `¿Eliminar ${leadToDelete.length} Leads?` : "¿Eliminar este Lead?"}
-                    </h3>
-                    <p className="text-sm text-slate-500 mb-6">Esta acción es irreversible. Se borrarán los datos seleccionados.</p>
-                    <div className="flex gap-3">
-                        <button onClick={() => setLeadToDelete(null)} className="flex-1 py-2.5 bg-white border border-gray-200 text-slate-600 rounded-xl font-medium text-sm hover:bg-gray-50 transition-colors">Cancelar</button>
-                        <button onClick={confirmDelete} className="flex-1 py-2.5 bg-red-500 text-white rounded-xl font-medium text-sm hover:bg-red-600 transition-colors shadow-lg shadow-red-200">Eliminar</button>
-                    </div>
+                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500"><Trash2 size={24} /></div>
+                    <h3 className="font-bold text-lg text-slate-800 mb-2">{Array.isArray(leadToDelete) && leadToDelete.length > 1 ? `¿Eliminar ${leadToDelete.length} Leads?` : "¿Eliminar este Lead?"}</h3>
+                    <p className="text-sm text-slate-500 mb-6">Esta acción es irreversible.</p>
+                    <div className="flex gap-3"><button onClick={() => setLeadToDelete(null)} className="flex-1 py-2.5 bg-white border border-gray-200 text-slate-600 rounded-xl font-medium text-sm hover:bg-gray-50 transition-colors">Cancelar</button><button onClick={confirmDelete} className="flex-1 py-2.5 bg-red-500 text-white rounded-xl font-medium text-sm hover:bg-red-600 transition-colors shadow-lg shadow-red-200">Eliminar</button></div>
                 </div>
             </div>
         )}
 
-        {/* Modal Detalle Lead (Individual) */}
         {selectedLead && (
             <div className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4">
                 <div className="bg-white w-full max-w-2xl rounded-[24px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
@@ -438,6 +568,31 @@ function LeadsList({ leads, onDeleteLead, onUpdateStatus, isArchive, searchTerm 
                         <button onClick={() => setSelectedLead(null)} className="p-2 bg-[#F5F5F7] hover:bg-[#E8E8ED] rounded-full transition-colors text-[#86868b]"><X size={18}/></button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-white">
+                        
+                        {/* NUEVO: Selector de Asignación de Agente dentro del Detalle */}
+                        <div className="bg-blue-50 p-4 rounded-xl flex items-center justify-between border border-blue-100">
+                             <div className="flex items-center gap-2 text-blue-800 font-medium text-sm">
+                                 <Briefcase size={16}/>
+                                 <span>Asignar a Agente:</span>
+                             </div>
+                             <div className="relative">
+                                 <select 
+                                    className="bg-white border border-blue-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 pr-8 appearance-none outline-none cursor-pointer"
+                                    value={selectedLead.assignedAgentId || ""}
+                                    onChange={(e) => {
+                                        onAssignAgent(selectedLead.id, e.target.value);
+                                        setSelectedLead(prev => ({...prev, assignedAgentId: e.target.value})); // Optimistic UI
+                                    }}
+                                 >
+                                     <option value="">-- Sin Asignar --</option>
+                                     {agents && agents.map(agent => (
+                                         <option key={agent.id} value={agent.id}>{agent.nombre}</option>
+                                     ))}
+                                 </select>
+                                 <ChevronDown size={14} className="absolute right-3 top-3 text-gray-400 pointer-events-none"/>
+                             </div>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span><a href={`https://wa.me/${String(selectedLead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(selectedLead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
                             <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Programado</span><p className="font-medium text-[#1d1d1f]">{formatScheduledDate(String(selectedLead.horario_preferido || 'Inmediata'))}</p></div>
@@ -456,7 +611,6 @@ function LeadsList({ leads, onDeleteLead, onUpdateStatus, isArchive, searchTerm 
         )}
       
         <div className="bg-white rounded-[24px] shadow-sm overflow-hidden border border-gray-100/50">
-          {/* BARRA DE ACCIONES EN LOTE */}
           {selectedIds.length > 0 && (
               <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 flex justify-between items-center animate-in fade-in">
                   <span className="text-xs font-bold text-blue-700">{selectedIds.length} seleccionados</span>
@@ -465,9 +619,7 @@ function LeadsList({ leads, onDeleteLead, onUpdateStatus, isArchive, searchTerm 
                           {isArchive ? <RotateCcw size={14}/> : <Archive size={14}/>}
                           {isArchive ? 'Restaurar' : 'Archivar'}
                       </button>
-                      <button onClick={handleBulkDelete} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 transition-colors">
-                          <Trash2 size={14}/> Eliminar
-                      </button>
+                      <button onClick={() => setLeadToDelete(selectedIds)} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"><Trash2 size={14}/> Eliminar</button>
                   </div>
               </div>
           )}
@@ -475,9 +627,7 @@ function LeadsList({ leads, onDeleteLead, onUpdateStatus, isArchive, searchTerm 
           <table className="w-full text-left table-fixed">
             <thead className="bg-[#FBFBFD] border-b border-gray-100">
                 <tr>
-                    <th className="px-4 py-4 w-12 text-center">
-                        <input type="checkbox" className="custom-checkbox" checked={filteredLeads.length > 0 && selectedIds.length === filteredLeads.length} onChange={handleSelectAll} />
-                    </th>
+                    <th className="px-4 py-4 w-12 text-center"><input type="checkbox" className="custom-checkbox" checked={filteredLeads.length > 0 && selectedIds.length === filteredLeads.length} onChange={handleSelectAll} /></th>
                     <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/4">Nombre</th>
                     <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/4">Preferencia</th>
                     <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/3">Resumen</th>
@@ -510,155 +660,6 @@ function LeadsList({ leads, onDeleteLead, onUpdateStatus, isArchive, searchTerm 
   );
 }
 
-// --- ADMIN BRAIN COMPLETO (RESTAURADO CON HORARIOS + WEBHOOK SEGURO) ---
-function AdminBrain({ aiConfig, onSaveConfig }) {
-  const [c, setC] = useState(aiConfig);
-  const [isSaving, setIsSaving] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false); // <--- Nuevo estado
-  const [isEditingWebhook, setIsEditingWebhook] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authPassword, setAuthPassword] = useState('');
-  const [authError, setAuthError] = useState(null);
-
-  const handleDayToggle = (day) => setC(prev => ({...prev, schedule: {...prev.schedule, [day]: {...prev.schedule[day], enabled: !prev.schedule[day].enabled}}}));
-  const handleTimeChange = (day, type, value) => setC(prev => ({...prev, schedule: {...prev.schedule, [day]: {...prev.schedule[day], [type]: value}}}));
-
-  const handleSave = async () => { 
-      setIsSaving(true); 
-      await onSaveConfig(c); 
-      setIsSaving(false); 
-      setIsEditingWebhook(false); 
-      setShowSuccess(true); // <--- Mostrar mensaje
-      setTimeout(() => setShowSuccess(false), 3000); // <--- Ocultar después de 3s
-  }; 
-
-  const daysList = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
-
-  const handleEditWebhookClick = () => {
-     setShowAuthModal(true);
-     setAuthPassword('');
-     setAuthError(null);
-  };
-
-  const handleAuthSubmit = async (e) => {
-     e.preventDefault();
-     setAuthError(null);
-     try {
-         // Verificar contraseña re-autenticando
-         const user = auth.currentUser;
-         if (user && user.email) {
-             await signInWithEmailAndPassword(auth, user.email, authPassword);
-             // Si no lanza error, la contraseña es correcta
-             setShowAuthModal(false);
-             setIsEditingWebhook(true);
-         } else {
-             setAuthError("No se pudo verificar la sesión.");
-         }
-     } catch (error) {
-         console.error("Auth check failed", error);
-         setAuthError("Contraseña incorrecta.");
-     }
-  };
-
-  return (
-    <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="bg-white p-8 rounded-[24px] shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100 flex flex-col md:flex-row gap-10">
-        <div className="flex-1 space-y-6">
-          <div>
-            <h3 className="font-semibold text-[#1d1d1f] mb-4 text-sm flex items-center gap-2">Configuración del Cerebro</h3>
-            <div className="space-y-3 mb-6 bg-[#F5F5F7] p-5 rounded-2xl border border-gray-100">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-2"><span className="text-xs font-bold uppercase tracking-wide text-slate-500 flex items-center gap-2"><Clock size={14}/> Horario Semanal</span><label className="flex items-center gap-2 cursor-pointer text-[10px] font-bold text-slate-500 bg-white px-2 py-1 rounded-md shadow-sm border border-slate-200"><input type="checkbox" checked={c.vacationMode} onChange={(e)=>setC({...c, vacationMode: e.target.checked})} className="accent-orange-500"/> Modo Vacaciones (No Disponible)</label></div>
-               
-              {/* RANGO DE FECHAS PARA VACACIONES */}
-              {c.vacationMode && (
-                  <div className="flex gap-4 items-center bg-orange-50 p-3 rounded-xl border border-orange-100 mb-3 animate-in fade-in">
-                      <div>
-                          <label className="text-[10px] font-bold text-orange-600 uppercase block mb-1">Fecha Inicio</label>
-                          <input type="date" value={c.vacationStart} onChange={(e) => setC({...c, vacationStart: e.target.value})} className="bg-white border border-orange-200 rounded-lg px-2 py-1 text-xs text-orange-800 outline-none focus:ring-2 focus:ring-orange-200" />
-                      </div>
-                      <span className="text-orange-400 font-bold">→</span>
-                      <div>
-                          <label className="text-[10px] font-bold text-orange-600 uppercase block mb-1">Fecha Fin</label>
-                          <input type="date" value={c.vacationEnd} onChange={(e) => setC({...c, vacationEnd: e.target.value})} className="bg-white border border-orange-200 rounded-lg px-2 py-1 text-xs text-orange-800 outline-none focus:ring-2 focus:ring-orange-200" />
-                      </div>
-                  </div>
-              )}
-
-              {daysList.map(day => (
-                <div key={day} className="flex items-center justify-between group">
-                   <div className="flex items-center gap-3"><input type="checkbox" checked={c.schedule?.[day]?.enabled} onChange={() => handleDayToggle(day)} className="accent-black w-4 h-4 rounded cursor-pointer"/><span className={`text-xs font-bold uppercase tracking-wide w-20 ${c.schedule?.[day]?.enabled ? 'text-slate-700' : 'text-slate-400'}`}>{day}</span></div>
-                   {c.schedule?.[day]?.enabled ? (<div className="flex gap-2 items-center animate-in fade-in"><input type="time" value={c.schedule[day].start} onChange={(e)=>handleTimeChange(day, 'start', e.target.value)} className="bg-white border p-1 rounded text-xs w-20 text-center font-medium"/><span className="text-slate-400 text-[10px]">a</span><input type="time" value={c.schedule[day].end} onChange={(e)=>handleTimeChange(day, 'end', e.target.value)} className="bg-white border p-1 rounded text-xs w-20 text-center font-medium"/></div>) : (<span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest px-8">No disponible</span>)}
-                </div>
-              ))}
-            </div>
-            <label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Instrucciones Base</label>
-            <textarea value={c.systemPrompt} onChange={(e)=>setC({...c, systemPrompt:e.target.value})} className="w-full h-32 p-4 bg-white border border-gray-200 rounded-xl text-xs font-mono text-[#1d1d1f] focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all shadow-sm leading-relaxed resize-none" />
-          </div>
-        </div>
-        <div className="md:w-72 space-y-6">
-          <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide">Webhook URL (Zapier/Make)</label>
-                {!isEditingWebhook && (
-                    <button onClick={handleEditWebhookClick} className="text-blue-500 hover:text-blue-700 transition-colors" title="Editar Webhook">
-                        <Pencil size={12} />
-                    </button>
-                )}
-              </div>
-              <input 
-                type={isEditingWebhook ? "text" : "password"}
-                placeholder="https://hooks.zapier.com/..." 
-                value={c.webhookUrl || ""} 
-                onChange={(e)=>setC({...c, webhookUrl:e.target.value})} 
-                disabled={!isEditingWebhook}
-                className={`w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-medium text-[#1d1d1f] focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all shadow-sm ${!isEditingWebhook ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} 
-              />
-              <p className="text-[9px] text-gray-400 mt-1">
-                {isEditingWebhook ? "Edición habilitada. Guarde para bloquear." : "Conectado con Zapier (Oculto)"}
-              </p>
-          </div>
-          <button onClick={handleSave} disabled={isSaving} className="w-full bg-black text-white font-medium py-3 rounded-xl hover:bg-gray-800 transition-all text-xs shadow-lg relative overflow-hidden">{isSaving ? "Guardando..." : "Guardar Cambios"}</button>
-         
-          {/* Mensaje de éxito restaurado */}
-          {showSuccess && (
-            <div className="animate-in fade-in bg-green-50 text-green-700 border border-green-100 rounded-xl p-3 flex items-center justify-center gap-2 text-xs font-medium shadow-sm mt-2">
-              <CheckCircle size={14} /> Cambios guardados correctamente
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Modal de Confirmación de Contraseña */}
-      {showAuthModal && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
-              <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-xs border border-gray-100">
-                  <div className="flex justify-between items-center mb-4">
-                      <h4 className="font-bold text-sm text-slate-800">Confirmar Identidad</h4>
-                      <button onClick={() => setShowAuthModal(false)} className="text-slate-400 hover:text-slate-600"><X size={16}/></button>
-                  </div>
-                  <form onSubmit={handleAuthSubmit} className="space-y-3">
-                      <p className="text-xs text-slate-500">Ingrese su contraseña de administrador para editar el Webhook.</p>
-                      <input 
-                          type="password" 
-                          autoFocus
-                          value={authPassword} 
-                          onChange={(e) => setAuthPassword(e.target.value)} 
-                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 outline-none" 
-                          placeholder="Contraseña"
-                      />
-                      {authError && <p className="text-xs text-red-500 font-medium">{authError}</p>}
-                      <div className="flex justify-end gap-2 mt-2">
-                          <button type="button" onClick={() => setShowAuthModal(false)} className="px-3 py-2 text-xs font-medium text-slate-500 hover:text-slate-800">Cancelar</button>
-                          <button type="submit" className="px-4 py-2 bg-black text-white text-xs font-medium rounded-lg hover:bg-gray-800">Verificar</button>
-                      </div>
-                  </form>
-              </div>
-          </div>
-      )}
-    </div>
-  );
-}
-
 // --- CLIENT CHAT (MODIFICADO: Botón compartir URL) ---
 function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
   const [activeUsers, setActiveUsers] = useState(Math.floor(Math.random() * (28 - 18 + 1)) + 18);
@@ -670,7 +671,6 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
   const [showOptions, setShowOptions] = useState(false);
   const [pendingLeadData, setPendingLeadData] = useState(null);
   
-  // --- NUEVO: Estados para el Modal de Compartir ---
   const [showShareModal, setShowShareModal] = useState(false);
   const [urlCopied, setUrlCopied] = useState(false);
   
@@ -684,7 +684,6 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
 
   useEffect(()=>{ if(scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; },[msgs, loading, showOptions]);
 
-  // --- NUEVO: Función para copiar URL ---
   const handleCopyLink = () => {
       const url = window.location.href;
       navigator.clipboard.writeText(url).then(() => {
@@ -703,11 +702,7 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
           onSaveLead(finalLead);
           setPendingLeadData(null); 
           setShowOptions(false); 
-       
-          const responseMsg = type === 'ahora' 
-              ? "¡Perfecto! Un agente se comunicará con usted en breve al número proporcionado." 
-              : "Excelente. Un agente le llamará para programar la cita en el horario que mejor le convenga.";
-       
+          const responseMsg = type === 'ahora' ? "¡Perfecto! Un agente se comunicará con usted en breve al número proporcionado." : "Excelente. Un agente le llamará para programar la cita en el horario que mejor le convenga.";
           setMsgs(prev => [...prev, {role: 'assistant', content: responseMsg}]);
       }
   };
@@ -717,17 +712,13 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
     const newM = [...msgs, {role:'user', content:input}]; setMsgs(newM); setInput(''); setLoading(true);
     try {
         let availabilityInstruction = "";
-        if (isVacation && resumeDate) {
-            availabilityInstruction = `NOTA CRÍTICA DEL SISTEMA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}. Sé muy amable y profesional, NO digas "vacaciones".`;
-        }
+        if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA DEL SISTEMA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}. Sé muy amable y profesional, NO digas "vacaciones".`;
 
         const prompt = `
           ${aiConfig.systemPrompt}
           ${availabilityInstruction}
-       
           HISTORIAL:
           ${newM.map(m=>`${m.role}: ${m.content}`).join('\n')}
-       
           INSTRUCCIÓN TÉCNICA CRÍTICA:
           Si el usuario YA ha proporcionado Nombre, Edad, y algún dato de contacto, y consideras que la etapa de recolección de datos ha terminado, TU RESPUESTA DEBE INCLUIR UN BLOQUE JSON AL FINAL con este formato:
           \`\`\`json
@@ -739,28 +730,19 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
 
         const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
         const rawText = res.candidates[0].content.parts[0].text;
-      
         let reply = rawText;
         const jsonMatch = rawText.match(/```json([\s\S]*?)```/);
-      
         if (jsonMatch) {
             try {
                const jsonStr = jsonMatch[1];
                const data = JSON.parse(jsonStr);
                if (data.action === 'data_ready') {
-                   setPendingLeadData({
-                       nombre: data.nombre || 'Anonimo',
-                       edad: data.edad || '',
-                       telefono: data.telefono || '',
-                       resumen_ai: data.resumen_ai || 'Lead capturado por Lucy',
-                       fullChat: newM
-                   });
+                   setPendingLeadData({ nombre: data.nombre || 'Anonimo', edad: data.edad || '', telefono: data.telefono || '', resumen_ai: data.resumen_ai || 'Lead capturado por Lucy', fullChat: newM });
                    setShowOptions(true);
                    reply = rawText.replace(jsonMatch[0], '').trim();
                }
             } catch(jsonErr) { console.error("Error parsing JSON", jsonErr); }
         }
-      
         reply = cleanAiMessage(reply);
         setMsgs([...newM, {role:'assistant', content:reply}]);
     } catch(e){ console.error(e); }
@@ -769,83 +751,46 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
 
   return (
     <div className="max-w-[480px] mx-auto flex flex-col h-full bg-white rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden relative font-sans">
-        
-        {/* Header Modificado con Botón Share */}
         <div className="bg-white/90 backdrop-blur-xl p-5 border-b border-gray-100 flex items-center justify-between z-10 sticky top-0">
             <div className="flex items-center gap-4">
                 <div className="relative"><LucyAvatar className="w-12 h-12" /></div>
                 <div>
                   <h2 className="font-bold text-[#1d1d1f] text-lg tracking-tight">Lucy</h2>
                   <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-2 h-2 rounded-full bg-green-500 animate-pulse`}></span>
-                        <p className="text-xs text-[#86868b] font-medium">En Línea</p>
-                      </div>
+                      <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full bg-green-500 animate-pulse`}></span><p className="text-xs text-[#86868b] font-medium">En Línea</p></div>
                       <span className="text-[#86868b] text-[10px]">•</span>
-                      <p className="text-xs text-blue-600 font-medium">{activeUsers} personas están consultando</p>
+                      <p className="text-xs text-blue-600 font-medium">{activeUsers} personas</p>
                   </div>
                 </div>
             </div>
-            {/* Botón Nuevo */}
-            <button onClick={() => setShowShareModal(true)} className="p-2 bg-slate-50 text-slate-400 rounded-full hover:bg-slate-100 hover:text-blue-600 transition-colors" title="Guardar enlace">
-                <Share2 size={20} />
-            </button>
+            <button onClick={() => setShowShareModal(true)} className="p-2 bg-slate-50 text-slate-400 rounded-full hover:bg-slate-100 hover:text-blue-600 transition-colors" title="Guardar enlace"><Share2 size={20} /></button>
         </div>
-      
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-6 bg-white no-scrollbar">
             {msgs.map((m,i)=>(
                 <div key={i} className={`flex ${m.role==='user'?'justify-end':'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                     {m.role === 'assistant' && <LucyAvatar className="w-8 h-8 mr-2 mt-auto shrink-0" />}
-                    <div className={`w-fit max-w-[75%] px-5 py-3 rounded-2xl text-[16px] leading-relaxed shadow-sm text-left ${m.role==='user'?'bg-[#007AFF] text-white rounded-br-none':'bg-[#F2F2F7] text-[#1d1d1f] rounded-bl-none'}`}>
-                        <RichText content={m.content}/>
-                    </div>
+                    <div className={`w-fit max-w-[75%] px-5 py-3 rounded-2xl text-[16px] leading-relaxed shadow-sm text-left ${m.role==='user'?'bg-[#007AFF] text-white rounded-br-none':'bg-[#F2F2F7] text-[#1d1d1f] rounded-bl-none'}`}><RichText content={m.content}/></div>
                 </div>
             ))}
             {loading && <div className="flex justify-start pl-10"><div className="bg-[#F2F2F7] px-4 py-3 rounded-2xl rounded-bl-none flex gap-1.5 items-center w-fit"><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span></div></div>}
-      
             {showOptions && (
                 <div className="flex flex-col gap-2 pt-2 animate-in zoom-in px-8">
-                    <button onClick={() => handleOptionClick('ahora')} disabled={!isAgentAvailable} className={`w-full font-medium py-3.5 rounded-xl transition-all text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 ${isAgentAvailable ? 'bg-[#007AFF] text-white hover:bg-[#0062cc]' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}>
-                      {isAgentAvailable ? <Zap size={16} fill="currentColor"/> : <Moon size={16}/>} {isAgentAvailable ? 'Hablar con un Agente Ahora' : 'Agentes no disponibles'}
-                    </button>
-                    <button onClick={() => handleOptionClick('programada')} className="w-full bg-[#F2F2F7] text-[#007AFF] font-medium py-3.5 rounded-xl hover:bg-[#E5E5EA] transition-all text-sm flex items-center justify-center gap-2 active:scale-95">
-                        <Calendar size={16}/> Programar Llamada
-                    </button>
+                    <button onClick={() => handleOptionClick('ahora')} disabled={!isAgentAvailable} className={`w-full font-medium py-3.5 rounded-xl transition-all text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 ${isAgentAvailable ? 'bg-[#007AFF] text-white hover:bg-[#0062cc]' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}>{isAgentAvailable ? <Zap size={16} fill="currentColor"/> : <Moon size={16}/>} {isAgentAvailable ? 'Hablar con un Agente Ahora' : 'Agentes no disponibles'}</button>
+                    <button onClick={() => handleOptionClick('programada')} className="w-full bg-[#F2F2F7] text-[#007AFF] font-medium py-3.5 rounded-xl hover:bg-[#E5E5EA] transition-all text-sm flex items-center justify-center gap-2 active:scale-95"><Calendar size={16}/> Programar Llamada</button>
                 </div>
             )}
         </div>
-      
         <form onSubmit={send} className="p-4 bg-white/90 backdrop-blur-xl border-t border-gray-100 flex gap-3">
             <input value={input} onChange={e=>setInput(e.target.value)} placeholder="Escribe un mensaje..." className="flex-1 bg-[#F2F2F7] border-0 rounded-full px-5 py-3 text-[16px] focus:ring-2 focus:ring-[#007AFF]/20 text-[#1d1d1f] placeholder:text-[#86868b] outline-none transition-all"/>
-            <button disabled={loading} className="w-12 h-12 bg-[#007AFF] text-white rounded-full hover:bg-[#0062cc] transition-all active:scale-90 disabled:opacity-50 disabled:scale-100 flex items-center justify-center shrink-0 shadow-md">
-                <Send size={20} fill="currentColor" className="ml-0.5" />
-            </button>
+            <button disabled={loading} className="w-12 h-12 bg-[#007AFF] text-white rounded-full hover:bg-[#0062cc] transition-all active:scale-90 disabled:opacity-50 disabled:scale-100 flex items-center justify-center shrink-0 shadow-md"><Send size={20} fill="currentColor" className="ml-0.5" /></button>
         </form>
-
-        <div className="text-center py-2 bg-white border-t border-gray-50">
-            <button onClick={onOpenLogin} className="text-[9px] text-slate-300 hover:text-slate-400 transition-colors">Acceso Corporativo</button>
-        </div>
-
-        {/* --- NUEVO: Modal de Compartir / Guardar --- */}
+        <div className="text-center py-2 bg-white border-t border-gray-50"><button onClick={onOpenLogin} className="text-[9px] text-slate-300 hover:text-slate-400 transition-colors">Acceso Corporativo</button></div>
         {showShareModal && (
             <div className="absolute inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
                 <div className="bg-white rounded-[24px] shadow-2xl p-6 w-full max-w-sm animate-in zoom-in-95">
-                    <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <h3 className="text-lg font-bold text-slate-800">Guarde esta página</h3>
-                            <p className="text-xs text-slate-500 mt-1">Copie este enlace para volver a hablar con Lucy más tarde sin perder el contacto.</p>
-                        </div>
-                        <button onClick={() => setShowShareModal(false)} className="p-1 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full"><X size={16}/></button>
-                    </div>
-                    
-                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center gap-2 mb-4">
-                        <input type="text" readOnly value={window.location.href} className="bg-transparent border-0 text-xs text-slate-600 w-full outline-none font-mono truncate" />
-                    </div>
-
-                    <button onClick={handleCopyLink} className={`w-full py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 shadow-lg ${urlCopied ? 'bg-green-500 text-white' : 'bg-black text-white hover:bg-slate-800'}`}>
-                        {urlCopied ? <CheckCircle size={16}/> : <Copy size={16}/>}
-                        {urlCopied ? '¡Enlace Copiado!' : 'Copiar Enlace'}
-                    </button>
+                    <div className="flex justify-between items-start mb-4"><div><h3 className="text-lg font-bold text-slate-800">Guardar conversación</h3><p className="text-xs text-slate-500 mt-1">Copie este enlace para volver a hablar con Lucy más tarde sin perder el contacto.</p></div><button onClick={() => setShowShareModal(false)} className="p-1 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full"><X size={16}/></button></div>
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center gap-2 mb-4"><input type="text" readOnly value={window.location.href} className="bg-transparent border-0 text-xs text-slate-600 w-full outline-none font-mono truncate" /></div>
+                    <button onClick={handleCopyLink} className={`w-full py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 shadow-lg ${urlCopied ? 'bg-green-500 text-white' : 'bg-black text-white hover:bg-slate-800'}`}>{urlCopied ? <CheckCircle size={16}/> : <Copy size={16}/>}{urlCopied ? '¡Enlace Copiado!' : 'Copiar Enlace'}</button>
                 </div>
             </div>
         )}
