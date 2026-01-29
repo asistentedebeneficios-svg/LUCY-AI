@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
-// Agregamos Briefcase y UserCog para los Agentes
 import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, Mail } from 'https://esm.sh/lucide-react@0.344.0';
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
@@ -127,7 +126,7 @@ function App() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [adminTab, setAdminTab] = useState('active'); 
   const [leads, setLeads] = useState([]);
-  const [agents, setAgents] = useState([]); // NUEVO: Estado para Agentes
+  const [agents, setAgents] = useState([]); 
   const [searchTerm, setSearchTerm] = useState('');
   const [permissionError, setPermissionError] = useState(false);
 
@@ -169,13 +168,16 @@ function App() {
     return () => unsub();
   }, [user, isAdmin]);
 
-  // NUEVO: Fetch Agentes
+  // NUEVO: Fetch Agentes (CORREGIDO: Desde Documento 'settings' para evitar error de permisos)
   useEffect(() => {
       if (OFFLINE_MODE || !user || !isAdmin) return;
-      const agentsRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'agents');
-      const unsub = onSnapshot(agentsRef, (snapshot) => {
-          const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-          setAgents(data.sort((a,b) => (a.nombre || '').localeCompare(b.nombre || '')));
+      const agentsDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
+      const unsub = onSnapshot(agentsDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+              setAgents(docSnap.data().list || []);
+          } else {
+              setAgents([]);
+          }
       });
       return () => unsub();
   }, [user, isAdmin]);
@@ -199,19 +201,37 @@ function App() {
   // NUEVO: Asignar Agente a Lead
   const assignAgentToLead = async (leadId, agentId) => { if(!isAdmin) return; await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', leadId), { assignedAgentId: agentId, assignedAt: serverTimestamp() }); };
 
-  // NUEVO: Acciones Agentes
+  // NUEVO: Acciones Agentes (CORREGIDO: Array en Documento 'settings')
   const saveAgent = async (agentData) => { 
       if(!isAdmin) return; 
+      const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
+      const docSnap = await getDoc(agentsRef);
+      let currentList = docSnap.exists() ? (docSnap.data().list || []) : [];
+
       if (agentData.id) {
           // Update
-          const { id, ...data } = agentData;
-          await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'agents', id), data);
+          currentList = currentList.map(a => a.id === agentData.id ? { ...agentData, updatedAt: Date.now() } : a);
       } else {
           // Create
-          await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'agents'), { ...agentData, createdAt: serverTimestamp() });
+          const newAgent = { ...agentData, id: crypto.randomUUID(), createdAt: Date.now() };
+          currentList.push(newAgent);
       }
+      
+      await setDoc(agentsRef, { list: currentList });
   };
-  const deleteAgent = async (ids) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'agents', id); batch.delete(ref); }); await batch.commit(); };
+
+  const deleteAgent = async (ids) => { 
+      const idArray = Array.isArray(ids) ? ids : [ids];
+      if(!isAdmin) return; 
+      const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
+      const docSnap = await getDoc(agentsRef);
+      if (!docSnap.exists()) return;
+      
+      let currentList = docSnap.data().list || [];
+      currentList = currentList.filter(a => !idArray.includes(a.id));
+      
+      await setDoc(agentsRef, { list: currentList });
+  };
 
   if (!user) return <div className="h-screen flex items-center justify-center bg-[#F5F5F7] text-slate-400">Cargando...</div>;
 
@@ -316,29 +336,27 @@ function LandingView({ onStartChat, onOpenLogin }) {
   );
 }
 
-// --- AGENTS MANAGER (CORREGIDO: Formulario estable) ---
+// --- AGENTS MANAGER (CORREGIDO) ---
 function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }) {
     const [selectedAgent, setSelectedAgent] = useState(null); 
     const [isEditing, setIsEditing] = useState(false); 
     const [editingAgent, setEditingAgent] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
     
-    // Estado del Formulario (Movido aquí para estabilidad)
+    // AQUÍ ESTÁ EL ARREGLO: El estado del formulario ahora es estable
     const [formData, setFormData] = useState({ nombre: '', telefono: '', email: '', foto: '', estados: '', mensaje: '' });
 
-    // Estado Filtros
+    // Filtros de bitácora
     const [dateFilter, setDateFilter] = useState('all');
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
 
-    // Preparar formulario al abrir
     const openForm = (agent = null) => {
         setEditingAgent(agent);
         setFormData(agent || { nombre: '', telefono: '', email: '', foto: '', estados: '', mensaje: '' });
         setIsEditing(true);
     };
 
-    // Manejar el Guardado
     const handleFormSubmit = async (e) => {
         e.preventDefault();
         try {
@@ -347,7 +365,7 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
             setEditingAgent(null);
         } catch (error) {
             console.error(error);
-            alert("Error al guardar. Verifica tu conexión o permisos.");
+            alert("Error al guardar");
         }
     };
 
@@ -394,7 +412,6 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
         return agentLeads;
     };
 
-    // Vista de Detalle (Bitácora)
     if (selectedAgent) {
         const agentLeads = getAgentLeads(selectedAgent.id);
         return (
@@ -476,7 +493,6 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
                 ))}
             </div>
 
-            {/* Modal de Formulario (Renderizado condicional pero estable) */}
             {isEditing && (
                 <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg">
