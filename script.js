@@ -168,7 +168,7 @@ function App() {
     return () => unsub();
   }, [user, isAdmin]);
 
-  // NUEVO: Fetch Agentes (CORREGIDO: Desde Documento 'settings' para evitar error de permisos)
+  // Fetch Agentes
   useEffect(() => {
       if (OFFLINE_MODE || !user || !isAdmin) return;
       const agentsDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
@@ -198,10 +198,10 @@ function App() {
   const deleteLead = async (ids) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.delete(ref); }); await batch.commit(); }
   const updateLeadStatus = async (ids, status) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.update(ref, { status: status }); }); await batch.commit(); }
   
-  // NUEVO: Asignar Agente a Lead
+  // Asignar Agente
   const assignAgentToLead = async (leadId, agentId) => { if(!isAdmin) return; await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', leadId), { assignedAgentId: agentId, assignedAt: serverTimestamp() }); };
 
-  // NUEVO: Acciones Agentes (CORREGIDO: Array en Documento 'settings')
+  // Acciones Agentes
   const saveAgent = async (agentData) => { 
       if(!isAdmin) return; 
       const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
@@ -209,14 +209,11 @@ function App() {
       let currentList = docSnap.exists() ? (docSnap.data().list || []) : [];
 
       if (agentData.id) {
-          // Update
           currentList = currentList.map(a => a.id === agentData.id ? { ...agentData, updatedAt: Date.now() } : a);
       } else {
-          // Create
           const newAgent = { ...agentData, id: crypto.randomUUID(), createdAt: Date.now() };
           currentList.push(newAgent);
       }
-      
       await setDoc(agentsRef, { list: currentList });
   };
 
@@ -226,10 +223,8 @@ function App() {
       const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
       const docSnap = await getDoc(agentsRef);
       if (!docSnap.exists()) return;
-      
       let currentList = docSnap.data().list || [];
       currentList = currentList.filter(a => !idArray.includes(a.id));
-      
       await setDoc(agentsRef, { list: currentList });
   };
 
@@ -266,7 +261,6 @@ function App() {
           <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                <div className="flex gap-1 bg-[#E8E8ED]/50 p-1 rounded-xl w-fit self-start">
-                  {/* NUEVO: Tab de Agentes agregado aquí */}
                   {[{ id: 'active', icon: <Inbox size={14} />, label: 'Activos' }, { id: 'archived', icon: <Archive size={14} />, label: 'Archivo' }, { id: 'agents', icon: <Briefcase size={14} />, label: 'Agentes' }, { id: 'brain', icon: <BrainAvatar className="w-4 h-4 rounded-md" />, label: 'Inteligencia' }].map(tab => (
                     <button key={tab.id} onClick={() => setAdminTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === tab.id ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}>
                       {tab.id !== 'brain' && tab.icon}{tab.id === 'brain' && <Sparkles size={14}/>}{tab.label}
@@ -275,8 +269,6 @@ function App() {
                </div>
                {adminTab !== 'brain' && <div className="relative group w-full md:w-auto"><Search className="absolute left-3 top-2.5 text-gray-400" size={14} /><input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-4 py-2 bg-white border-0 rounded-xl text-sm w-full md:w-64 outline-none shadow-sm" /></div>}
             </div>
-            
-            {/* Renderizado Condicional de Vistas */}
             {adminTab === 'active' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active'))} agents={agents} onAssignAgent={assignAgentToLead} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> : 
              adminTab === 'archived' ? <LeadsList leads={leads.filter(l => l.status === 'archived')} agents={agents} onAssignAgent={assignAgentToLead} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={true} searchTerm={searchTerm} /> : 
              adminTab === 'agents' ? <AgentsManager agents={agents} leads={leads} onSaveAgent={saveAgent} onDeleteAgent={deleteAgent} searchTerm={searchTerm} /> :
@@ -319,9 +311,7 @@ function LandingView({ onStartChat, onOpenLogin }) {
         <div className="relative mb-4"><div className="absolute inset-0 bg-rose-200 rounded-full blur-2xl opacity-30 animate-pulse"></div><LucyAvatar className="w-28 h-28 md:w-32 md:h-32 border-4 border-white shadow-xl relative z-10" /><div className="absolute bottom-0 right-0 bg-white p-1.5 rounded-full shadow-md z-20"><Heart size={20} className="text-rose-500 fill-current animate-bounce" /></div></div>
         <div className="space-y-3"><h1 className="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">Hola, soy Lucy 👋</h1><p className="text-slate-500 text-lg md:text-xl font-medium max-w-md mx-auto leading-relaxed">Su asistente <span className="text-rose-500 font-bold">AI</span> experta en <span className="text-rose-500 font-semibold">Protección Familiar</span>.</p><p className="text-slate-400 text-sm md:text-base max-w-lg mx-auto">Estoy aquí para escucharle y explicarle los beneficios de protección disponibles para usted. Hablemos con confianza, a su ritmo y sin complicaciones.</p></div>
         <button onClick={onStartChat} className="group relative inline-flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-semibold text-lg shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 w-full md:w-auto justify-center"><span>Hablar con Lucy</span><MessageSquare size={20} className="group-hover:translate-x-1 transition-transform" /></button>
-        
         <div className="bg-slate-50 p-4 rounded-2xl text-sm text-slate-600 italic border border-slate-100 max-w-sm mx-auto mt-2 relative min-h-[100px] flex flex-col justify-center transition-all duration-500 shadow-sm"><span className="absolute -top-3 left-4 text-3xl text-slate-200">"</span><p className="animate-in fade-in duration-500" key={idx}>{cur.text}</p><div className="mt-2 flex items-center justify-center gap-2 not-italic font-semibold text-slate-800 text-xs animate-in fade-in duration-500" key={`author-${idx}`}><div className="w-5 h-5 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">{cur.author.charAt(0)}</div>{cur.author}</div></div>
-
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 w-full max-w-md pt-4 border-t border-slate-100">
            <div className="flex flex-col items-center gap-1.5"><div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><UserCheck size={20} /></div><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center">Solo agentes licenciados</span></div>
            <div className="flex flex-col items-center gap-1.5"><div className="p-2 bg-red-50 text-red-600 rounded-xl"><PhoneOff size={20} /></div><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center">No más llamadas inesperadas</span></div>
@@ -343,7 +333,7 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
     const [editingAgent, setEditingAgent] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
     
-    // AQUÍ ESTÁ EL ARREGLO: El estado del formulario ahora es estable
+    // Estado del formulario
     const [formData, setFormData] = useState({ nombre: '', telefono: '', email: '', foto: '', estados: '', mensaje: '' });
 
     // Filtros de bitácora
@@ -642,6 +632,106 @@ function LeadsList({ leads, agents, onAssignAgent, onDeleteLead, onUpdateStatus,
             </tbody>
           </table>
         </div>
+    </div>
+  );
+}
+
+// --- ADMIN BRAIN (RESTORED) ---
+function AdminBrain({ aiConfig, onSaveConfig }) {
+  const [c, setC] = useState(aiConfig);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false); 
+  const [isEditingWebhook, setIsEditingWebhook] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState(null);
+
+  const handleDayToggle = (day) => setC(prev => ({...prev, schedule: {...prev.schedule, [day]: {...prev.schedule[day], enabled: !prev.schedule[day].enabled}}}));
+  const handleTimeChange = (day, type, value) => setC(prev => ({...prev, schedule: {...prev.schedule, [day]: {...prev.schedule[day], [type]: value}}}));
+
+  const handleSave = async () => { 
+      setIsSaving(true); 
+      await onSaveConfig(c); 
+      setIsSaving(false); 
+      setIsEditingWebhook(false); 
+      setShowSuccess(true); 
+      setTimeout(() => setShowSuccess(false), 3000); 
+  }; 
+
+  const daysList = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+
+  const handleEditWebhookClick = () => { setShowAuthModal(true); setAuthPassword(''); setAuthError(null); };
+
+  const handleAuthSubmit = async (e) => {
+     e.preventDefault();
+     setAuthError(null);
+     try {
+         const user = auth.currentUser;
+         if (user && user.email) {
+             await signInWithEmailAndPassword(auth, user.email, authPassword);
+             setShowAuthModal(false);
+             setIsEditingWebhook(true);
+         } else {
+             setAuthError("No se pudo verificar la sesión.");
+         }
+     } catch (error) {
+         console.error("Auth check failed", error);
+         setAuthError("Contraseña incorrecta.");
+     }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="bg-white p-8 rounded-[24px] shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100 flex flex-col md:flex-row gap-10">
+        <div className="flex-1 space-y-6">
+          <div>
+            <h3 className="font-semibold text-[#1d1d1f] mb-4 text-sm flex items-center gap-2">Configuración del Cerebro</h3>
+            <div className="space-y-3 mb-6 bg-[#F5F5F7] p-5 rounded-2xl border border-gray-100">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-2"><span className="text-xs font-bold uppercase tracking-wide text-slate-500 flex items-center gap-2"><Clock size={14}/> Horario Semanal</span><label className="flex items-center gap-2 cursor-pointer text-[10px] font-bold text-slate-500 bg-white px-2 py-1 rounded-md shadow-sm border border-slate-200"><input type="checkbox" checked={c.vacationMode} onChange={(e)=>setC({...c, vacationMode: e.target.checked})} className="accent-orange-500"/> Modo Vacaciones (No Disponible)</label></div>
+              {c.vacationMode && (
+                  <div className="flex gap-4 items-center bg-orange-50 p-3 rounded-xl border border-orange-100 mb-3 animate-in fade-in">
+                      <div><label className="text-[10px] font-bold text-orange-600 uppercase block mb-1">Fecha Inicio</label><input type="date" value={c.vacationStart} onChange={(e) => setC({...c, vacationStart: e.target.value})} className="bg-white border border-orange-200 rounded-lg px-2 py-1 text-xs text-orange-800 outline-none focus:ring-2 focus:ring-orange-200" /></div>
+                      <span className="text-orange-400 font-bold">→</span>
+                      <div><label className="text-[10px] font-bold text-orange-600 uppercase block mb-1">Fecha Fin</label><input type="date" value={c.vacationEnd} onChange={(e) => setC({...c, vacationEnd: e.target.value})} className="bg-white border border-orange-200 rounded-lg px-2 py-1 text-xs text-orange-800 outline-none focus:ring-2 focus:ring-orange-200" /></div>
+                  </div>
+              )}
+              {daysList.map(day => (
+                <div key={day} className="flex items-center justify-between group">
+                   <div className="flex items-center gap-3"><input type="checkbox" checked={c.schedule?.[day]?.enabled} onChange={() => handleDayToggle(day)} className="accent-black w-4 h-4 rounded cursor-pointer"/><span className={`text-xs font-bold uppercase tracking-wide w-20 ${c.schedule?.[day]?.enabled ? 'text-slate-700' : 'text-slate-400'}`}>{day}</span></div>
+                   {c.schedule?.[day]?.enabled ? (<div className="flex gap-2 items-center animate-in fade-in"><input type="time" value={c.schedule[day].start} onChange={(e)=>handleTimeChange(day, 'start', e.target.value)} className="bg-white border p-1 rounded text-xs w-20 text-center font-medium"/><span className="text-slate-400 text-[10px]">a</span><input type="time" value={c.schedule[day].end} onChange={(e)=>handleTimeChange(day, 'end', e.target.value)} className="bg-white border p-1 rounded text-xs w-20 text-center font-medium"/></div>) : (<span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest px-8">No disponible</span>)}
+                </div>
+              ))}
+            </div>
+            <label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Instrucciones Base</label>
+            <textarea value={c.systemPrompt} onChange={(e)=>setC({...c, systemPrompt:e.target.value})} className="w-full h-32 p-4 bg-white border border-gray-200 rounded-xl text-xs font-mono text-[#1d1d1f] focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all shadow-sm leading-relaxed resize-none" />
+          </div>
+        </div>
+        <div className="md:w-72 space-y-6">
+          <div>
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide">Webhook URL (Zapier/Make)</label>
+                {!isEditingWebhook && (<button onClick={handleEditWebhookClick} className="text-blue-500 hover:text-blue-700 transition-colors" title="Editar Webhook"><Pencil size={12} /></button>)}
+              </div>
+              <input type={isEditingWebhook ? "text" : "password"} placeholder="https://hooks.zapier.com/..." value={c.webhookUrl || ""} onChange={(e)=>setC({...c, webhookUrl:e.target.value})} disabled={!isEditingWebhook} className={`w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-medium text-[#1d1d1f] focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all shadow-sm ${!isEditingWebhook ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} />
+              <p className="text-[9px] text-gray-400 mt-1">{isEditingWebhook ? "Edición habilitada. Guarde para bloquear." : "Conectado con Zapier (Oculto)"}</p>
+          </div>
+          <button onClick={handleSave} disabled={isSaving} className="w-full bg-black text-white font-medium py-3 rounded-xl hover:bg-gray-800 transition-all text-xs shadow-lg relative overflow-hidden">{isSaving ? "Guardando..." : "Guardar Cambios"}</button>
+          {showSuccess && (<div className="animate-in fade-in bg-green-50 text-green-700 border border-green-100 rounded-xl p-3 flex items-center justify-center gap-2 text-xs font-medium shadow-sm mt-2"><CheckCircle size={14} /> Cambios guardados correctamente</div>)}
+        </div>
+      </div>
+      {showAuthModal && (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-xs border border-gray-100">
+                  <div className="flex justify-between items-center mb-4"><h4 className="font-bold text-sm text-slate-800">Confirmar Identidad</h4><button onClick={() => setShowAuthModal(false)} className="text-slate-400 hover:text-slate-600"><X size={16}/></button></div>
+                  <form onSubmit={handleAuthSubmit} className="space-y-3">
+                      <p className="text-xs text-slate-500">Ingrese su contraseña de administrador para editar el Webhook.</p>
+                      <input type="password" autoFocus value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 outline-none" placeholder="Contraseña"/>
+                      {authError && <p className="text-xs text-red-500 font-medium">{authError}</p>}
+                      <div className="flex justify-end gap-2 mt-2"><button type="button" onClick={() => setShowAuthModal(false)} className="px-3 py-2 text-xs font-medium text-slate-500 hover:text-slate-800">Cancelar</button><button type="submit" className="px-4 py-2 bg-black text-white text-xs font-medium rounded-lg hover:bg-gray-800">Verificar</button></div>
+                  </form>
+              </div>
+          </div>
+      )}
     </div>
   );
 }
