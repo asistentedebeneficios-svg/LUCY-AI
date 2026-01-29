@@ -58,8 +58,8 @@ function useInactivityTimer(action, timeout = 600000) { useEffect(() => { let ti
 
 // --- COMPONENTES AUXILIARES ---
 
-// 1. Modal de Detalle del Lead (Ahora con botón de asignar mejorado)
-const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus, isArchive }) => {
+// 1. Modal de Detalle del Lead (Limpio: Sin acciones de asignación)
+const LeadDetailModal = ({ lead, agents, onClose, onUpdateStatus, isArchive }) => {
     if (!lead) return null;
     const assignedAgent = agents.find(a => a.id === lead.assignedAgentId);
 
@@ -74,28 +74,16 @@ const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus,
                     <button onClick={onClose} className="p-2 bg-[#F5F5F7] hover:bg-[#E8E8ED] rounded-full transition-colors text-[#86868b]"><X size={18}/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-white">
-                    {/* Tarjeta de Agente Asignado */}
-                    <div className={`p-4 rounded-xl flex items-center justify-between border ${assignedAgent ? 'bg-blue-50 border-blue-100' : 'bg-gray-50 border-gray-100'}`}>
-                        <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${assignedAgent ? 'bg-white' : 'bg-gray-200'}`}>
-                                {assignedAgent ? <img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-full h-full rounded-full object-cover"/> : <UserMinus size={18} className="text-gray-400"/>}
-                            </div>
+                    {/* Información de Agente (Solo lectura) */}
+                    {assignedAgent && (
+                        <div className="bg-blue-50 p-4 rounded-xl flex items-center gap-3 border border-blue-100">
+                            <img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-10 h-10 rounded-full object-cover border-2 border-white"/>
                             <div>
-                                <p className="text-[10px] font-bold uppercase tracking-wide opacity-60">Agente Asignado</p>
-                                <p className={`text-sm font-semibold ${assignedAgent ? 'text-blue-900' : 'text-gray-500'}`}>{assignedAgent ? assignedAgent.nombre : 'Sin asignar'}</p>
+                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Agente Responsable</p>
+                                <p className="font-bold text-blue-900 text-sm">{assignedAgent.nombre}</p>
                             </div>
                         </div>
-                        <div className="flex gap-2">
-                            {assignedAgent && (
-                                <button onClick={() => onAssignClick([lead.id], 'unassign')} className="p-2 bg-white text-red-500 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-100 transition-all" title="Desvincular">
-                                    <Link size={16} className="rotate-45"/>
-                                </button>
-                            )}
-                            <button onClick={() => onAssignClick([lead.id], 'open_modal')} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${assignedAgent ? 'bg-white text-blue-600 hover:bg-blue-50' : 'bg-black text-white hover:bg-gray-800'}`}>
-                                {assignedAgent ? 'Cambiar' : 'Asignar Agente'}
-                            </button>
-                        </div>
-                    </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span><a href={`https://wa.me/${String(lead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(lead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
@@ -155,8 +143,8 @@ function App() {
   const [permissionError, setPermissionError] = useState(false);
 
   // Estados Globales para Modales (Lifting State Up)
-  const [selectedLead, setSelectedLead] = useState(null); // Detalle del Lead
-  const [assignModalData, setAssignModalData] = useState({ isOpen: false, targetIds: [] }); // Modal Asignación
+  const [selectedLead, setSelectedLead] = useState(null); 
+  const [assignModalData, setAssignModalData] = useState({ isOpen: false, targetIds: [] }); 
 
   const [aiConfig, setAiConfig] = useState({
     systemPrompt: `Eres Lucy...`, webhookUrl: "", schedule: DEFAULT_SCHEDULE, 
@@ -219,7 +207,7 @@ function App() {
   const deleteLead = async (ids) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.delete(ref); }); await batch.commit(); }
   const updateLeadStatus = async (ids, status) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.update(ref, { status: status }); }); await batch.commit(); }
   
-  // Asignación Unificada (Funciona para 1 o varios)
+  // Asignación Unificada
   const handleAssignAgent = async (agentId) => {
       if(!isAdmin) return;
       const targetIds = assignModalData.targetIds;
@@ -237,17 +225,8 @@ function App() {
       setAssignModalData({ isOpen: false, targetIds: [] });
   };
 
-  const openAssignModal = (ids, actionType) => {
-      // actionType: 'unassign' (direct action) or 'open_modal'
-      if (actionType === 'unassign') {
-          if(confirm("¿Desvincular agente de este lead?")) {
-              const batch = writeBatch(db);
-              ids.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.update(ref, { assignedAgentId: null, assignedAt: null }); });
-              batch.commit();
-          }
-      } else {
-          setAssignModalData({ isOpen: true, targetIds: ids });
-      }
+  const openAssignModal = (ids) => {
+      setAssignModalData({ isOpen: true, targetIds: ids });
   };
 
   const saveAgent = async (agentData) => { 
@@ -301,26 +280,37 @@ function App() {
           <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                <div className="flex gap-1 bg-[#E8E8ED]/50 p-1 rounded-xl w-fit self-start">
-                  {[{ id: 'active', icon: <Inbox size={14} />, label: 'Activos' }, { id: 'archived', icon: <Archive size={14} />, label: 'Archivo' }, { id: 'agents', icon: <Briefcase size={14} />, label: 'Agentes' }, { id: 'brain', icon: <BrainAvatar className="w-4 h-4 rounded-md" />, label: 'Inteligencia' }].map(tab => (
-                    <button key={tab.id} onClick={() => setAdminTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === tab.id ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}>
-                      {tab.id !== 'brain' && tab.icon}{tab.id === 'brain' && <Sparkles size={14}/>}{tab.label}
-                    </button>
-                  ))}
+                  {/* TABS DE NAVEGACION */}
+                  <button onClick={() => setAdminTab('active')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'active' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><Inbox size={14}/> Activos</button>
+                  <button onClick={() => setAdminTab('assigned')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'assigned' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><UserCheck size={14}/> Asignados</button>
+                  <button onClick={() => setAdminTab('archived')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'archived' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><Archive size={14}/> Archivo</button>
+                  <button onClick={() => setAdminTab('agents')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'agents' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><Briefcase size={14}/> Agentes</button>
+                  <button onClick={() => setAdminTab('brain')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'brain' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><Sparkles size={14}/> Inteligencia</button>
                </div>
                {adminTab !== 'brain' && <div className="relative group w-full md:w-auto"><Search className="absolute left-3 top-2.5 text-gray-400" size={14} /><input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-4 py-2 bg-white border-0 rounded-xl text-sm w-full md:w-64 outline-none shadow-sm" /></div>}
             </div>
             
             {/* VISTAS */}
-            {adminTab === 'active' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active'))} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> : 
+            {/* 1. Activos: Leads sin asignar */}
+            {adminTab === 'active' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active') && !l.assignedAgentId)} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> : 
+             
+             /* 2. Asignados: Leads activos CON agente */
+             adminTab === 'assigned' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active') && l.assignedAgentId)} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> :
+             
+             /* 3. Archivo */
              adminTab === 'archived' ? <LeadsList leads={leads.filter(l => l.status === 'archived')} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={true} searchTerm={searchTerm} /> : 
+             
+             /* 4. Agentes */
              adminTab === 'agents' ? <AgentsManager agents={agents} leads={leads} onOpenLead={(l) => setSelectedLead(l)} onSaveAgent={saveAgent} onDeleteAgent={deleteAgent} searchTerm={searchTerm} /> :
+             
+             /* 5. Cerebro */
              <AdminBrain aiConfig={aiConfig} onSaveConfig={saveAiConfig} />}
           </div>
         )}
       </main>
 
       {/* MODALES GLOBALES */}
-      <LeadDetailModal lead={selectedLead} agents={agents} onClose={() => setSelectedLead(null)} onAssignClick={openAssignModal} onUpdateStatus={updateLeadStatus} isArchive={adminTab === 'archived'} />
+      <LeadDetailModal lead={selectedLead} agents={agents} onClose={() => setSelectedLead(null)} onUpdateStatus={updateLeadStatus} isArchive={adminTab === 'archived'} />
       <AgentAssignmentModal isOpen={assignModalData.isOpen} agents={agents} onClose={() => setAssignModalData({ ...assignModalData, isOpen: false })} onAssign={handleAssignAgent} />
 
       {showLogin && (
@@ -369,7 +359,7 @@ function LandingView({ onStartChat, onOpenLogin }) {
   );
 }
 
-// --- AGENTS MANAGER ---
+// --- AGENTS MANAGER (CORREGIDO) ---
 function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, searchTerm }) {
     const [selectedAgent, setSelectedAgent] = useState(null); 
     const [isEditing, setIsEditing] = useState(false); 
@@ -380,25 +370,63 @@ function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, 
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
 
-    const openForm = (agent = null) => { setEditingAgent(agent); setFormData(agent || { nombre: '', telefono: '', email: '', foto: '', estados: '', mensaje: '' }); setIsEditing(true); };
-    const handleFormSubmit = async (e) => { e.preventDefault(); try { await onSaveAgent(formData); setIsEditing(false); setEditingAgent(null); } catch (error) { console.error(error); alert("Error al guardar"); } };
-    const filteredAgents = agents.filter(a => (a.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) || (a.email || '').toLowerCase().includes(searchTerm.toLowerCase()));
+    const openForm = (agent = null) => {
+        setEditingAgent(agent);
+        setFormData(agent || { nombre: '', telefono: '', email: '', foto: '', estados: '', mensaje: '' });
+        setIsEditing(true);
+    };
+
+    const handleFormSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            await onSaveAgent(formData);
+            setIsEditing(false);
+            setEditingAgent(null);
+        } catch (error) {
+            console.error(error);
+            alert("Error al guardar");
+        }
+    };
+
+    const filteredAgents = agents.filter(a => 
+        (a.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (a.email || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
     const handleSelectAll = (e) => e.target.checked ? setSelectedIds(filteredAgents.map(a => a.id)) : setSelectedIds([]);
     const handleSelectOne = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-    const handleDeleteSelected = async () => { if(confirm(`¿Eliminar ${selectedIds.length} agentes?`)) { await onDeleteAgent(selectedIds); setSelectedIds([]); } };
+    
+    const handleDeleteSelected = async () => {
+        if(confirm(`¿Eliminar ${selectedIds.length} agentes?`)) {
+            await onDeleteAgent(selectedIds);
+            setSelectedIds([]);
+        }
+    };
 
     const getAgentLeads = (agentId) => {
         let agentLeads = leads.filter(l => l.assignedAgentId === agentId);
         const now = new Date();
+        
         if (dateFilter === 'thisMonth') {
-            agentLeads = agentLeads.filter(l => { const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
+            agentLeads = agentLeads.filter(l => {
+                const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000);
+                return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            });
         } else if (dateFilter === 'lastMonth') {
              const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
              const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-             agentLeads = agentLeads.filter(l => { const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000); return d >= lastMonth && d <= endLastMonth; });
+             agentLeads = agentLeads.filter(l => {
+                const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000);
+                return d >= lastMonth && d <= endLastMonth;
+            });
         } else if (dateFilter === 'custom' && customStart && customEnd) {
-             const start = new Date(customStart); const end = new Date(customEnd); end.setHours(23,59,59);
-             agentLeads = agentLeads.filter(l => { const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000); return d >= start && d <= end; });
+             const start = new Date(customStart);
+             const end = new Date(customEnd);
+             end.setHours(23,59,59);
+             agentLeads = agentLeads.filter(l => {
+                const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000);
+                return d >= start && d <= end;
+            });
         }
         return agentLeads;
     };
@@ -428,7 +456,9 @@ function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, 
                     <div className="flex items-center gap-2"><Filter size={16} className="text-gray-400"/><span className="text-sm font-bold text-gray-700">Filtrar Asignaciones:</span></div>
                     <div className="flex gap-2 flex-wrap">
                         {['all', 'thisMonth', 'lastMonth', 'custom'].map(f => (
-                            <button key={f} onClick={()=>setDateFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${dateFilter===f ? 'bg-black text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{f==='all'?'Todo':f==='thisMonth'?'Este Mes':f==='lastMonth'?'Mes Pasado':'Personalizado'}</button>
+                            <button key={f} onClick={()=>setDateFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${dateFilter===f ? 'bg-black text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                                {f==='all'?'Todo':f==='thisMonth'?'Este Mes':f==='lastMonth'?'Mes Pasado':'Personalizado'}
+                            </button>
                         ))}
                     </div>
                     {dateFilter === 'custom' && (<div className="flex gap-2 items-center animate-in fade-in"><input type="date" value={customStart} onChange={e=>setCustomStart(e.target.value)} className="bg-gray-50 border rounded p-1 text-xs" /><span className="text-gray-400">-</span><input type="date" value={customEnd} onChange={e=>setCustomEnd(e.target.value)} className="bg-gray-50 border rounded p-1 text-xs" /></div>)}
@@ -461,6 +491,7 @@ function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, 
                     <button onClick={()=>openForm(null)} className="bg-black text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors flex items-center gap-2 shadow-lg shadow-gray-200"><UserCog size={16}/> Nuevo Agente</button>
                 </div>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredAgents.map(agent => (
                     <div key={agent.id} className={`bg-white rounded-2xl p-5 border transition-all hover:shadow-md cursor-pointer relative group ${selectedIds.includes(agent.id) ? 'border-blue-500 bg-blue-50/10' : 'border-gray-100'}`} onClick={()=>setSelectedAgent(agent)}>
@@ -480,16 +511,27 @@ function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, 
                     </div>
                 ))}
             </div>
+
             {isEditing && (
                 <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg">
                         <h3 className="text-lg font-bold mb-4">{editingAgent ? 'Editar Agente' : 'Nuevo Agente'}</h3>
                         <form onSubmit={handleFormSubmit} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-500 uppercase">Nombre Completo</label><input required className="w-full p-2 border rounded-lg text-sm" value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} /></div><div><label className="text-[10px] font-bold text-gray-500 uppercase">Teléfono</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} /></div></div>
-                            <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-500 uppercase">Email</label><input type="email" className="w-full p-2 border rounded-lg text-sm" value={formData.email} onChange={e=>setFormData({...formData, email:e.target.value})} /></div><div><label className="text-[10px] font-bold text-gray-500 uppercase">Foto (URL)</label><input className="w-full p-2 border rounded-lg text-sm" placeholder="https://..." value={formData.foto} onChange={e=>setFormData({...formData, foto:e.target.value})} /></div></div>
+                            <div className="grid grid-cols-2 gap-4">
+                                 <div><label className="text-[10px] font-bold text-gray-500 uppercase">Nombre Completo</label><input required className="w-full p-2 border rounded-lg text-sm" value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} /></div>
+                                 <div><label className="text-[10px] font-bold text-gray-500 uppercase">Teléfono</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} /></div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                 <div><label className="text-[10px] font-bold text-gray-500 uppercase">Email</label><input type="email" className="w-full p-2 border rounded-lg text-sm" value={formData.email} onChange={e=>setFormData({...formData, email:e.target.value})} /></div>
+                                 <div><label className="text-[10px] font-bold text-gray-500 uppercase">Foto (URL)</label><input className="w-full p-2 border rounded-lg text-sm" placeholder="https://..." value={formData.foto} onChange={e=>setFormData({...formData, foto:e.target.value})} /></div>
+                            </div>
                             <div><label className="text-[10px] font-bold text-gray-500 uppercase">Estados (Licencias)</label><input placeholder="Ej: FL, TX, CA" className="w-full p-2 border rounded-lg text-sm" value={formData.estados} onChange={e=>setFormData({...formData, estados:e.target.value})} /></div>
                             <div><label className="text-[10px] font-bold text-gray-500 uppercase">Mensaje Especial</label><textarea className="w-full p-2 border rounded-lg text-sm h-20" value={formData.mensaje} onChange={e=>setFormData({...formData, mensaje:e.target.value})} /></div>
-                            <div className="flex gap-2 justify-end mt-4"><button type="button" onClick={()=>{setIsEditing(false); setEditingAgent(null)}} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button><button type="submit" className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800">Guardar</button></div>
+                            
+                            <div className="flex gap-2 justify-end mt-4">
+                                <button type="button" onClick={()=>{setIsEditing(false); setEditingAgent(null)}} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
+                                <button type="submit" className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800">Guardar</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -498,10 +540,11 @@ function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, 
     );
 }
 
-// --- LEADS LIST (MODIFICADO: Sin dropdown feo) ---
+// --- LEADS LIST (MODIFICADO: Con Modal de Asignación Masiva) ---
 function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
   const [leadToDelete, setLeadToDelete] = useState(null); 
   const [selectedIds, setSelectedIds] = useState([]); 
+  
   const filteredLeads = leads.filter(l => String(l.nombre||'').toLowerCase().includes(searchTerm.toLowerCase()));
 
   const handleSelectAll = (e) => e.target.checked ? setSelectedIds(filteredLeads.map(l => l.id)) : setSelectedIds([]);
@@ -511,6 +554,7 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
 
   return (
     <div className="animate-in fade-in duration-500">
+        
         {leadToDelete && (
             <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                 <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm border border-gray-100 text-center">
@@ -527,7 +571,7 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
               <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 flex justify-between items-center animate-in fade-in sticky top-0 z-20">
                   <span className="text-xs font-bold text-blue-700">{selectedIds.length} seleccionados</span>
                   <div className="flex gap-2 items-center">
-                      <button onClick={() => onOpenAssign(selectedIds, 'open_modal')} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"><UserPlus size={14}/> Asignar Agente...</button>
+                      <button onClick={() => onOpenAssign(selectedIds)} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"><UserPlus size={14}/> Acciones Agente</button>
                       <button onClick={handleBulkArchive} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors">{isArchive ? <RotateCcw size={14}/> : <Archive size={14}/>}{isArchive ? 'Restaurar' : 'Archivar'}</button>
                       <button onClick={() => setLeadToDelete(selectedIds)} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"><Trash2 size={14}/> Eliminar</button>
                   </div>
