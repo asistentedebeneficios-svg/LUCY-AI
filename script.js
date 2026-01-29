@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
-// Importamos Link como LinkIcon para evitar conflictos de nombre
+// Importamos Link como LinkIcon para evitar conflictos
 import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, Mail, UserMinus, UserPlus, Link as LinkIcon } from 'https://esm.sh/lucide-react@0.344.0';
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
@@ -8,11 +8,9 @@ import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, dele
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
 // --- MODO OFFLINE / PRODUCCIÓN ---
-// IMPORTANTE: Déjalo en false para que Lucy conecte con tu API real.
 const OFFLINE_MODE = false; 
 
-// --- SEGURIDAD Y CONFIGURACIÓN DE API (ACTUALIZADO) ---
-// Tu clave: AIzaSyB9qP1gjlqrrdANqvhI2hY5KAirqByeI9Q
+// --- SEGURIDAD Y CONFIGURACIÓN ---
 const AI_KEY_PART_A = "AIzaSyB9qP1gjlqrrdAN";
 const AI_KEY_PART_B = "qvhI2hY5KAirqByeI9Q";
 const GEMINI_API_KEY = `${AI_KEY_PART_A}${AI_KEY_PART_B}`;
@@ -40,7 +38,6 @@ if (!OFFLINE_MODE) {
 }
 
 // --- UTILIDADES ---
-// Generador de ID robusto
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
 function cleanAiMessage(text) { if (!text) return ''; let cleaned = text.replace(new RegExp('\\[Botón:.*?\\]', 'gi'), '').replace(new RegExp('\\[Button:.*?\\]', 'gi'), ''); return cleaned.split('***').join('').split('---').join('').trim(); }
@@ -71,8 +68,8 @@ async function fetchGeminiWithRetry(payload) {
     if (!rateLimit.check()) throw new Error("Espera unos segundos."); 
     if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; } 
     
-    // Usamos el modelo Flash-Lite o Flash para rapidez
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite-preview-02-05:generateContent?key=${GEMINI_API_KEY}`; 
+    // Usamos el modelo estable 1.5 flash
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`; 
     try { 
         const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); 
         if (res.ok) return await res.json(); 
