@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
-import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, Mail, UserMinus, UserPlus } from 'https://esm.sh/lucide-react@0.344.0';
+import { MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, Mail, UserMinus, UserPlus, Link } from 'https://esm.sh/lucide-react@0.344.0';
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
@@ -40,79 +40,103 @@ if (!OFFLINE_MODE) {
 const IMAGES = { lucy: "https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" };
 
 const LucyAvatar = ({ className = "w-10 h-10" }) => (
-  <img 
-    src={IMAGES.lucy} 
-    alt="Lucy Asistente" 
-    className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} 
-    onError={(e) => {
-      e.target.onerror = null; 
-      e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400";
-    }}
-  />
+  <img src={IMAGES.lucy} alt="Lucy" className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"; }} />
 );
-
 const BrainAvatar = ({ className = "w-10 h-10" }) => (<div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}><Sparkles size={20} strokeWidth={2} /></div>);
 const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
 
 // --- UTILIDADES ---
-function cleanAiMessage(text) { 
-    if (!text) return ''; 
-    let cleaned = text.replace(new RegExp('\\[Botón:.*?\\]', 'gi'), '').replace(new RegExp('\\[Button:.*?\\]', 'gi'), '');
-    return cleaned.split('***').join('').split('---').join('').trim();
-}
-
-function to12h(t) { if (!t) return ''; const [h, m] = t.split(':'); return `${h % 12 || 12}:${m.toString().padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`; }
+function cleanAiMessage(text) { if (!text) return ''; let cleaned = text.replace(new RegExp('\\[Botón:.*?\\]', 'gi'), '').replace(new RegExp('\\[Button:.*?\\]', 'gi'), ''); return cleaned.split('***').join('').split('---').join('').trim(); }
 function formatScheduledDate(d) { if (!d || d.length < 10) return d; const date = new Date(d); return isNaN(date) ? d : date.toLocaleDateString('en-US', {month:'2-digit', day:'2-digit', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true}); }
-function formatFirestoreDate(ts) { 
-    if (!ts) return 'Reciente'; 
-    if (OFFLINE_MODE && typeof ts === 'string') return new Date(ts).toLocaleDateString('en-US'); 
-    return ts.toDate ? ts.toDate().toLocaleDateString('en-US') : new Date(ts.seconds * 1000).toLocaleDateString('en-US'); 
-}
-
-const RichText = ({ content }) => {
-  if (!content || typeof content !== 'string') return null;
-  return <span className="text-sm leading-relaxed">{content.split(/(\*\*.*?\*\*)/g).map((part, i) => part.startsWith('**') ? <strong key={i} className="text-slate-900 font-bold">{part.slice(2, -2)}</strong> : part)}</span>;
-};
-
+function formatFirestoreDate(ts) { if (!ts) return 'Reciente'; if (OFFLINE_MODE && typeof ts === 'string') return new Date(ts).toLocaleDateString('en-US'); return ts.toDate ? ts.toDate().toLocaleDateString('en-US') : new Date(ts.seconds * 1000).toLocaleDateString('en-US'); }
+const RichText = ({ content }) => { if (!content || typeof content !== 'string') return null; return <span className="text-sm leading-relaxed">{content.split(/(\*\*.*?\*\*)/g).map((part, i) => part.startsWith('**') ? <strong key={i} className="text-slate-900 font-bold">{part.slice(2, -2)}</strong> : part)}</span>; };
 const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
-
 const DEFAULT_SCHEDULE = { lunes: { start: '09:00', end: '18:00', enabled: true }, martes: { start: '09:00', end: '18:00', enabled: true }, miercoles: { start: '09:00', end: '18:00', enabled: true }, jueves: { start: '09:00', end: '18:00', enabled: true }, viernes: { start: '09:00', end: '18:00', enabled: true }, sabado: { start: '10:00', end: '14:00', enabled: false }, domingo: { start: '10:00', end: '14:00', enabled: false } };
+const getAgentStatus = (config) => { const now = new Date(); if (config.vacationMode && config.vacationStart && config.vacationEnd) { const vStart = new Date(config.vacationStart + 'T00:00:00'); const vEnd = new Date(config.vacationEnd + 'T23:59:59'); if (now >= vStart && now <= vEnd) return { isAgentAvailable: false, isVacation: true, resumeDate: new Date(vEnd.setDate(vEnd.getDate() + 1)) }; } const day = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'][now.getDay()]; const sch = config.schedule?.[day]; if (!sch || !sch.enabled) return { isAgentAvailable: false, message: "Cerrado hoy" }; const mins = now.getHours() * 60 + now.getMinutes(); const [sH, sM] = sch.start.split(':').map(Number); const [eH, eM] = sch.end.split(':').map(Number); if (mins < sH * 60 + sM || mins >= eH * 60 + eM) return { isAgentAvailable: false, message: "Cerrado ahora" }; return { isAgentAvailable: true, message: "Agentes Disponibles" }; };
+async function fetchGeminiWithRetry(payload) { if (!rateLimit.check()) throw new Error("Espera unos segundos."); if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; } const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`; try { const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if (res.ok) return await res.json(); } catch (e) { throw e; } throw new Error("Error conexión"); }
+function useInactivityTimer(action, timeout = 600000) { useEffect(() => { let timer; const resetTimer = () => { clearTimeout(timer); timer = setTimeout(action, timeout); }; window.addEventListener('mousemove', resetTimer); window.addEventListener('keypress', resetTimer); window.addEventListener('click', resetTimer); window.addEventListener('touchstart', resetTimer); resetTimer(); return () => { clearTimeout(timer); window.removeEventListener('mousemove', resetTimer); window.removeEventListener('keypress', resetTimer); window.removeEventListener('click', resetTimer); window.removeEventListener('touchstart', resetTimer); }; }, [action, timeout]); }
 
-const getAgentStatus = (config) => {
-  const now = new Date();
-  if (config.vacationMode && config.vacationStart && config.vacationEnd) {
-     const vStart = new Date(config.vacationStart + 'T00:00:00'); 
-     const vEnd = new Date(config.vacationEnd + 'T23:59:59'); 
-     if (now >= vStart && now <= vEnd) return { isAgentAvailable: false, isVacation: true, resumeDate: new Date(vEnd.setDate(vEnd.getDate() + 1)) };
-  }
-  const day = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'][now.getDay()];
-  const sch = config.schedule?.[day];
-  if (!sch || !sch.enabled) return { isAgentAvailable: false, message: "Cerrado hoy" };
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const [sH, sM] = sch.start.split(':').map(Number);
-  const [eH, eM] = sch.end.split(':').map(Number);
-  if (mins < sH * 60 + sM || mins >= eH * 60 + eM) return { isAgentAvailable: false, message: "Cerrado ahora" };
-  return { isAgentAvailable: true, message: "Agentes Disponibles" };
+// --- COMPONENTES AUXILIARES ---
+
+// 1. Modal de Detalle del Lead (Ahora con botón de asignar mejorado)
+const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus, isArchive }) => {
+    if (!lead) return null;
+    const assignedAgent = agents.find(a => a.id === lead.assignedAgentId);
+
+    return (
+        <div className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in-95 duration-300">
+            <div className="bg-white w-full max-w-2xl rounded-[24px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-10">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-[#F5F5F7] rounded-full flex items-center justify-center text-gray-400"><User size={24} strokeWidth={1.5} /></div>
+                        <div><h3 className="font-semibold text-[#1d1d1f] text-xl tracking-tight">{String(lead.nombre || 'Anónimo')}</h3><p className="text-xs text-[#86868b] mt-0.5 font-medium">{formatFirestoreDate(lead.createdAt)}</p></div>
+                    </div>
+                    <button onClick={onClose} className="p-2 bg-[#F5F5F7] hover:bg-[#E8E8ED] rounded-full transition-colors text-[#86868b]"><X size={18}/></button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-white">
+                    {/* Tarjeta de Agente Asignado */}
+                    <div className={`p-4 rounded-xl flex items-center justify-between border ${assignedAgent ? 'bg-blue-50 border-blue-100' : 'bg-gray-50 border-gray-100'}`}>
+                        <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${assignedAgent ? 'bg-white' : 'bg-gray-200'}`}>
+                                {assignedAgent ? <img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-full h-full rounded-full object-cover"/> : <UserMinus size={18} className="text-gray-400"/>}
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-wide opacity-60">Agente Asignado</p>
+                                <p className={`text-sm font-semibold ${assignedAgent ? 'text-blue-900' : 'text-gray-500'}`}>{assignedAgent ? assignedAgent.nombre : 'Sin asignar'}</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            {assignedAgent && (
+                                <button onClick={() => onAssignClick([lead.id], 'unassign')} className="p-2 bg-white text-red-500 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-100 transition-all" title="Desvincular">
+                                    <Link size={16} className="rotate-45"/>
+                                </button>
+                            )}
+                            <button onClick={() => onAssignClick([lead.id], 'open_modal')} className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${assignedAgent ? 'bg-white text-blue-600 hover:bg-blue-50' : 'bg-black text-white hover:bg-gray-800'}`}>
+                                {assignedAgent ? 'Cambiar' : 'Asignar Agente'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span><a href={`https://wa.me/${String(lead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(lead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
+                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Programado</span><p className="font-medium text-[#1d1d1f]">{formatScheduledDate(String(lead.horario_preferido || 'Inmediata'))}</p></div>
+                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Perfil</span><p className="font-medium text-[#1d1d1f] text-sm">{String(lead.edad || '?')} años • {String(lead.estado || '?')} • {String(lead.fuma || '?')}</p></div>
+                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Salud</span><p className="font-medium text-[#1d1d1f] text-sm truncate">{String(lead.salud || '-')}</p></div>
+                    </div>
+                    <div className="relative"><div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-full"></div><div className="pl-5 py-1"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2 flex items-center gap-1"><Sparkles size={12} className="text-blue-500"/> Análisis Lucy</span><p className="text-sm text-[#1d1d1f] leading-relaxed">"{String(lead.resumen_ai || '')}"</p></div></div>
+                    <div><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-4">Historial</span><div className="space-y-3">{lead.fullChat?.map((m, i) => (<div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}><div className={`px-4 py-2.5 rounded-2xl text-xs max-w-[90%] leading-relaxed ${m.role === 'user' ? 'bg-[#0071e3] text-white' : 'bg-[#F5F5F7] text-[#1d1d1f]'}`}><RichText content={String(m.content || '')} /></div></div>))}</div></div>
+                </div>
+                <div className="p-6 border-t border-gray-100 flex gap-3 bg-white">
+                    <button onClick={() => { const text = `Lead: ${lead.nombre}\nTel: ${lead.telefono}`; navigator.clipboard.writeText(text); }} className="flex-1 py-3 bg-black text-white rounded-xl font-medium text-xs hover:bg-gray-800 transition-all">Copiar Ficha</button>
+                    <button onClick={() => { onUpdateStatus(lead.id, isArchive ? 'active' : 'archived'); onClose(); }} className="flex-1 py-3 bg-[#F5F5F7] text-[#1d1d1f] rounded-xl font-medium text-xs hover:bg-[#E8E8ED] transition-all">{isArchive ? 'Restaurar' : 'Archivar'}</button>
+                </div>
+            </div>
+        </div>
+    );
 };
 
-async function fetchGeminiWithRetry(payload) {
-  if (!rateLimit.check()) throw new Error("Espera unos segundos.");
-  if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; }
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
-  try { const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if (res.ok) return await res.json(); } catch (e) { throw e; }
-  throw new Error("Error conexión");
-}
+// 2. Modal de Asignación de Agentes (Buscador)
+const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
+    const [search, setSearch] = useState('');
+    if (!isOpen) return null;
+    const filtered = agents.filter(a => a.nombre.toLowerCase().includes(search.toLowerCase()));
 
-function useInactivityTimer(action, timeout = 600000) {
-    useEffect(() => {
-        let timer;
-        const resetTimer = () => { clearTimeout(timer); timer = setTimeout(action, timeout); };
-        window.addEventListener('mousemove', resetTimer); window.addEventListener('keypress', resetTimer);
-        window.addEventListener('click', resetTimer); window.addEventListener('touchstart', resetTimer);
-        resetTimer();
-        return () => { clearTimeout(timer); window.removeEventListener('mousemove', resetTimer); window.removeEventListener('keypress', resetTimer); window.removeEventListener('click', resetTimer); window.removeEventListener('touchstart', resetTimer); };
-    }, [action, timeout]);
-}
+    return (
+        <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden flex flex-col max-h-[80vh]">
+                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white"><h3 className="font-bold text-gray-800">Seleccionar Agente</h3><button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X size={18}/></button></div>
+                <div className="p-4 bg-gray-50 border-b border-gray-100"><div className="relative"><Search className="absolute left-3 top-2.5 text-gray-400" size={16} /><input autoFocus type="text" placeholder="Buscar agente..." className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-100" value={search} onChange={(e) => setSearch(e.target.value)} /></div></div>
+                <div className="overflow-y-auto flex-1 p-2 space-y-1">
+                    <button onClick={() => onAssign('unassign')} className="w-full flex items-center gap-3 p-3 hover:bg-red-50 rounded-xl transition-colors text-left group"><div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 group-hover:bg-red-200"><UserMinus size={18}/></div><div><p className="font-bold text-red-600 text-sm">Desasignar / Liberar</p><p className="text-[10px] text-red-400">Dejar sin agente</p></div></button>
+                    <div className="h-px bg-gray-100 my-1 mx-4"></div>
+                    {filtered.length > 0 ? filtered.map(agent => (
+                        <button key={agent.id} onClick={() => onAssign(agent.id)} className="w-full flex items-center gap-3 p-3 hover:bg-blue-50 rounded-xl transition-colors text-left"><img src={agent.foto || "https://ui-avatars.com/api/?name=" + agent.nombre} className="w-10 h-10 rounded-full object-cover border border-gray-200" /><div className="flex-1 min-w-0"><p className="font-bold text-gray-800 text-sm truncate">{agent.nombre}</p><div className="flex items-center gap-2 text-[10px] text-gray-500"><span className="flex items-center gap-1"><MapPin size={10}/> {agent.estados || 'N/A'}</span></div></div><div className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold">Asignar</div></button>
+                    )) : (<p className="text-center text-gray-400 text-sm py-4">No se encontraron agentes.</p>)}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // --- COMPONENTE PRINCIPAL ---
 function App() {
@@ -129,6 +153,10 @@ function App() {
   const [agents, setAgents] = useState([]); 
   const [searchTerm, setSearchTerm] = useState('');
   const [permissionError, setPermissionError] = useState(false);
+
+  // Estados Globales para Modales (Lifting State Up)
+  const [selectedLead, setSelectedLead] = useState(null); // Detalle del Lead
+  const [assignModalData, setAssignModalData] = useState({ isOpen: false, targetIds: [] }); // Modal Asignación
 
   const [aiConfig, setAiConfig] = useState({
     systemPrompt: `Eres Lucy...`, webhookUrl: "", schedule: DEFAULT_SCHEDULE, 
@@ -154,7 +182,6 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch Leads y Config
   useEffect(() => {
     if (OFFLINE_MODE) { setLeads([]); return; }
     if (!user) return;
@@ -168,16 +195,11 @@ function App() {
     return () => unsub();
   }, [user, isAdmin]);
 
-  // Fetch Agentes
   useEffect(() => {
       if (OFFLINE_MODE || !user || !isAdmin) return;
       const agentsDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
       const unsub = onSnapshot(agentsDocRef, (docSnap) => {
-          if (docSnap.exists()) {
-              setAgents(docSnap.data().list || []);
-          } else {
-              setAgents([]);
-          }
+          if (docSnap.exists()) { setAgents(docSnap.data().list || []); } else { setAgents([]); }
       });
       return () => unsub();
   }, [user, isAdmin]);
@@ -194,18 +216,17 @@ function App() {
   const saveLeadToDb = async (leadData) => { if (OFFLINE_MODE) { alert("Modo Offline"); return; } await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'leads'), { ...leadData, createdAt: serverTimestamp(), status: 'active' }); };
   const saveAiConfig = async (newConfig) => { if (OFFLINE_MODE) { setAiConfig(newConfig); return; } if (!user || !isAdmin) return; await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config'), newConfig); setAiConfig(newConfig); };
   
-  // Acciones Leads
   const deleteLead = async (ids) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.delete(ref); }); await batch.commit(); }
   const updateLeadStatus = async (ids, status) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.update(ref, { status: status }); }); await batch.commit(); }
   
-  // Asignar Agente (Individual)
-  const assignAgentToLead = async (leadId, agentId) => { if(!isAdmin) return; await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', leadId), { assignedAgentId: agentId || null, assignedAt: agentId ? serverTimestamp() : null }); };
-
-  // Asignación Masiva
-  const bulkAssignAgent = async (leadIds, agentId) => {
+  // Asignación Unificada (Funciona para 1 o varios)
+  const handleAssignAgent = async (agentId) => {
       if(!isAdmin) return;
+      const targetIds = assignModalData.targetIds;
+      if (targetIds.length === 0) return;
+
       const batch = writeBatch(db);
-      leadIds.forEach(id => {
+      targetIds.forEach(id => {
           const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id);
           batch.update(ref, { 
               assignedAgentId: agentId === 'unassign' ? null : agentId, 
@@ -213,30 +234,35 @@ function App() {
           });
       });
       await batch.commit();
+      setAssignModalData({ isOpen: false, targetIds: [] });
   };
 
-  // Acciones Agentes
+  const openAssignModal = (ids, actionType) => {
+      // actionType: 'unassign' (direct action) or 'open_modal'
+      if (actionType === 'unassign') {
+          if(confirm("¿Desvincular agente de este lead?")) {
+              const batch = writeBatch(db);
+              ids.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.update(ref, { assignedAgentId: null, assignedAt: null }); });
+              batch.commit();
+          }
+      } else {
+          setAssignModalData({ isOpen: true, targetIds: ids });
+      }
+  };
+
   const saveAgent = async (agentData) => { 
       if(!isAdmin) return; 
       const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
       const docSnap = await getDoc(agentsRef);
       let currentList = docSnap.exists() ? (docSnap.data().list || []) : [];
-
-      if (agentData.id) {
-          currentList = currentList.map(a => a.id === agentData.id ? { ...agentData, updatedAt: Date.now() } : a);
-      } else {
-          const newAgent = { ...agentData, id: crypto.randomUUID(), createdAt: Date.now() };
-          currentList.push(newAgent);
-      }
+      if (agentData.id) { currentList = currentList.map(a => a.id === agentData.id ? { ...agentData, updatedAt: Date.now() } : a); } 
+      else { const newAgent = { ...agentData, id: crypto.randomUUID(), createdAt: Date.now() }; currentList.push(newAgent); }
       await setDoc(agentsRef, { list: currentList });
   };
-
   const deleteAgent = async (ids) => { 
-      const idArray = Array.isArray(ids) ? ids : [ids];
-      if(!isAdmin) return; 
+      const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; 
       const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
-      const docSnap = await getDoc(agentsRef);
-      if (!docSnap.exists()) return;
+      const docSnap = await getDoc(agentsRef); if (!docSnap.exists()) return;
       let currentList = docSnap.data().list || [];
       currentList = currentList.filter(a => !idArray.includes(a.id));
       await setDoc(agentsRef, { list: currentList });
@@ -283,21 +309,24 @@ function App() {
                </div>
                {adminTab !== 'brain' && <div className="relative group w-full md:w-auto"><Search className="absolute left-3 top-2.5 text-gray-400" size={14} /><input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-4 py-2 bg-white border-0 rounded-xl text-sm w-full md:w-64 outline-none shadow-sm" /></div>}
             </div>
-            {adminTab === 'active' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active'))} agents={agents} onAssignAgent={assignAgentToLead} onBulkAssign={bulkAssignAgent} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> : 
-             adminTab === 'archived' ? <LeadsList leads={leads.filter(l => l.status === 'archived')} agents={agents} onAssignAgent={assignAgentToLead} onBulkAssign={bulkAssignAgent} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={true} searchTerm={searchTerm} /> : 
-             adminTab === 'agents' ? <AgentsManager agents={agents} leads={leads} onSaveAgent={saveAgent} onDeleteAgent={deleteAgent} searchTerm={searchTerm} /> :
+            
+            {/* VISTAS */}
+            {adminTab === 'active' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active'))} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> : 
+             adminTab === 'archived' ? <LeadsList leads={leads.filter(l => l.status === 'archived')} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={true} searchTerm={searchTerm} /> : 
+             adminTab === 'agents' ? <AgentsManager agents={agents} leads={leads} onOpenLead={(l) => setSelectedLead(l)} onSaveAgent={saveAgent} onDeleteAgent={deleteAgent} searchTerm={searchTerm} /> :
              <AdminBrain aiConfig={aiConfig} onSaveConfig={saveAiConfig} />}
           </div>
         )}
       </main>
 
+      {/* MODALES GLOBALES */}
+      <LeadDetailModal lead={selectedLead} agents={agents} onClose={() => setSelectedLead(null)} onAssignClick={openAssignModal} onUpdateStatus={updateLeadStatus} isArchive={adminTab === 'archived'} />
+      <AgentAssignmentModal isOpen={assignModalData.isOpen} agents={agents} onClose={() => setAssignModalData({ ...assignModalData, isOpen: false })} onAssign={handleAssignAgent} />
+
       {showLogin && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm border border-gray-100">
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center gap-2 text-red-600"><ShieldAlert size={20} /><h3 className="font-bold text-lg text-slate-800">Acceso Restringido</h3></div>
-              <button onClick={() => setShowLogin(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            </div>
+            <div className="flex justify-between items-center mb-6"><div className="flex items-center gap-2 text-red-600"><ShieldAlert size={20} /><h3 className="font-bold text-lg text-slate-800">Acceso Restringido</h3></div><button onClick={() => setShowLogin(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div>
             <form onSubmit={handleLogin} className="space-y-4">
               <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Correo Corporativo</label><input type="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-black/10 outline-none text-sm" placeholder="usuario@empresa.com" /></div>
               <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Credencial</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-black/10 outline-none text-sm" placeholder="••••••••" /></div>
@@ -340,8 +369,8 @@ function LandingView({ onStartChat, onOpenLogin }) {
   );
 }
 
-// --- AGENTS MANAGER (CORREGIDO) ---
-function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }) {
+// --- AGENTS MANAGER ---
+function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, searchTerm }) {
     const [selectedAgent, setSelectedAgent] = useState(null); 
     const [isEditing, setIsEditing] = useState(false); 
     const [editingAgent, setEditingAgent] = useState(null);
@@ -351,63 +380,25 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
 
-    const openForm = (agent = null) => {
-        setEditingAgent(agent);
-        setFormData(agent || { nombre: '', telefono: '', email: '', foto: '', estados: '', mensaje: '' });
-        setIsEditing(true);
-    };
-
-    const handleFormSubmit = async (e) => {
-        e.preventDefault();
-        try {
-            await onSaveAgent(formData);
-            setIsEditing(false);
-            setEditingAgent(null);
-        } catch (error) {
-            console.error(error);
-            alert("Error al guardar");
-        }
-    };
-
-    const filteredAgents = agents.filter(a => 
-        (a.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-        (a.email || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
+    const openForm = (agent = null) => { setEditingAgent(agent); setFormData(agent || { nombre: '', telefono: '', email: '', foto: '', estados: '', mensaje: '' }); setIsEditing(true); };
+    const handleFormSubmit = async (e) => { e.preventDefault(); try { await onSaveAgent(formData); setIsEditing(false); setEditingAgent(null); } catch (error) { console.error(error); alert("Error al guardar"); } };
+    const filteredAgents = agents.filter(a => (a.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) || (a.email || '').toLowerCase().includes(searchTerm.toLowerCase()));
     const handleSelectAll = (e) => e.target.checked ? setSelectedIds(filteredAgents.map(a => a.id)) : setSelectedIds([]);
     const handleSelectOne = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-    
-    const handleDeleteSelected = async () => {
-        if(confirm(`¿Eliminar ${selectedIds.length} agentes?`)) {
-            await onDeleteAgent(selectedIds);
-            setSelectedIds([]);
-        }
-    };
+    const handleDeleteSelected = async () => { if(confirm(`¿Eliminar ${selectedIds.length} agentes?`)) { await onDeleteAgent(selectedIds); setSelectedIds([]); } };
 
     const getAgentLeads = (agentId) => {
         let agentLeads = leads.filter(l => l.assignedAgentId === agentId);
         const now = new Date();
-        
         if (dateFilter === 'thisMonth') {
-            agentLeads = agentLeads.filter(l => {
-                const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000);
-                return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-            });
+            agentLeads = agentLeads.filter(l => { const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
         } else if (dateFilter === 'lastMonth') {
              const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
              const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-             agentLeads = agentLeads.filter(l => {
-                const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000);
-                return d >= lastMonth && d <= endLastMonth;
-            });
+             agentLeads = agentLeads.filter(l => { const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000); return d >= lastMonth && d <= endLastMonth; });
         } else if (dateFilter === 'custom' && customStart && customEnd) {
-             const start = new Date(customStart);
-             const end = new Date(customEnd);
-             end.setHours(23,59,59);
-             agentLeads = agentLeads.filter(l => {
-                const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000);
-                return d >= start && d <= end;
-            });
+             const start = new Date(customStart); const end = new Date(customEnd); end.setHours(23,59,59);
+             agentLeads = agentLeads.filter(l => { const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000); return d >= start && d <= end; });
         }
         return agentLeads;
     };
@@ -437,9 +428,7 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
                     <div className="flex items-center gap-2"><Filter size={16} className="text-gray-400"/><span className="text-sm font-bold text-gray-700">Filtrar Asignaciones:</span></div>
                     <div className="flex gap-2 flex-wrap">
                         {['all', 'thisMonth', 'lastMonth', 'custom'].map(f => (
-                            <button key={f} onClick={()=>setDateFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${dateFilter===f ? 'bg-black text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                                {f==='all'?'Todo':f==='thisMonth'?'Este Mes':f==='lastMonth'?'Mes Pasado':'Personalizado'}
-                            </button>
+                            <button key={f} onClick={()=>setDateFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${dateFilter===f ? 'bg-black text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{f==='all'?'Todo':f==='thisMonth'?'Este Mes':f==='lastMonth'?'Mes Pasado':'Personalizado'}</button>
                         ))}
                     </div>
                     {dateFilter === 'custom' && (<div className="flex gap-2 items-center animate-in fade-in"><input type="date" value={customStart} onChange={e=>setCustomStart(e.target.value)} className="bg-gray-50 border rounded p-1 text-xs" /><span className="text-gray-400">-</span><input type="date" value={customEnd} onChange={e=>setCustomEnd(e.target.value)} className="bg-gray-50 border rounded p-1 text-xs" /></div>)}
@@ -449,7 +438,7 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
                         <thead className="bg-gray-50 border-b border-gray-100"><tr><th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Fecha Asignación</th><th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Nombre Lead</th><th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Estado</th><th className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase">Resumen</th></tr></thead>
                         <tbody className="divide-y divide-gray-50">
                             {agentLeads.length > 0 ? agentLeads.map(lead => (
-                                <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
+                                <tr key={lead.id} onClick={() => onOpenLead(lead)} className="hover:bg-blue-50 transition-colors cursor-pointer">
                                     <td className="px-6 py-4 text-xs text-gray-600 font-medium">{formatFirestoreDate(lead.assignedAt || lead.createdAt)}</td>
                                     <td className="px-6 py-4 text-sm font-semibold text-gray-900">{lead.nombre}</td>
                                     <td className="px-6 py-4"><span className="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase">{lead.status}</span></td>
@@ -472,7 +461,6 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
                     <button onClick={()=>openForm(null)} className="bg-black text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors flex items-center gap-2 shadow-lg shadow-gray-200"><UserCog size={16}/> Nuevo Agente</button>
                 </div>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredAgents.map(agent => (
                     <div key={agent.id} className={`bg-white rounded-2xl p-5 border transition-all hover:shadow-md cursor-pointer relative group ${selectedIds.includes(agent.id) ? 'border-blue-500 bg-blue-50/10' : 'border-gray-100'}`} onClick={()=>setSelectedAgent(agent)}>
@@ -492,27 +480,16 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
                     </div>
                 ))}
             </div>
-
             {isEditing && (
                 <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg">
                         <h3 className="text-lg font-bold mb-4">{editingAgent ? 'Editar Agente' : 'Nuevo Agente'}</h3>
                         <form onSubmit={handleFormSubmit} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                 <div><label className="text-[10px] font-bold text-gray-500 uppercase">Nombre Completo</label><input required className="w-full p-2 border rounded-lg text-sm" value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} /></div>
-                                 <div><label className="text-[10px] font-bold text-gray-500 uppercase">Teléfono</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} /></div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                 <div><label className="text-[10px] font-bold text-gray-500 uppercase">Email</label><input type="email" className="w-full p-2 border rounded-lg text-sm" value={formData.email} onChange={e=>setFormData({...formData, email:e.target.value})} /></div>
-                                 <div><label className="text-[10px] font-bold text-gray-500 uppercase">Foto (URL)</label><input className="w-full p-2 border rounded-lg text-sm" placeholder="https://..." value={formData.foto} onChange={e=>setFormData({...formData, foto:e.target.value})} /></div>
-                            </div>
+                            <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-500 uppercase">Nombre Completo</label><input required className="w-full p-2 border rounded-lg text-sm" value={formData.nombre} onChange={e=>setFormData({...formData, nombre:e.target.value})} /></div><div><label className="text-[10px] font-bold text-gray-500 uppercase">Teléfono</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.telefono} onChange={e=>setFormData({...formData, telefono:e.target.value})} /></div></div>
+                            <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-500 uppercase">Email</label><input type="email" className="w-full p-2 border rounded-lg text-sm" value={formData.email} onChange={e=>setFormData({...formData, email:e.target.value})} /></div><div><label className="text-[10px] font-bold text-gray-500 uppercase">Foto (URL)</label><input className="w-full p-2 border rounded-lg text-sm" placeholder="https://..." value={formData.foto} onChange={e=>setFormData({...formData, foto:e.target.value})} /></div></div>
                             <div><label className="text-[10px] font-bold text-gray-500 uppercase">Estados (Licencias)</label><input placeholder="Ej: FL, TX, CA" className="w-full p-2 border rounded-lg text-sm" value={formData.estados} onChange={e=>setFormData({...formData, estados:e.target.value})} /></div>
                             <div><label className="text-[10px] font-bold text-gray-500 uppercase">Mensaje Especial</label><textarea className="w-full p-2 border rounded-lg text-sm h-20" value={formData.mensaje} onChange={e=>setFormData({...formData, mensaje:e.target.value})} /></div>
-                            
-                            <div className="flex gap-2 justify-end mt-4">
-                                <button type="button" onClick={()=>{setIsEditing(false); setEditingAgent(null)}} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                                <button type="submit" className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800">Guardar</button>
-                            </div>
+                            <div className="flex gap-2 justify-end mt-4"><button type="button" onClick={()=>{setIsEditing(false); setEditingAgent(null)}} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button><button type="submit" className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800">Guardar</button></div>
                         </form>
                     </div>
                 </div>
@@ -521,16 +498,10 @@ function AgentsManager({ agents, leads, onSaveAgent, onDeleteAgent, searchTerm }
     );
 }
 
-// --- LEADS LIST (MODIFICADO: Con Modal de Asignación Masiva) ---
-function LeadsList({ leads, agents, onAssignAgent, onBulkAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
-  const [selectedLead, setSelectedLead] = useState(null);
+// --- LEADS LIST (MODIFICADO: Sin dropdown feo) ---
+function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
   const [leadToDelete, setLeadToDelete] = useState(null); 
   const [selectedIds, setSelectedIds] = useState([]); 
-  
-  // NUEVO: Estado para el Modal de Asignación Masiva
-  const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
-  const [bulkSearchTerm, setBulkSearchTerm] = useState('');
-
   const filteredLeads = leads.filter(l => String(l.nombre||'').toLowerCase().includes(searchTerm.toLowerCase()));
 
   const handleSelectAll = (e) => e.target.checked ? setSelectedIds(filteredLeads.map(l => l.id)) : setSelectedIds([]);
@@ -538,77 +509,8 @@ function LeadsList({ leads, agents, onAssignAgent, onBulkAssign, onDeleteLead, o
   const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
   const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
 
-  // Filtrado de agentes en el modal
-  const filteredAgentsForBulk = agents.filter(a => a.nombre.toLowerCase().includes(bulkSearchTerm.toLowerCase()));
-
-  const handleBulkAssignAction = (agentId) => {
-      // Si agentId es 'unassign', liberamos. Si es un ID, asignamos.
-      const actionText = agentId === 'unassign' ? 'Desasignar' : 'Asignar';
-      
-      onBulkAssign(selectedIds, agentId);
-      setShowBulkAssignModal(false);
-      setSelectedIds([]);
-      setBulkSearchTerm('');
-  };
-
   return (
     <div className="animate-in fade-in duration-500">
-        
-        {/* MODAL DE ASIGNACIÓN MASIVA */}
-        {showBulkAssignModal && (
-            <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden flex flex-col max-h-[80vh]">
-                    <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white">
-                        <h3 className="font-bold text-gray-800">Asignar {selectedIds.length} Leads</h3>
-                        <button onClick={() => setShowBulkAssignModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X size={18}/></button>
-                    </div>
-                    
-                    <div className="p-4 bg-gray-50 border-b border-gray-100">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                            <input 
-                                autoFocus
-                                type="text" 
-                                placeholder="Buscar agente..." 
-                                className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-100"
-                                value={bulkSearchTerm}
-                                onChange={(e) => setBulkSearchTerm(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="overflow-y-auto flex-1 p-2 space-y-1">
-                        {/* Opción Especial: Desasignar */}
-                        <button onClick={() => handleBulkAssignAction('unassign')} className="w-full flex items-center gap-3 p-3 hover:bg-red-50 rounded-xl transition-colors text-left group">
-                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 group-hover:bg-red-200"><UserMinus size={18}/></div>
-                            <div>
-                                <p className="font-bold text-red-600 text-sm">Desasignar / Liberar</p>
-                                <p className="text-[10px] text-red-400">Dejar estos leads sin agente</p>
-                            </div>
-                        </button>
-                        
-                        <div className="h-px bg-gray-100 my-1 mx-4"></div>
-
-                        {/* Lista de Agentes */}
-                        {filteredAgentsForBulk.length > 0 ? filteredAgentsForBulk.map(agent => (
-                            <button key={agent.id} onClick={() => handleBulkAssignAction(agent.id)} className="w-full flex items-center gap-3 p-3 hover:bg-blue-50 rounded-xl transition-colors text-left">
-                                <img src={agent.foto || "https://ui-avatars.com/api/?name=" + agent.nombre} className="w-10 h-10 rounded-full object-cover border border-gray-200" />
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-bold text-gray-800 text-sm truncate">{agent.nombre}</p>
-                                    <div className="flex items-center gap-2 text-[10px] text-gray-500">
-                                        <span className="flex items-center gap-1"><MapPin size={10}/> {agent.estados || 'N/A'}</span>
-                                    </div>
-                                </div>
-                                <div className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold">Asignar</div>
-                            </button>
-                        )) : (
-                            <p className="text-center text-gray-400 text-sm py-4">No se encontraron agentes.</p>
-                        )}
-                    </div>
-                </div>
-            </div>
-        )}
-
         {leadToDelete && (
             <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                 <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm border border-gray-100 text-center">
@@ -619,75 +521,14 @@ function LeadsList({ leads, agents, onAssignAgent, onBulkAssign, onDeleteLead, o
                 </div>
             </div>
         )}
-
-        {selectedLead && (
-            <div className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4">
-                <div className="bg-white w-full max-w-2xl rounded-[24px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
-                    <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-10">
-                        <div className="flex items-center gap-4"><div className="w-12 h-12 bg-[#F5F5F7] rounded-full flex items-center justify-center text-gray-400"><User size={24} strokeWidth={1.5} /></div><div><h3 className="font-semibold text-[#1d1d1f] text-xl tracking-tight">{String(selectedLead.nombre || 'Anónimo')}</h3><p className="text-xs text-[#86868b] mt-0.5 font-medium">{formatFirestoreDate(selectedLead.createdAt)}</p></div></div>
-                        <button onClick={() => setSelectedLead(null)} className="p-2 bg-[#F5F5F7] hover:bg-[#E8E8ED] rounded-full transition-colors text-[#86868b]"><X size={18}/></button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-white">
-                        
-                        {/* Selector de Asignación Individual (Mantenemos este también) */}
-                        <div className="bg-blue-50 p-4 rounded-xl flex items-center justify-between border border-blue-100">
-                             <div className="flex items-center gap-2 text-blue-800 font-medium text-sm">
-                                 <Briefcase size={16}/>
-                                 <span>Asignar a Agente:</span>
-                             </div>
-                             <div className="relative">
-                                 <select 
-                                    className="bg-white border border-blue-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 pr-8 appearance-none outline-none cursor-pointer"
-                                    value={selectedLead.assignedAgentId || ""}
-                                    onChange={(e) => {
-                                        onAssignAgent(selectedLead.id, e.target.value);
-                                        setSelectedLead(prev => ({...prev, assignedAgentId: e.target.value})); 
-                                    }}
-                                 >
-                                     <option value="">-- Sin Asignar --</option>
-                                     {agents && agents.map(agent => (
-                                         <option key={agent.id} value={agent.id}>{agent.nombre}</option>
-                                     ))}
-                                 </select>
-                                 <ChevronDown size={14} className="absolute right-3 top-3 text-gray-400 pointer-events-none"/>
-                             </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span><a href={`https://wa.me/${String(selectedLead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(selectedLead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
-                            <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Programado</span><p className="font-medium text-[#1d1d1f]">{formatScheduledDate(String(selectedLead.horario_preferido || 'Inmediata'))}</p></div>
-                            <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Perfil</span><p className="font-medium text-[#1d1d1f] text-sm">{String(selectedLead.edad || '?')} años • {String(selectedLead.estado || '?')} • {String(selectedLead.fuma || '?')}</p></div>
-                            <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Salud</span><p className="font-medium text-[#1d1d1f] text-sm truncate">{String(selectedLead.salud || '-')}</p></div>
-                        </div>
-                        <div className="relative"><div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-full"></div><div className="pl-5 py-1"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2 flex items-center gap-1"><Sparkles size={12} className="text-blue-500"/> Análisis Lucy</span><p className="text-sm text-[#1d1d1f] leading-relaxed">"{String(selectedLead.resumen_ai || '')}"</p></div></div>
-                        <div><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-4">Historial</span><div className="space-y-3">{selectedLead.fullChat?.map((m, i) => (<div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}><div className={`px-4 py-2.5 rounded-2xl text-xs max-w-[90%] leading-relaxed ${m.role === 'user' ? 'bg-[#0071e3] text-white' : 'bg-[#F5F5F7] text-[#1d1d1f]'}`}><RichText content={String(m.content || '')} /></div></div>))}</div></div>
-                    </div>
-                    <div className="p-6 border-t border-gray-100 flex gap-3 bg-white">
-                        <button onClick={() => { const text = `Lead: ${selectedLead.nombre}\nTel: ${selectedLead.telefono}`; navigator.clipboard.writeText(text); }} className="flex-1 py-3 bg-black text-white rounded-xl font-medium text-xs hover:bg-gray-800 transition-all">Copiar Ficha</button>
-                        <button onClick={() => { onUpdateStatus(selectedLead.id, isArchive ? 'active' : 'archived'); setSelectedLead(null); }} className="flex-1 py-3 bg-[#F5F5F7] text-[#1d1d1f] rounded-xl font-medium text-xs hover:bg-[#E8E8ED] transition-all">{isArchive ? 'Restaurar' : 'Archivar'}</button>
-                    </div>
-                </div>
-            </div>
-        )}
       
         <div className="bg-white rounded-[24px] shadow-sm overflow-hidden border border-gray-100/50">
           {selectedIds.length > 0 && (
               <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 flex justify-between items-center animate-in fade-in sticky top-0 z-20">
                   <span className="text-xs font-bold text-blue-700">{selectedIds.length} seleccionados</span>
                   <div className="flex gap-2 items-center">
-                      
-                      {/* NUEVO: Botón que abre el Modal */}
-                      <button 
-                          onClick={() => setShowBulkAssignModal(true)} 
-                          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"
-                      >
-                          <UserPlus size={14}/> Asignar Agente...
-                      </button>
-
-                      <button onClick={handleBulkArchive} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors">
-                          {isArchive ? <RotateCcw size={14}/> : <Archive size={14}/>}
-                          {isArchive ? 'Restaurar' : 'Archivar'}
-                      </button>
+                      <button onClick={() => onOpenAssign(selectedIds, 'open_modal')} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"><UserPlus size={14}/> Asignar Agente...</button>
+                      <button onClick={handleBulkArchive} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors">{isArchive ? <RotateCcw size={14}/> : <Archive size={14}/>}{isArchive ? 'Restaurar' : 'Archivar'}</button>
                       <button onClick={() => setLeadToDelete(selectedIds)} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"><Trash2 size={14}/> Eliminar</button>
                   </div>
               </div>
@@ -707,30 +548,16 @@ function LeadsList({ leads, agents, onAssignAgent, onBulkAssign, onDeleteLead, o
               {filteredLeads.map(l => {
                   const assignedAgent = agents.find(a => a.id === l.assignedAgentId);
                   return (
-                    <tr key={l.id} onClick={() => setSelectedLead(l)} className={`hover:bg-[#F5F5F7] transition-colors cursor-pointer group ${selectedIds.includes(l.id) ? 'bg-blue-50/30' : ''}`}>
+                    <tr key={l.id} onClick={() => onOpenLead(l)} className={`hover:bg-[#F5F5F7] transition-colors cursor-pointer group ${selectedIds.includes(l.id) ? 'bg-blue-50/30' : ''}`}>
                       <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
                           <input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(l.id)} onChange={() => handleSelectOne(l.id)} />
                       </td>
                       <td className="px-4 py-5 truncate"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-gradient-to-b from-gray-100 to-gray-200 flex items-center justify-center font-semibold text-xs text-gray-500 shrink-0 border border-white shadow-sm">{l.nombre ? l.nombre.charAt(0).toUpperCase() : '?'}</div><div className="min-w-0"><div className="text-sm font-semibold text-[#1d1d1f] truncate">{String(l.nombre || 'Anónimo')}</div><div className="text-[11px] text-[#86868b] mt-0.5">{String(l.edad || '')} años • {String(l.estado || '')}</div></div></div></td>
-                      
-                      {/* Columna Agente */}
-                      <td className="px-4 py-5">
-                          {assignedAgent ? (
-                              <div className="flex items-center gap-2">
-                                  <img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-5 h-5 rounded-full object-cover"/>
-                                  <span className="text-xs font-medium text-gray-700 truncate">{assignedAgent.nombre}</span>
-                              </div>
-                          ) : (
-                              <span className="text-[10px] text-gray-400 italic">-- Sin Asignar --</span>
-                          )}
-                      </td>
-
+                      <td className="px-4 py-5">{assignedAgent ? (<div className="flex items-center gap-2"><img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-5 h-5 rounded-full object-cover"/><span className="text-xs font-medium text-gray-700 truncate">{assignedAgent.nombre}</span></div>) : (<span className="text-[10px] text-gray-400 italic">-- Sin Asignar --</span>)}</td>
                       <td className="px-4 py-5"><p className="text-xs text-[#1d1d1f] truncate opacity-80">"{String(l.resumen_ai || '')}"</p></td>
                       <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                              <button onClick={() => onUpdateStatus(l.id, isArchive ? 'active' : 'archived')} className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-white rounded-lg transition-all">
-                                {isArchive ? <RotateCcw size={16} strokeWidth={1.5}/> : <Archive size={16} strokeWidth={1.5}/>}
-                              </button>
+                              <button onClick={() => onUpdateStatus(l.id, isArchive ? 'active' : 'archived')} className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-white rounded-lg transition-all">{isArchive ? <RotateCcw size={16} strokeWidth={1.5}/> : <Archive size={16} strokeWidth={1.5}/>}</button>
                               <button onClick={() => setLeadToDelete(l.id)} className="p-2 text-[#86868b] hover:text-red-500 hover:bg-white rounded-lg transition-all"><Trash2 size={16} strokeWidth={1.5}/></button>
                           </div>
                       </td>
@@ -757,36 +584,10 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
   const handleDayToggle = (day) => setC(prev => ({...prev, schedule: {...prev.schedule, [day]: {...prev.schedule[day], enabled: !prev.schedule[day].enabled}}}));
   const handleTimeChange = (day, type, value) => setC(prev => ({...prev, schedule: {...prev.schedule, [day]: {...prev.schedule[day], [type]: value}}}));
 
-  const handleSave = async () => { 
-      setIsSaving(true); 
-      await onSaveConfig(c); 
-      setIsSaving(false); 
-      setIsEditingWebhook(false); 
-      setShowSuccess(true); 
-      setTimeout(() => setShowSuccess(false), 3000); 
-  }; 
-
+  const handleSave = async () => { setIsSaving(true); await onSaveConfig(c); setIsSaving(false); setIsEditingWebhook(false); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000); }; 
   const daysList = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
-
   const handleEditWebhookClick = () => { setShowAuthModal(true); setAuthPassword(''); setAuthError(null); };
-
-  const handleAuthSubmit = async (e) => {
-     e.preventDefault();
-     setAuthError(null);
-     try {
-         const user = auth.currentUser;
-         if (user && user.email) {
-             await signInWithEmailAndPassword(auth, user.email, authPassword);
-             setShowAuthModal(false);
-             setIsEditingWebhook(true);
-         } else {
-             setAuthError("No se pudo verificar la sesión.");
-         }
-     } catch (error) {
-         console.error("Auth check failed", error);
-         setAuthError("Contraseña incorrecta.");
-     }
-  };
+  const handleAuthSubmit = async (e) => { e.preventDefault(); setAuthError(null); try { const user = auth.currentUser; if (user && user.email) { await signInWithEmailAndPassword(auth, user.email, authPassword); setShowAuthModal(false); setIsEditingWebhook(true); } else { setAuthError("No se pudo verificar la sesión."); } } catch (error) { console.error("Auth check failed", error); setAuthError("Contraseña incorrecta."); } };
 
   return (
     <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -796,19 +597,8 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
             <h3 className="font-semibold text-[#1d1d1f] mb-4 text-sm flex items-center gap-2">Configuración del Cerebro</h3>
             <div className="space-y-3 mb-6 bg-[#F5F5F7] p-5 rounded-2xl border border-gray-100">
               <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-2"><span className="text-xs font-bold uppercase tracking-wide text-slate-500 flex items-center gap-2"><Clock size={14}/> Horario Semanal</span><label className="flex items-center gap-2 cursor-pointer text-[10px] font-bold text-slate-500 bg-white px-2 py-1 rounded-md shadow-sm border border-slate-200"><input type="checkbox" checked={c.vacationMode} onChange={(e)=>setC({...c, vacationMode: e.target.checked})} className="accent-orange-500"/> Modo Vacaciones (No Disponible)</label></div>
-              {c.vacationMode && (
-                  <div className="flex gap-4 items-center bg-orange-50 p-3 rounded-xl border border-orange-100 mb-3 animate-in fade-in">
-                      <div><label className="text-[10px] font-bold text-orange-600 uppercase block mb-1">Fecha Inicio</label><input type="date" value={c.vacationStart} onChange={(e) => setC({...c, vacationStart: e.target.value})} className="bg-white border border-orange-200 rounded-lg px-2 py-1 text-xs text-orange-800 outline-none focus:ring-2 focus:ring-orange-200" /></div>
-                      <span className="text-orange-400 font-bold">→</span>
-                      <div><label className="text-[10px] font-bold text-orange-600 uppercase block mb-1">Fecha Fin</label><input type="date" value={c.vacationEnd} onChange={(e) => setC({...c, vacationEnd: e.target.value})} className="bg-white border border-orange-200 rounded-lg px-2 py-1 text-xs text-orange-800 outline-none focus:ring-2 focus:ring-orange-200" /></div>
-                  </div>
-              )}
-              {daysList.map(day => (
-                <div key={day} className="flex items-center justify-between group">
-                   <div className="flex items-center gap-3"><input type="checkbox" checked={c.schedule?.[day]?.enabled} onChange={() => handleDayToggle(day)} className="accent-black w-4 h-4 rounded cursor-pointer"/><span className={`text-xs font-bold uppercase tracking-wide w-20 ${c.schedule?.[day]?.enabled ? 'text-slate-700' : 'text-slate-400'}`}>{day}</span></div>
-                   {c.schedule?.[day]?.enabled ? (<div className="flex gap-2 items-center animate-in fade-in"><input type="time" value={c.schedule[day].start} onChange={(e)=>handleTimeChange(day, 'start', e.target.value)} className="bg-white border p-1 rounded text-xs w-20 text-center font-medium"/><span className="text-slate-400 text-[10px]">a</span><input type="time" value={c.schedule[day].end} onChange={(e)=>handleTimeChange(day, 'end', e.target.value)} className="bg-white border p-1 rounded text-xs w-20 text-center font-medium"/></div>) : (<span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest px-8">No disponible</span>)}
-                </div>
-              ))}
+              {c.vacationMode && (<div className="flex gap-4 items-center bg-orange-50 p-3 rounded-xl border border-orange-100 mb-3 animate-in fade-in"><div><label className="text-[10px] font-bold text-orange-600 uppercase block mb-1">Fecha Inicio</label><input type="date" value={c.vacationStart} onChange={(e) => setC({...c, vacationStart: e.target.value})} className="bg-white border border-orange-200 rounded-lg px-2 py-1 text-xs text-orange-800 outline-none focus:ring-2 focus:ring-orange-200" /></div><span className="text-orange-400 font-bold">→</span><div><label className="text-[10px] font-bold text-orange-600 uppercase block mb-1">Fecha Fin</label><input type="date" value={c.vacationEnd} onChange={(e) => setC({...c, vacationEnd: e.target.value})} className="bg-white border border-orange-200 rounded-lg px-2 py-1 text-xs text-orange-800 outline-none focus:ring-2 focus:ring-orange-200" /></div></div>)}
+              {daysList.map(day => (<div key={day} className="flex items-center justify-between group"><div className="flex items-center gap-3"><input type="checkbox" checked={c.schedule?.[day]?.enabled} onChange={() => handleDayToggle(day)} className="accent-black w-4 h-4 rounded cursor-pointer"/><span className={`text-xs font-bold uppercase tracking-wide w-20 ${c.schedule?.[day]?.enabled ? 'text-slate-700' : 'text-slate-400'}`}>{day}</span></div>{c.schedule?.[day]?.enabled ? (<div className="flex gap-2 items-center animate-in fade-in"><input type="time" value={c.schedule[day].start} onChange={(e)=>handleTimeChange(day, 'start', e.target.value)} className="bg-white border p-1 rounded text-xs w-20 text-center font-medium"/><span className="text-slate-400 text-[10px]">a</span><input type="time" value={c.schedule[day].end} onChange={(e)=>handleTimeChange(day, 'end', e.target.value)} className="bg-white border p-1 rounded text-xs w-20 text-center font-medium"/></div>) : (<span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest px-8">No disponible</span>)}</div>))}
             </div>
             <label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Instrucciones Base</label>
             <textarea value={c.systemPrompt} onChange={(e)=>setC({...c, systemPrompt:e.target.value})} className="w-full h-32 p-4 bg-white border border-gray-200 rounded-xl text-xs font-mono text-[#1d1d1f] focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all shadow-sm leading-relaxed resize-none" />
@@ -816,10 +606,7 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
         </div>
         <div className="md:w-72 space-y-6">
           <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide">Webhook URL (Zapier/Make)</label>
-                {!isEditingWebhook && (<button onClick={handleEditWebhookClick} className="text-blue-500 hover:text-blue-700 transition-colors" title="Editar Webhook"><Pencil size={12} /></button>)}
-              </div>
+              <div className="flex justify-between items-center mb-2"><label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide">Webhook URL (Zapier/Make)</label>{!isEditingWebhook && (<button onClick={handleEditWebhookClick} className="text-blue-500 hover:text-blue-700 transition-colors" title="Editar Webhook"><Pencil size={12} /></button>)}</div>
               <input type={isEditingWebhook ? "text" : "password"} placeholder="https://hooks.zapier.com/..." value={c.webhookUrl || ""} onChange={(e)=>setC({...c, webhookUrl:e.target.value})} disabled={!isEditingWebhook} className={`w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-medium text-[#1d1d1f] focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all shadow-sm ${!isEditingWebhook ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} />
               <p className="text-[9px] text-gray-400 mt-1">{isEditingWebhook ? "Edición habilitada. Guarde para bloquear." : "Conectado con Zapier (Oculto)"}</p>
           </div>
