@@ -58,7 +58,6 @@ function useInactivityTimer(action, timeout = 600000) { useEffect(() => { let ti
 
 // --- COMPONENTES AUXILIARES ---
 
-// 1. Modal de Detalle del Lead (Limpio: Sin acciones de asignación)
 const LeadDetailModal = ({ lead, agents, onClose, onUpdateStatus, isArchive }) => {
     if (!lead) return null;
     const assignedAgent = agents.find(a => a.id === lead.assignedAgentId);
@@ -74,17 +73,12 @@ const LeadDetailModal = ({ lead, agents, onClose, onUpdateStatus, isArchive }) =
                     <button onClick={onClose} className="p-2 bg-[#F5F5F7] hover:bg-[#E8E8ED] rounded-full transition-colors text-[#86868b]"><X size={18}/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-white">
-                    {/* Información de Agente (Solo lectura) */}
                     {assignedAgent && (
                         <div className="bg-blue-50 p-4 rounded-xl flex items-center gap-3 border border-blue-100">
                             <img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-10 h-10 rounded-full object-cover border-2 border-white"/>
-                            <div>
-                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Agente Responsable</p>
-                                <p className="font-bold text-blue-900 text-sm">{assignedAgent.nombre}</p>
-                            </div>
+                            <div><p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Agente Responsable</p><p className="font-bold text-blue-900 text-sm">{assignedAgent.nombre}</p></div>
                         </div>
                     )}
-
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span><a href={`https://wa.me/${String(lead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(lead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
                         <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Programado</span><p className="font-medium text-[#1d1d1f]">{formatScheduledDate(String(lead.horario_preferido || 'Inmediata'))}</p></div>
@@ -103,7 +97,6 @@ const LeadDetailModal = ({ lead, agents, onClose, onUpdateStatus, isArchive }) =
     );
 };
 
-// 2. Modal de Asignación de Agentes (Buscador)
 const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
     const [search, setSearch] = useState('');
     if (!isOpen) return null;
@@ -113,7 +106,13 @@ const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
         <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden flex flex-col max-h-[80vh]">
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white"><h3 className="font-bold text-gray-800">Seleccionar Agente</h3><button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X size={18}/></button></div>
-                <div className="p-4 bg-gray-50 border-b border-gray-100"><div className="relative"><Search className="absolute left-3 top-2.5 text-gray-400" size={16} /><input autoFocus type="text" placeholder="Buscar agente..." className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-100" value={search} onChange={(e) => setSearch(e.target.value)} /></div></div>
+                <div className="p-4 bg-gray-50 border-b border-gray-100">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                        <input autoFocus type="text" placeholder="Buscar agente..." className="w-full pl-9 pr-8 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-100" value={search} onChange={(e) => setSearch(e.target.value)} />
+                        {search && (<button onClick={() => setSearch('')} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"><X size={14} /></button>)}
+                    </div>
+                </div>
                 <div className="overflow-y-auto flex-1 p-2 space-y-1">
                     <button onClick={() => onAssign('unassign')} className="w-full flex items-center gap-3 p-3 hover:bg-red-50 rounded-xl transition-colors text-left group"><div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 group-hover:bg-red-200"><UserMinus size={18}/></div><div><p className="font-bold text-red-600 text-sm">Desasignar / Liberar</p><p className="text-[10px] text-red-400">Dejar sin agente</p></div></button>
                     <div className="h-px bg-gray-100 my-1 mx-4"></div>
@@ -142,21 +141,16 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [permissionError, setPermissionError] = useState(false);
 
-  // Estados Globales para Modales (Lifting State Up)
+  // Estados Globales
   const [selectedLead, setSelectedLead] = useState(null); 
   const [assignModalData, setAssignModalData] = useState({ isOpen: false, targetIds: [] }); 
 
   const [aiConfig, setAiConfig] = useState({
-    systemPrompt: `Eres Lucy...`, webhookUrl: "", schedule: DEFAULT_SCHEDULE, 
+    systemPrompt: `Eres Lucy...`, webhookUrl: "", assignmentWebhookUrl: "", schedule: DEFAULT_SCHEDULE, 
     vacationMode: false, vacationStart: "", vacationEnd: "", personality: "Empático"
   });
 
-  useEffect(() => {
-      const handlePopState = (event) => { if (event.state && event.state.view) setView(event.state.view); else setView('landing'); };
-      window.addEventListener('popstate', handlePopState);
-      return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
+  useEffect(() => { const handlePopState = (event) => { if (event.state && event.state.view) setView(event.state.view); else setView('landing'); }; window.addEventListener('popstate', handlePopState); return () => window.removeEventListener('popstate', handlePopState); }, []);
   const navigateTo = (newView) => { setView(newView); window.history.pushState({ view: newView }, '', `#${newView}`); };
   useInactivityTimer(() => { if (view !== 'landing') { if (isAdmin) handleLogout(); else navigateTo('landing'); } }, 600000);
 
@@ -186,19 +180,11 @@ function App() {
   useEffect(() => {
       if (OFFLINE_MODE || !user || !isAdmin) return;
       const agentsDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
-      const unsub = onSnapshot(agentsDocRef, (docSnap) => {
-          if (docSnap.exists()) { setAgents(docSnap.data().list || []); } else { setAgents([]); }
-      });
+      const unsub = onSnapshot(agentsDocRef, (docSnap) => { if (docSnap.exists()) { setAgents(docSnap.data().list || []); } else { setAgents([]); } });
       return () => unsub();
   }, [user, isAdmin]);
 
-  const handleLogin = async (e) => {
-    e.preventDefault(); setIsLoggingIn(true); setLoginError(null);
-    if (OFFLINE_MODE) { setTimeout(()=>{ setIsAdmin(true); navigateTo('admin'); setShowLogin(false); setIsLoggingIn(false); }, 1000); return; }
-    try { await signInWithEmailAndPassword(auth, email, password); setShowLogin(false); setEmail(''); setPassword(''); } 
-    catch (error) { setLoginError("Credenciales no válidas."); }
-    setIsLoggingIn(false);
-  };
+  const handleLogin = async (e) => { e.preventDefault(); setIsLoggingIn(true); setLoginError(null); if (OFFLINE_MODE) { setTimeout(()=>{ setIsAdmin(true); navigateTo('admin'); setShowLogin(false); setIsLoggingIn(false); }, 1000); return; } try { await signInWithEmailAndPassword(auth, email, password); setShowLogin(false); setEmail(''); setPassword(''); } catch (error) { setLoginError("Credenciales no válidas."); } setIsLoggingIn(false); };
   const handleLogout = async () => { if (!OFFLINE_MODE) await signOut(auth); setIsAdmin(false); navigateTo('landing'); };
   const notifyNewLead = (lead) => { if (Notification.permission === "granted") new Notification("¡Nuevo Lead!", { body: lead.nombre, icon: IMAGES.lucy }); if (aiConfig.webhookUrl && lead.status === 'active') fetch(aiConfig.webhookUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead) }).catch(e=>console.error(e)); };
   const saveLeadToDb = async (leadData) => { if (OFFLINE_MODE) { alert("Modo Offline"); return; } await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'leads'), { ...leadData, createdAt: serverTimestamp(), status: 'active' }); };
@@ -207,12 +193,16 @@ function App() {
   const deleteLead = async (ids) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.delete(ref); }); await batch.commit(); }
   const updateLeadStatus = async (ids, status) => { const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.update(ref, { status: status }); }); await batch.commit(); }
   
-  // Asignación Unificada
+  // --- ASIGNACIÓN UNIFICADA + WEBHOOK TRIGGER ---
   const handleAssignAgent = async (agentId) => {
       if(!isAdmin) return;
       const targetIds = assignModalData.targetIds;
       if (targetIds.length === 0) return;
 
+      // 1. Encontrar el Agente (si se está asignando)
+      const assignedAgent = agentId !== 'unassign' ? agents.find(a => a.id === agentId) : null;
+
+      // 2. Preparar el Batch de Firebase
       const batch = writeBatch(db);
       targetIds.forEach(id => {
           const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id);
@@ -222,29 +212,50 @@ function App() {
           });
       });
       await batch.commit();
+
+      // 3. Disparar Webhook de Asignación (Si hay URL configurada y es una asignación)
+      if (assignedAgent && aiConfig.assignmentWebhookUrl) {
+          const targetLeads = leads.filter(l => targetIds.includes(l.id));
+          
+          targetLeads.forEach(lead => {
+              // Solo enviamos si el lead tiene email
+              if (lead.email) { 
+                  // Payload que enviamos a Zapier
+                  const payload = {
+                      leadName: lead.nombre,
+                      leadEmail: lead.email,
+                      leadPhone: lead.telefono,
+                      agentName: assignedAgent.nombre,
+                      agentEmail: assignedAgent.email,
+                      agentPhone: assignedAgent.telefono,
+                      agentPhoto: assignedAgent.foto,
+                      assignedAt: new Date().toISOString()
+                  };
+
+                  fetch(aiConfig.assignmentWebhookUrl, {
+                      method: 'POST',
+                      mode: 'no-cors', // Importante para evitar errores de CORS con webhooks simples
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(payload)
+                  }).catch(err => console.error("Error webhook asignación:", err));
+              }
+          });
+      }
+
       setAssignModalData({ isOpen: false, targetIds: [] });
   };
 
-  const openAssignModal = (ids) => {
-      setAssignModalData({ isOpen: true, targetIds: ids });
-  };
+  const openAssignModal = (ids) => { setAssignModalData({ isOpen: true, targetIds: ids }); };
 
   const saveAgent = async (agentData) => { 
-      if(!isAdmin) return; 
-      const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
-      const docSnap = await getDoc(agentsRef);
-      let currentList = docSnap.exists() ? (docSnap.data().list || []) : [];
+      if(!isAdmin) return; const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list'); const docSnap = await getDoc(agentsRef); let currentList = docSnap.exists() ? (docSnap.data().list || []) : [];
       if (agentData.id) { currentList = currentList.map(a => a.id === agentData.id ? { ...agentData, updatedAt: Date.now() } : a); } 
       else { const newAgent = { ...agentData, id: crypto.randomUUID(), createdAt: Date.now() }; currentList.push(newAgent); }
       await setDoc(agentsRef, { list: currentList });
   };
   const deleteAgent = async (ids) => { 
-      const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; 
-      const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
-      const docSnap = await getDoc(agentsRef); if (!docSnap.exists()) return;
-      let currentList = docSnap.data().list || [];
-      currentList = currentList.filter(a => !idArray.includes(a.id));
-      await setDoc(agentsRef, { list: currentList });
+      const idArray = Array.isArray(ids) ? ids : [ids]; if(!isAdmin) return; const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list'); const docSnap = await getDoc(agentsRef); if (!docSnap.exists()) return;
+      let currentList = docSnap.data().list || []; currentList = currentList.filter(a => !idArray.includes(a.id)); await setDoc(agentsRef, { list: currentList });
   };
 
   if (!user) return <div className="h-screen flex items-center justify-center bg-[#F5F5F7] text-slate-400">Cargando...</div>;
@@ -280,36 +291,24 @@ function App() {
           <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                <div className="flex gap-1 bg-[#E8E8ED]/50 p-1 rounded-xl w-fit self-start">
-                  {/* TABS DE NAVEGACION */}
                   <button onClick={() => setAdminTab('active')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'active' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><Inbox size={14}/> Activos</button>
                   <button onClick={() => setAdminTab('assigned')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'assigned' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><UserCheck size={14}/> Asignados</button>
                   <button onClick={() => setAdminTab('archived')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'archived' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><Archive size={14}/> Archivo</button>
                   <button onClick={() => setAdminTab('agents')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'agents' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><Briefcase size={14}/> Agentes</button>
                   <button onClick={() => setAdminTab('brain')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'brain' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><Sparkles size={14}/> Inteligencia</button>
                </div>
-               {adminTab !== 'brain' && <div className="relative group w-full md:w-auto"><Search className="absolute left-3 top-2.5 text-gray-400" size={14} /><input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-4 py-2 bg-white border-0 rounded-xl text-sm w-full md:w-64 outline-none shadow-sm" /></div>}
+               {adminTab !== 'brain' && <div className="relative group w-full md:w-auto"><Search className="absolute left-3 top-2.5 text-gray-400" size={14} /><input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-8 py-2 bg-white border-0 rounded-xl text-sm w-full md:w-64 outline-none shadow-sm" />{searchTerm && (<button onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"><X size={14} /></button>)}</div>}
             </div>
             
-            {/* VISTAS */}
-            {/* 1. Activos: Leads sin asignar */}
             {adminTab === 'active' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active') && !l.assignedAgentId)} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> : 
-             
-             /* 2. Asignados: Leads activos CON agente */
              adminTab === 'assigned' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active') && l.assignedAgentId)} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> :
-             
-             /* 3. Archivo */
              adminTab === 'archived' ? <LeadsList leads={leads.filter(l => l.status === 'archived')} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={true} searchTerm={searchTerm} /> : 
-             
-             /* 4. Agentes */
              adminTab === 'agents' ? <AgentsManager agents={agents} leads={leads} onOpenLead={(l) => setSelectedLead(l)} onSaveAgent={saveAgent} onDeleteAgent={deleteAgent} searchTerm={searchTerm} /> :
-             
-             /* 5. Cerebro */
              <AdminBrain aiConfig={aiConfig} onSaveConfig={saveAiConfig} />}
           </div>
         )}
       </main>
 
-      {/* MODALES GLOBALES */}
       <LeadDetailModal lead={selectedLead} agents={agents} onClose={() => setSelectedLead(null)} onUpdateStatus={updateLeadStatus} isArchive={adminTab === 'archived'} />
       <AgentAssignmentModal isOpen={assignModalData.isOpen} agents={agents} onClose={() => setAssignModalData({ ...assignModalData, isOpen: false })} onAssign={handleAssignAgent} />
 
@@ -545,12 +544,24 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
   const [leadToDelete, setLeadToDelete] = useState(null); 
   const [selectedIds, setSelectedIds] = useState([]); 
   
+  // NUEVO: Estado para el Modal de Asignación Masiva
+  const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
+  const [bulkSearchTerm, setBulkSearchTerm] = useState('');
+
   const filteredLeads = leads.filter(l => String(l.nombre||'').toLowerCase().includes(searchTerm.toLowerCase()));
 
   const handleSelectAll = (e) => e.target.checked ? setSelectedIds(filteredLeads.map(l => l.id)) : setSelectedIds([]);
   const handleSelectOne = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
   const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
+
+  // Filtrado de agentes en el modal
+  const filteredAgentsForBulk = agents.filter(a => a.nombre.toLowerCase().includes(bulkSearchTerm.toLowerCase()));
+
+  const handleBulkAssignAction = (agentId) => {
+      onOpenAssign(selectedIds);
+      setSelectedIds([]); // Limpiar selección tras abrir modal
+  };
 
   return (
     <div className="animate-in fade-in duration-500">
@@ -571,7 +582,7 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
               <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 flex justify-between items-center animate-in fade-in sticky top-0 z-20">
                   <span className="text-xs font-bold text-blue-700">{selectedIds.length} seleccionados</span>
                   <div className="flex gap-2 items-center">
-                      <button onClick={() => onOpenAssign(selectedIds)} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"><UserPlus size={14}/> Acciones Agente</button>
+                      <button onClick={handleBulkAssignAction} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"><UserPlus size={14}/> Acciones Agente</button>
                       <button onClick={handleBulkArchive} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors">{isArchive ? <RotateCcw size={14}/> : <Archive size={14}/>}{isArchive ? 'Restaurar' : 'Archivar'}</button>
                       <button onClick={() => setLeadToDelete(selectedIds)} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"><Trash2 size={14}/> Eliminar</button>
                   </div>
@@ -621,17 +632,52 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false); 
   const [isEditingWebhook, setIsEditingWebhook] = useState(false);
+  const [isEditingAssignmentWebhook, setIsEditingAssignmentWebhook] = useState(false); // NUEVO
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [targetWebhook, setTargetWebhook] = useState(''); // 'main' or 'assignment'
   const [authPassword, setAuthPassword] = useState('');
   const [authError, setAuthError] = useState(null);
 
   const handleDayToggle = (day) => setC(prev => ({...prev, schedule: {...prev.schedule, [day]: {...prev.schedule[day], enabled: !prev.schedule[day].enabled}}}));
   const handleTimeChange = (day, type, value) => setC(prev => ({...prev, schedule: {...prev.schedule, [day]: {...prev.schedule[day], [type]: value}}}));
 
-  const handleSave = async () => { setIsSaving(true); await onSaveConfig(c); setIsSaving(false); setIsEditingWebhook(false); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000); }; 
+  const handleSave = async () => { 
+      setIsSaving(true); 
+      await onSaveConfig(c); 
+      setIsSaving(false); 
+      setIsEditingWebhook(false); 
+      setIsEditingAssignmentWebhook(false);
+      setShowSuccess(true); 
+      setTimeout(() => setShowSuccess(false), 3000); 
+  }; 
+
   const daysList = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
-  const handleEditWebhookClick = () => { setShowAuthModal(true); setAuthPassword(''); setAuthError(null); };
-  const handleAuthSubmit = async (e) => { e.preventDefault(); setAuthError(null); try { const user = auth.currentUser; if (user && user.email) { await signInWithEmailAndPassword(auth, user.email, authPassword); setShowAuthModal(false); setIsEditingWebhook(true); } else { setAuthError("No se pudo verificar la sesión."); } } catch (error) { console.error("Auth check failed", error); setAuthError("Contraseña incorrecta."); } };
+
+  const handleEditWebhookClick = (target) => { 
+      setTargetWebhook(target);
+      setShowAuthModal(true); 
+      setAuthPassword(''); 
+      setAuthError(null); 
+  };
+
+  const handleAuthSubmit = async (e) => {
+     e.preventDefault();
+     setAuthError(null);
+     try {
+         const user = auth.currentUser;
+         if (user && user.email) {
+             await signInWithEmailAndPassword(auth, user.email, authPassword);
+             setShowAuthModal(false);
+             if (targetWebhook === 'main') setIsEditingWebhook(true);
+             if (targetWebhook === 'assignment') setIsEditingAssignmentWebhook(true);
+         } else {
+             setAuthError("No se pudo verificar la sesión.");
+         }
+     } catch (error) {
+         console.error("Auth check failed", error);
+         setAuthError("Contraseña incorrecta.");
+     }
+  };
 
   return (
     <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -649,11 +695,20 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
           </div>
         </div>
         <div className="md:w-72 space-y-6">
+          
+          {/* Webhook 1: Nuevo Lead */}
           <div>
-              <div className="flex justify-between items-center mb-2"><label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide">Webhook URL (Zapier/Make)</label>{!isEditingWebhook && (<button onClick={handleEditWebhookClick} className="text-blue-500 hover:text-blue-700 transition-colors" title="Editar Webhook"><Pencil size={12} /></button>)}</div>
+              <div className="flex justify-between items-center mb-2"><label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide">Webhook: Nuevo Lead</label>{!isEditingWebhook && (<button onClick={() => handleEditWebhookClick('main')} className="text-blue-500 hover:text-blue-700 transition-colors" title="Editar Webhook"><Pencil size={12} /></button>)}</div>
               <input type={isEditingWebhook ? "text" : "password"} placeholder="https://hooks.zapier.com/..." value={c.webhookUrl || ""} onChange={(e)=>setC({...c, webhookUrl:e.target.value})} disabled={!isEditingWebhook} className={`w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-medium text-[#1d1d1f] focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all shadow-sm ${!isEditingWebhook ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} />
-              <p className="text-[9px] text-gray-400 mt-1">{isEditingWebhook ? "Edición habilitada. Guarde para bloquear." : "Conectado con Zapier (Oculto)"}</p>
           </div>
+
+          {/* Webhook 2: Asignación */}
+          <div>
+              <div className="flex justify-between items-center mb-2"><label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide">Webhook: Notificar Cliente</label>{!isEditingAssignmentWebhook && (<button onClick={() => handleEditWebhookClick('assignment')} className="text-blue-500 hover:text-blue-700 transition-colors" title="Editar Webhook"><Pencil size={12} /></button>)}</div>
+              <input type={isEditingAssignmentWebhook ? "text" : "password"} placeholder="https://hooks.zapier.com/..." value={c.assignmentWebhookUrl || ""} onChange={(e)=>setC({...c, assignmentWebhookUrl:e.target.value})} disabled={!isEditingAssignmentWebhook} className={`w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-medium text-[#1d1d1f] focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all shadow-sm ${!isEditingAssignmentWebhook ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} />
+              <p className="text-[9px] text-gray-400 mt-1">Se dispara al asignar un agente.</p>
+          </div>
+
           <button onClick={handleSave} disabled={isSaving} className="w-full bg-black text-white font-medium py-3 rounded-xl hover:bg-gray-800 transition-all text-xs shadow-lg relative overflow-hidden">{isSaving ? "Guardando..." : "Guardar Cambios"}</button>
           {showSuccess && (<div className="animate-in fade-in bg-green-50 text-green-700 border border-green-100 rounded-xl p-3 flex items-center justify-center gap-2 text-xs font-medium shadow-sm mt-2"><CheckCircle size={14} /> Cambios guardados correctamente</div>)}
         </div>
@@ -671,144 +726,6 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
               </div>
           </div>
       )}
-    </div>
-  );
-}
-
-// --- CLIENT CHAT (MODIFICADO: Botón compartir URL) ---
-function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
-  const [activeUsers, setActiveUsers] = useState(Math.floor(Math.random() * (28 - 18 + 1)) + 18);
-  const [msgs, setMsgs] = useState([
-    { role: 'assistant', content: 'Hola, soy Lucy, su asistente personal experta en **Gastos Finales**. Mi misión es brindarle la información que necesita para su tranquilidad y la de su familia.\n\nTenga la plena seguridad de que **todo lo que hablemos es confidencial**; nada será divulgado sin su expresa autorización. Mi único objetivo es ayudarle, y si al final de nuestra charla usted lo desea, podré conectarle directamente con un **agente acreditado por su estado**.\n\n¿Cómo le podemos servir el día de hoy?' }
-  ]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [showOptions, setShowOptions] = useState(false);
-  const [pendingLeadData, setPendingLeadData] = useState(null);
-  
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [urlCopied, setUrlCopied] = useState(false);
-  
-  const scrollRef = useRef(null);
-  const { isAgentAvailable, message: statusMessage, isVacation, resumeDate } = getAgentStatus(aiConfig);
-
-  useEffect(()=>{ 
-      const i = setInterval(() => setActiveUsers(p => p + (Math.random() > 0.5 ? 1 : -1)), 5000);
-      return () => clearInterval(i);
-  },[]);
-
-  useEffect(()=>{ if(scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; },[msgs, loading, showOptions]);
-
-  const handleCopyLink = () => {
-      const url = window.location.href;
-      navigator.clipboard.writeText(url).then(() => {
-          setUrlCopied(true);
-          setTimeout(() => setUrlCopied(false), 2500);
-      });
-  };
-
-  const handleOptionClick = (type) => {
-      if (pendingLeadData) {
-          const finalLead = {
-              ...pendingLeadData,
-              metodo_contacto: type,
-              horario_preferido: type === 'ahora' ? 'Inmediata' : 'Pendiente'
-          };
-          onSaveLead(finalLead);
-          setPendingLeadData(null); 
-          setShowOptions(false); 
-          const responseMsg = type === 'ahora' ? "¡Perfecto! Un agente se comunicará con usted en breve al número proporcionado." : "Excelente. Un agente le llamará para programar la cita en el horario que mejor le convenga.";
-          setMsgs(prev => [...prev, {role: 'assistant', content: responseMsg}]);
-      }
-  };
-
-  const send = async (e) => {
-    e.preventDefault(); if(!input.trim() || loading) return;
-    const newM = [...msgs, {role:'user', content:input}]; setMsgs(newM); setInput(''); setLoading(true);
-    try {
-        let availabilityInstruction = "";
-        if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA DEL SISTEMA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}. Sé muy amable y profesional, NO digas "vacaciones".`;
-
-        const prompt = `
-          ${aiConfig.systemPrompt}
-          ${availabilityInstruction}
-          HISTORIAL:
-          ${newM.map(m=>`${m.role}: ${m.content}`).join('\n')}
-          INSTRUCCIÓN TÉCNICA CRÍTICA:
-          Si el usuario YA ha proporcionado Nombre, Edad, y algún dato de contacto, y consideras que la etapa de recolección de datos ha terminado, TU RESPUESTA DEBE INCLUIR UN BLOQUE JSON AL FINAL con este formato:
-          \`\`\`json
-          { "action": "data_ready", "nombre": "...", "edad": "...", "telefono": "...", "resumen_ai": "..." }
-          \`\`\`
-          IMPORTANTE: NO te despidas definitivamente todavía. Solo di que tienes opciones disponibles.
-          Si no, responde normalmente como Lucy.
-        `;
-
-        const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
-        const rawText = res.candidates[0].content.parts[0].text;
-        let reply = rawText;
-        const jsonMatch = rawText.match(/```json([\s\S]*?)```/);
-        if (jsonMatch) {
-            try {
-               const jsonStr = jsonMatch[1];
-               const data = JSON.parse(jsonStr);
-               if (data.action === 'data_ready') {
-                   setPendingLeadData({ nombre: data.nombre || 'Anonimo', edad: data.edad || '', telefono: data.telefono || '', resumen_ai: data.resumen_ai || 'Lead capturado por Lucy', fullChat: newM });
-                   setShowOptions(true);
-                   reply = rawText.replace(jsonMatch[0], '').trim();
-               }
-            } catch(jsonErr) { console.error("Error parsing JSON", jsonErr); }
-        }
-        reply = cleanAiMessage(reply);
-        setMsgs([...newM, {role:'assistant', content:reply}]);
-    } catch(e){ console.error(e); }
-    setLoading(false);
-  };
-
-  return (
-    <div className="max-w-[480px] mx-auto flex flex-col h-full bg-white rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden relative font-sans">
-        <div className="bg-white/90 backdrop-blur-xl p-5 border-b border-gray-100 flex items-center justify-between z-10 sticky top-0">
-            <div className="flex items-center gap-4">
-                <div className="relative"><LucyAvatar className="w-12 h-12" /></div>
-                <div>
-                  <h2 className="font-bold text-[#1d1d1f] text-lg tracking-tight">Lucy</h2>
-                  <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full bg-green-500 animate-pulse`}></span><p className="text-xs text-[#86868b] font-medium">En Línea</p></div>
-                      <span className="text-[#86868b] text-[10px]">•</span>
-                      <p className="text-xs text-blue-600 font-medium">{activeUsers} personas</p>
-                  </div>
-                </div>
-            </div>
-            <button onClick={() => setShowShareModal(true)} className="p-2 bg-slate-50 text-slate-400 rounded-full hover:bg-slate-100 hover:text-blue-600 transition-colors" title="Guardar enlace"><Share2 size={20} /></button>
-        </div>
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-6 bg-white no-scrollbar">
-            {msgs.map((m,i)=>(
-                <div key={i} className={`flex ${m.role==='user'?'justify-end':'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                    {m.role === 'assistant' && <LucyAvatar className="w-8 h-8 mr-2 mt-auto shrink-0" />}
-                    <div className={`w-fit max-w-[75%] px-5 py-3 rounded-2xl text-[16px] leading-relaxed shadow-sm text-left ${m.role==='user'?'bg-[#007AFF] text-white rounded-br-none':'bg-[#F2F2F7] text-[#1d1d1f] rounded-bl-none'}`}><RichText content={m.content}/></div>
-                </div>
-            ))}
-            {loading && <div className="flex justify-start pl-10"><div className="bg-[#F2F2F7] px-4 py-3 rounded-2xl rounded-bl-none flex gap-1.5 items-center w-fit"><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span></div></div>}
-            {showOptions && (
-                <div className="flex flex-col gap-2 pt-2 animate-in zoom-in px-8">
-                    <button onClick={() => handleOptionClick('ahora')} disabled={!isAgentAvailable} className={`w-full font-medium py-3.5 rounded-xl transition-all text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 ${isAgentAvailable ? 'bg-[#007AFF] text-white hover:bg-[#0062cc]' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}>{isAgentAvailable ? <Zap size={16} fill="currentColor"/> : <Moon size={16}/>} {isAgentAvailable ? 'Hablar con un Agente Ahora' : 'Agentes no disponibles'}</button>
-                    <button onClick={() => handleOptionClick('programada')} className="w-full bg-[#F2F2F7] text-[#007AFF] font-medium py-3.5 rounded-xl hover:bg-[#E5E5EA] transition-all text-sm flex items-center justify-center gap-2 active:scale-95"><Calendar size={16}/> Programar Llamada</button>
-                </div>
-            )}
-        </div>
-        <form onSubmit={send} className="p-4 bg-white/90 backdrop-blur-xl border-t border-gray-100 flex gap-3">
-            <input value={input} onChange={e=>setInput(e.target.value)} placeholder="Escribe un mensaje..." className="flex-1 bg-[#F2F2F7] border-0 rounded-full px-5 py-3 text-[16px] focus:ring-2 focus:ring-[#007AFF]/20 text-[#1d1d1f] placeholder:text-[#86868b] outline-none transition-all"/>
-            <button disabled={loading} className="w-12 h-12 bg-[#007AFF] text-white rounded-full hover:bg-[#0062cc] transition-all active:scale-90 disabled:opacity-50 disabled:scale-100 flex items-center justify-center shrink-0 shadow-md"><Send size={20} fill="currentColor" className="ml-0.5" /></button>
-        </form>
-        <div className="text-center py-2 bg-white border-t border-gray-50"><button onClick={onOpenLogin} className="text-[9px] text-slate-300 hover:text-slate-400 transition-colors">Acceso Corporativo</button></div>
-        {showShareModal && (
-            <div className="absolute inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
-                <div className="bg-white rounded-[24px] shadow-2xl p-6 w-full max-w-sm animate-in zoom-in-95">
-                    <div className="flex justify-between items-start mb-4"><div><h3 className="text-lg font-bold text-slate-800">Guardar conversación</h3><p className="text-xs text-slate-500 mt-1">Copie este enlace para volver a hablar con Lucy más tarde sin perder el contacto.</p></div><button onClick={() => setShowShareModal(false)} className="p-1 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full"><X size={16}/></button></div>
-                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center gap-2 mb-4"><input type="text" readOnly value={window.location.href} className="bg-transparent border-0 text-xs text-slate-600 w-full outline-none font-mono truncate" /></div>
-                    <button onClick={handleCopyLink} className={`w-full py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 shadow-lg ${urlCopied ? 'bg-green-500 text-white' : 'bg-black text-white hover:bg-slate-800'}`}>{urlCopied ? <CheckCircle size={16}/> : <Copy size={16}/>}{urlCopied ? '¡Enlace Copiado!' : 'Copiar Enlace'}</button>
-                </div>
-            </div>
-        )}
     </div>
   );
 }
