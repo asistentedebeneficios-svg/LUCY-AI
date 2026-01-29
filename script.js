@@ -11,8 +11,9 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassw
 const OFFLINE_MODE = false;
 
 // --- SEGURIDAD Y CONFIGURACIÓN ---
-const AI_KEY_PART_A = "AIzaSyB9qP1gjlqrrdAN";
-const AI_KEY_PART_B = "qvhI2hY5KAirqByeI9Q";
+// Nueva API Key dividida
+const AI_KEY_PART_A = "AIzaSyAIOAO4-h7lRRK8";
+const AI_KEY_PART_B = "SKAC2hgomoE-MaCZ58M";
 const GEMINI_API_KEY = `${AI_KEY_PART_A}${AI_KEY_PART_B}`;
 
 const FIREBASE_CONFIG = {
@@ -85,13 +86,13 @@ const getAgentStatus = (config) => {
     return { isAgentAvailable: true, message: "Agentes Disponibles" };
 };
 
-// --- API FETCH (MODELO GEMINI 2.0 FLASH - EL MÁS NUEVO Y COMPATIBLE) ---
+// --- API FETCH (MODELO GEMINI 1.5 FLASH) ---
 async function fetchGeminiWithRetry(payload) {
     if (!rateLimit.check()) throw new Error("Espera unos segundos.");
     if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; }
 
-    // Usamos gemini-2.0-flash que es el actual
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+    // Usamos gemini-1.5-flash (el estándar actual)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
     
     try {
         const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -104,14 +105,14 @@ async function fetchGeminiWithRetry(payload) {
                 errorMessage = errJson.error?.message || errorMessage;
             } catch (e) {}
             
-            // Fallback a 1.5 si 2.0 falla
-            if(errorMessage.toLowerCase().includes("not found")) {
-                 console.warn("2.0 no encontrado, intentando 1.5...");
-                 const urlBackup = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+            // Si falla 1.5, intentamos con 1.5-pro como respaldo
+            if(errorMessage.toLowerCase().includes("not found") || errorMessage.toLowerCase().includes("supported")) {
+                 console.warn("1.5 Flash falló, intentando 1.5 Pro...");
+                 const urlBackup = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`;
                  const resBackup = await fetch(urlBackup, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                  if (!resBackup.ok) {
                      const backupError = await resBackup.text();
-                     throw new Error(`Error API (Backup): ${backupError}`);
+                     throw new Error(`Error API: ${backupError}`);
                  }
                  return await resBackup.json();
             }
