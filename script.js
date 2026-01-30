@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
 
-// -----------------------------------------------------------------------------
-// 1. IMPORTACIÓN DE ICONOS Y LIBRERÍAS
-// -----------------------------------------------------------------------------
+// 1. IMPORTACIÓN DE ICONOS (LUCIDE)
+// Renombramos Link a LinkIcon para evitar conflictos
 import { 
   MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, 
   Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, 
@@ -19,12 +18,8 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebas
 import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
-// -----------------------------------------------------------------------------
-// 2. CONFIGURACIÓN DEL SISTEMA Y API KEYS
-// -----------------------------------------------------------------------------
-const OFFLINE_MODE = false; // Cambiar a true solo si no hay internet
-
-// CLAVE API DIVIDIDA (Seguridad básica)
+// 2. CONFIGURACIÓN
+const OFFLINE_MODE = false;
 const AI_KEY_PART_A = "AIzaSyAIOAO4-h7lRRK8";
 const AI_KEY_PART_B = "SKAC2hgomoE-MaCZ58M";
 const GEMINI_API_KEY = `${AI_KEY_PART_A}${AI_KEY_PART_B}`;
@@ -41,85 +36,47 @@ const FIREBASE_CONFIG = {
 
 const APP_ID = 'gastos-finales-v1';
 
-// -----------------------------------------------------------------------------
-// 3. INICIALIZACIÓN DE FIREBASE (CON MANEJO DE ERRORES)
-// -----------------------------------------------------------------------------
 let app, auth, db;
 if (!OFFLINE_MODE) {
     try {
         app = initializeApp(FIREBASE_CONFIG);
         auth = getAuth(app);
         db = getFirestore(app);
-        console.log("🔥 Firebase inicializado correctamente");
     } catch (e) {
-        console.error("❌ Error crítico inicializando Firebase:", e);
+        console.error("Firebase Error:", e);
     }
 }
 
-// -----------------------------------------------------------------------------
-// 4. UTILIDADES Y HELPERS
-// -----------------------------------------------------------------------------
+// 3. UTILIDADES
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
-// Limpiador de mensajes de la IA (elimina metadatos internos)
 function cleanAiMessage(text) {
     if (!text) return '';
-    let cleaned = text.replace(new RegExp('\\[Botón:.*?\\]', 'gi'), '')
-                      .replace(new RegExp('\\[Button:.*?\\]', 'gi'), '');
+    let cleaned = text.replace(new RegExp('\\[Botón:.*?\\]', 'gi'), '').replace(new RegExp('\\[Button:.*?\\]', 'gi'), '');
     return cleaned.split('***').join('').split('---').join('').trim();
 }
 
-// Formateador de fechas para humanos
 function formatScheduledDate(d) {
     if (!d || d.length < 10) return d;
     const date = new Date(d);
-    return isNaN(date) ? d : date.toLocaleDateString('en-US', { 
-        month: '2-digit', day: '2-digit', year: 'numeric', 
-        hour: 'numeric', minute: '2-digit', hour12: true 
-    });
+    return isNaN(date) ? d : date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
-// Formateador de timestamps de Firestore
 function formatFirestoreDate(ts) {
     if (!ts) return 'Reciente';
     if (OFFLINE_MODE && typeof ts === 'string') return new Date(ts).toLocaleDateString('en-US');
     try {
-        // Soporta tanto formato Firestore (Timestamp) como Date nativo JS
         return ts.toDate ? ts.toDate().toLocaleDateString('en-US') : new Date(ts.seconds * 1000).toLocaleDateString('en-US');
-    } catch (e) { 
-        return 'Fecha inválida'; 
-    }
+    } catch (e) { return 'Fecha inválida'; }
 }
 
-// Componente para renderizar texto con negritas (Markdown simple)
 const RichText = ({ content }) => {
     if (!content || typeof content !== 'string') return null;
-    return (
-        <span className="text-sm leading-relaxed">
-            {content.split(/(\*\*.*?\*\*)/g).map((part, i) => 
-                part.startsWith('**') ? <strong key={i} className="text-slate-900 font-bold">{part.slice(2, -2)}</strong> : part
-            )}
-        </span>
-    );
+    return <span className="text-sm leading-relaxed">{content.split(/(\*\*.*?\*\*)/g).map((part, i) => part.startsWith('**') ? <strong key={i} className="text-slate-900 font-bold">{part.slice(2, -2)}</strong> : part)}</span>;
 };
 
-// Limitador de tasa de peticiones (Rate Limiter)
-const rateLimit = { 
-    lastCall: 0, 
-    count: 0, 
-    check: function() { 
-        const now = Date.now(); 
-        if (now - this.lastCall < 2000) return false; 
-        this.lastCall = now; 
-        this.count++; 
-        if (this.count > 50) return false; 
-        return true; 
-    } 
-};
+const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
 
-// -----------------------------------------------------------------------------
-// 5. LÓGICA DE HORARIOS AVANZADA (MULTI-SLOT)
-// -----------------------------------------------------------------------------
 const DEFAULT_SCHEDULE = { 
     lunes: { enabled: true, slots: [{start: '09:00', end: '18:00'}] },
     martes: { enabled: true, slots: [{start: '09:00', end: '18:00'}] },
@@ -130,14 +87,12 @@ const DEFAULT_SCHEDULE = {
     domingo: { enabled: false, slots: [{start: '10:00', end: '14:00'}] }
 };
 
+// 4. LÓGICA DE HORARIOS
 const getAgentStatus = (config) => {
     try {
-        // Protección contra configuración nula
         if (!config) return { isAgentAvailable: true, message: "Disponible" };
-        
         const now = new Date();
         
-        // 1. Verificar Modo Vacaciones
         if (config.vacationMode && config.vacationStart && config.vacationEnd) {
             const vStart = new Date(config.vacationStart + 'T00:00:00');
             const vEnd = new Date(config.vacationEnd + 'T23:59:59');
@@ -148,146 +103,68 @@ const getAgentStatus = (config) => {
             }
         }
         
-        // 2. Obtener configuración del día actual
         const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
         const dayName = days[now.getDay()];
         const dayConfig = config.schedule?.[dayName];
         
-        // Si el día está deshabilitado completamente
-        if (!dayConfig || !dayConfig.enabled) {
-            return { isAgentAvailable: false, message: "Cerrado hoy" };
-        }
+        if (!dayConfig || !dayConfig.enabled) return { isAgentAvailable: false, message: "Cerrado hoy" };
 
-        // 3. Normalizar Slots (Compatibilidad con versiones viejas)
-        let activeSlots = dayConfig.slots || [];
-        if (activeSlots.length === 0 && dayConfig.start && dayConfig.end) {
-            activeSlots = [{ start: dayConfig.start, end: dayConfig.end }];
+        let slots = dayConfig.slots || [];
+        if (slots.length === 0 && dayConfig.start && dayConfig.end) {
+            slots = [{ start: dayConfig.start, end: dayConfig.end }];
         }
+        if (slots.length === 0) return { isAgentAvailable: false, message: "Sin turnos" };
 
-        if (activeSlots.length === 0) {
-             return { isAgentAvailable: false, message: "Sin turnos definidos" };
-        }
-
-        // 4. Comprobar si la hora actual cae en algún slot
         const currentMins = now.getHours() * 60 + now.getMinutes();
-        
-        const isOpenNow = activeSlots.some(slot => {
+        const isOpenNow = slots.some(slot => {
             if (!slot.start || !slot.end) return false;
             const [sH, sM] = slot.start.split(':').map(Number);
             const [eH, eM] = slot.end.split(':').map(Number);
-            
             if (isNaN(sH) || isNaN(eH)) return false;
-
             const startMins = sH * 60 + (sM || 0);
             const endMins = eH * 60 + (eM || 0);
-
-            // Verificar intervalo
             return currentMins >= startMins && currentMins < endMins;
         });
 
-        if (!isOpenNow) {
-             return { isAgentAvailable: false, message: "Cerrado ahora" };
-        }
-
-        return { isAgentAvailable: true, message: "Agentes Disponibles" };
-
+        return isOpenNow ? { isAgentAvailable: true, message: "Agentes Disponibles" } : { isAgentAvailable: false, message: "Cerrado ahora" };
     } catch (error) {
-        console.error("Error calculando horario:", error);
-        return { isAgentAvailable: true, message: "Disponible (Error)" }; 
+        return { isAgentAvailable: true, message: "Disponible" }; 
     }
 };
 
-// Generador de texto legible para el prompt de la IA
 const getScheduleText = (schedule) => {
     if (!schedule) return "No especificado";
     const days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
     return days.map(d => {
         const c = schedule[d];
         if (!c?.enabled) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: Cerrado`;
-        
         const slots = c.slots || (c.start ? [{start: c.start, end: c.end}] : []);
         if (slots.length === 0) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: Sin horario`;
-
         const times = slots.map(s => `${s.start} a ${s.end}`).join(' y de ');
         return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: ${times}`;
     }).join('\n');
 };
 
-// -----------------------------------------------------------------------------
-// 6. CONEXIÓN CON GEMINI (AUTO-NEGOCIACIÓN DE MODELOS)
-// -----------------------------------------------------------------------------
+// 5. API IA
 async function fetchGeminiWithRetry(payload) {
-    if (!rateLimit.check()) throw new Error("Por favor espera unos segundos.");
-    
-    if (OFFLINE_MODE) { 
-        await new Promise(r => setTimeout(r, 1000)); 
-        return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; 
-    }
+    if (!rateLimit.check()) throw new Error("Espera unos segundos.");
+    if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; }
 
-    // Lista de modelos a probar en orden de preferencia/novedad
-    const models = [
-        'gemini-2.0-flash', 
-        'gemini-1.5-flash', 
-        'gemini-1.5-pro', 
-        'gemini-1.0-pro'
-    ];
-    
+    const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'];
     let lastError = null;
 
-    // Bucle de intentos
     for (const model of models) {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
         try {
-            const res = await fetch(url, { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify(payload) 
-            });
-            
-            if (res.ok) {
-                // Si funciona, devolvemos la respuesta inmediatamente
-                return await res.json(); 
-            } else {
-                const errorText = await res.text();
-                lastError = `Modelo ${model} falló: ${res.status}`;
-                console.warn(lastError); 
-                // Continuamos al siguiente modelo sin lanzar error todavía
-            }
-        } catch (e) {
-            lastError = e.message;
-        }
+            const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (res.ok) return await res.json();
+            const errorText = await res.text();
+            lastError = `Modelo ${model} falló: ${res.status}`;
+        } catch (e) { lastError = e.message; }
     }
-    
-    // Si terminamos el bucle y nada funcionó
-    throw new Error(`Error de conexión AI: ${lastError || "Verifica tu conexión a internet"}`);
+    throw new Error(`Error de conexión AI: ${lastError || "Verifica tu conexión"}`);
 }
 
-// -----------------------------------------------------------------------------
-// 7. COMPONENTES VISUALES (AVATARES Y LOGOS)
-// -----------------------------------------------------------------------------
-const LucyAvatar = ({ className = "w-10 h-10" }) => (
-    <img 
-        src="https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" 
-        alt="Lucy" 
-        className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} 
-        onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"; }} 
-    />
-);
-
-const ProtectionLogo = ({ size = 24, className = "" }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        <path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" />
-        <path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" />
-    </svg>
-);
-
-const BrainAvatar = ({ className = "w-10 h-10" }) => (
-    <div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}>
-        <Sparkles size={20} strokeWidth={2} />
-    </div>
-);
-
-// --- HOOK DE INACTIVIDAD ---
 function useInactivityTimer(action, timeout = 600000) { 
     const savedAction = useRef(action);
     useEffect(() => { savedAction.current = action; }, [action]);
@@ -299,15 +176,15 @@ function useInactivityTimer(action, timeout = 600000) {
     }, [timeout]); 
 }
 
-// -----------------------------------------------------------------------------
-// 8. COMPONENTE DASHBOARD DE REPORTES (KPIs)
-// -----------------------------------------------------------------------------
+const LucyAvatar = ({ className = "w-10 h-10" }) => (<img src="https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" alt="Lucy" className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"; }} />);
+const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
+
+// 6. DASHBOARD REPORTES
 const ReportsDashboard = ({ leads, agents }) => {
     const [filterAgent, setFilterAgent] = useState('all');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
 
-    // Filtrar leads según los criterios
     const filteredLeads = useMemo(() => {
         return leads.filter(l => {
             const matchesAgent = filterAgent === 'all' || l.assignedAgentId === filterAgent;
@@ -322,118 +199,53 @@ const ReportsDashboard = ({ leads, agents }) => {
         });
     }, [leads, filterAgent, startDate, endDate]);
 
-    // --- CÁLCULO DE MÉTRICAS ---
-    // 1. Asignados (Vendidos al Agente): Tienen assignedAgentId
     const assignedLeads = filteredLeads.filter(l => l.assignedAgentId).length;
-    
-    // 2. Cerrados (Vendidos al Cliente): Tienen status = 'sold'
     const closedSales = filteredLeads.filter(l => l.status === 'sold').length;
-    
-    // 3. Tasa de Conversión: Cierres / Asignados
     const conversionRate = assignedLeads > 0 ? ((closedSales / assignedLeads) * 100).toFixed(1) : 0;
-    
-    // 4. Activos/Sin Asignar:
     const activeLeads = filteredLeads.filter(l => !l.assignedAgentId && l.status !== 'archived').length;
 
-    // Rendimiento detallado por Agente
     const agentPerformance = useMemo(() => {
         return agents.map(agent => {
             const myLeads = filteredLeads.filter(l => l.assignedAgentId === agent.id);
             const mySales = myLeads.filter(l => l.status === 'sold').length;
             const myConversion = myLeads.length > 0 ? ((mySales / myLeads.length) * 100).toFixed(0) : 0;
-            
-            return { 
-                ...agent, 
-                assigned: myLeads.length, 
-                closed: mySales, 
-                conversion: myConversion 
-            };
-        }).sort((a, b) => b.closed - a.closed); // Ordenar por ventas
+            return { ...agent, assigned: myLeads.length, closed: mySales, conversion: myConversion };
+        }).sort((a, b) => b.closed - a.closed);
     }, [agents, filteredLeads]);
 
     return (
         <div className="animate-in fade-in space-y-8">
-            {/* Header del Dashboard */}
             <div className="flex flex-col md:flex-row justify-between items-end gap-4 bg-white p-5 rounded-[24px] shadow-sm border border-gray-100">
-                <div>
-                    <h2 className="text-xl font-bold text-gray-900">Reportes de Rendimiento</h2>
-                    <p className="text-xs text-gray-500 mt-1">Métricas de Cierre y Asignación</p>
-                </div>
+                <div><h2 className="text-xl font-bold text-gray-900">Reportes de Rendimiento</h2><p className="text-xs text-gray-500 mt-1">Métricas de Cierre y Asignación</p></div>
                 <div className="flex gap-2 items-center">
                     <select className="bg-gray-50 border border-gray-200 text-xs rounded-xl px-3 py-2 outline-none" value={filterAgent} onChange={e => setFilterAgent(e.target.value)}>
                         <option value="all">Todos los Agentes</option>
                         {agents.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
                     </select>
-                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
-                        <input type="date" className="bg-transparent text-xs outline-none text-gray-600" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                        <span className="text-gray-300">-</span>
-                        <input type="date" className="bg-transparent text-xs outline-none text-gray-600" value={endDate} onChange={e => setEndDate(e.target.value)} />
-                    </div>
+                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1"><input type="date" className="bg-transparent text-xs outline-none" value={startDate} onChange={e => setStartDate(e.target.value)} /><span className="text-gray-300">-</span><input type="date" className="bg-transparent text-xs outline-none" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
                 </div>
             </div>
 
-            {/* Tarjetas de Métricas (KPIs) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-start mb-2"><div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><UserCheck size={18}/></div></div>
-                    <p className="text-2xl font-bold text-gray-900">{assignedLeads}</p>
-                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Leads Asignados</p>
-                </div>
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-start mb-2"><div className="p-2 bg-green-50 text-green-600 rounded-lg"><DollarSign size={18}/></div></div>
-                    <p className="text-2xl font-bold text-gray-900">{closedSales}</p>
-                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Ventas Cerradas</p>
-                </div>
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-start mb-2"><div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><TrendingUp size={18}/></div></div>
-                    <p className="text-2xl font-bold text-gray-900">{conversionRate}%</p>
-                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Tasa Cierre</p>
-                </div>
-                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-start mb-2"><div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><Inbox size={18}/></div></div>
-                    <p className="text-2xl font-bold text-gray-900">{activeLeads}</p>
-                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Sin Asignar</p>
-                </div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><UserCheck size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{assignedLeads}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Leads Asignados</p></div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-green-50 text-green-600 rounded-lg"><DollarSign size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{closedSales}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Ventas Cerradas</p></div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><TrendingUp size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{conversionRate}%</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Tasa Cierre</p></div>
+                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><Inbox size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{activeLeads}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Sin Asignar</p></div>
             </div>
 
-            {/* Tabla de Ranking */}
             <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 bg-[#FBFBFD]">
-                    <h3 className="font-bold text-gray-800 text-sm">Ranking de Cierre por Agente</h3>
-                </div>
+                <div className="px-6 py-4 border-b border-gray-100 bg-[#FBFBFD]"><h3 className="font-bold text-gray-800 text-sm">Ranking de Cierre por Agente</h3></div>
                 <table className="w-full text-left">
-                    <thead className="border-b border-gray-100">
-                        <tr>
-                            <th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Agente</th>
-                            <th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Asignados</th>
-                            <th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Cierres</th>
-                            <th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase w-1/3">Efectividad</th>
-                        </tr>
-                    </thead>
+                    <thead className="border-b border-gray-100"><tr><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Agente</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Asignados</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Cierres</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase w-1/3">Efectividad</th></tr></thead>
                     <tbody className="divide-y divide-gray-50">
                         {agentPerformance.map(agent => (
                             <tr key={agent.id} className="hover:bg-gray-50 transition-colors">
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center gap-3">
-                                        <img src={agent.foto || "https://ui-avatars.com/api/?name="+agent.nombre} className="w-8 h-8 rounded-full object-cover bg-gray-200 border border-white shadow-sm"/>
-                                        <span className="text-sm font-semibold text-gray-700">{agent.nombre}</span>
-                                    </div>
-                                </td>
+                                <td className="px-6 py-4"><div className="flex items-center gap-3"><img src={agent.foto || "https://ui-avatars.com/api/?name="+agent.nombre} className="w-8 h-8 rounded-full object-cover bg-gray-200 border border-white shadow-sm"/><span className="text-sm font-semibold text-gray-700">{agent.nombre}</span></div></td>
                                 <td className="px-6 py-4 text-xs font-medium text-gray-600">{agent.assigned}</td>
                                 <td className="px-6 py-4 text-xs font-bold text-green-600">{agent.closed}</td>
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                            <div className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full" style={{ width: `${agent.conversion}%` }}></div>
-                                        </div>
-                                        <span className="text-[10px] font-bold text-gray-500 w-8 text-right">{agent.conversion}%</span>
-                                    </div>
-                                </td>
+                                <td className="px-6 py-4"><div className="flex items-center gap-2"><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full" style={{ width: `${agent.conversion}%` }}></div></div><span className="text-[10px] font-bold text-gray-500 w-8 text-right">{agent.conversion}%</span></div></td>
                             </tr>
                         ))}
-                         {agentPerformance.length === 0 && (
-                             <tr><td colSpan="4" className="text-center py-8 text-gray-400 text-xs">No hay datos para mostrar.</td></tr>
-                         )}
                     </tbody>
                 </table>
             </div>
@@ -441,9 +253,7 @@ const ReportsDashboard = ({ leads, agents }) => {
     );
 };
 
-// -----------------------------------------------------------------------------
-// 9. MODALES DE GESTIÓN (LEADS Y ASIGNACIÓN)
-// -----------------------------------------------------------------------------
+// 7. MODALES
 const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus, isArchive }) => {
     if (!lead) return null;
     const assignedAgent = agents.find(a => a.id === lead.assignedAgentId);
@@ -454,25 +264,15 @@ const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus,
                 <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-10">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-[#F5F5F7] rounded-full flex items-center justify-center text-gray-400"><User size={24} strokeWidth={1.5} /></div>
-                        <div>
-                            <h3 className="font-semibold text-[#1d1d1f] text-xl tracking-tight">{String(lead.nombre || 'Anónimo')}</h3>
-                            <p className="text-xs text-[#86868b] mt-0.5 font-medium">{formatFirestoreDate(lead.createdAt)}</p>
-                        </div>
+                        <div><h3 className="font-semibold text-[#1d1d1f] text-xl tracking-tight">{String(lead.nombre || 'Anónimo')}</h3><p className="text-xs text-[#86868b] mt-0.5 font-medium">{formatFirestoreDate(lead.createdAt)}</p></div>
                     </div>
                     <button onClick={onClose} className="p-2 bg-[#F5F5F7] hover:bg-[#E8E8ED] rounded-full transition-colors text-[#86868b]"><X size={18}/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-white">
                     {assignedAgent && (
                         <div className="bg-blue-50 p-4 rounded-xl flex items-center justify-between border border-blue-100">
-                            <div className="flex items-center gap-3">
-                                <img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-10 h-10 rounded-full object-cover border-2 border-white" />
-                                <div><p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Agente Responsable</p><p className="font-bold text-blue-900 text-sm">{assignedAgent.nombre}</p></div>
-                            </div>
-                            {onAssignClick && (
-                                <button onClick={() => onAssignClick([lead.id], 'unassign')} className="p-2 bg-white text-red-500 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-100 transition-all" title="Desvincular">
-                                    <LinkIcon size={16} className="rotate-45"/>
-                                </button>
-                            )}
+                            <div className="flex items-center gap-3"><img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-10 h-10 rounded-full object-cover border-2 border-white" /><div><p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Agente Responsable</p><p className="font-bold text-blue-900 text-sm">{assignedAgent.nombre}</p></div></div>
+                            {onAssignClick && (<button onClick={() => onAssignClick([lead.id], 'unassign')} className="p-2 bg-white text-red-500 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-100 transition-all" title="Desvincular"><LinkIcon size={16} className="rotate-45"/></button>)}
                         </div>
                     )}
                     <div className="grid grid-cols-2 gap-4">
@@ -521,9 +321,7 @@ const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
     );
 };
 
-// -----------------------------------------------------------------------------
-// 10. LÓGICA PRINCIPAL DE LA APP
-// -----------------------------------------------------------------------------
+// 8. APP PRINCIPAL
 function App() {
     const [user, setUser] = useState(null);
     const [view, setView] = useState('landing');
@@ -552,7 +350,6 @@ function App() {
     const navigateTo = (newView) => { setView(newView); window.history.pushState({ view: newView }, '', `#${newView}`); };
     useInactivityTimer(() => { if (view !== 'landing') { if (isAdmin) handleLogout(); else navigateTo('landing'); } }, 600000);
 
-    // Autenticación
     useEffect(() => {
         if (OFFLINE_MODE) { setUser({ uid: 'offline', isAnonymous: true }); return; }
         if (!auth) return;
@@ -563,7 +360,6 @@ function App() {
         return () => unsubscribe();
     }, []);
 
-    // Cargar Leads
     useEffect(() => {
         if (OFFLINE_MODE) { setLeads([]); return; }
         if (!user || !db) return;
@@ -577,7 +373,6 @@ function App() {
         return () => unsub();
     }, [user, isAdmin]);
 
-    // Cargar Agentes
     useEffect(() => {
         if (OFFLINE_MODE || !user || !isAdmin || !db) return;
         const agentsDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
@@ -698,7 +493,7 @@ function App() {
                 )}
             </main>
 
-            <LeadDetailModal lead={selectedLead} agents={agents} onClose={() => setSelectedLead(null)} onAssignClick={handleAssignAgent} onUpdateStatus={updateLeadStatus} isArchive={adminTab === 'archived'} />
+            <LeadDetailModal lead={selectedLead} agents={agents} onClose={() => setSelectedLead(null)} onAssignClick={openAssignModal} onUpdateStatus={updateLeadStatus} isArchive={adminTab === 'archived'} />
             <AgentAssignmentModal isOpen={assignModalData.isOpen} agents={agents} onClose={() => setAssignModalData({ ...assignModalData, isOpen: false })} onAssign={handleAssignAgent} />
 
             {showLogin && (
@@ -719,7 +514,7 @@ function App() {
     );
 }
 
-// --- LANDING VIEW ---
+// 9. LANDING VIEW
 function LandingView({ onStartChat, onOpenLogin }) {
     const testimonials = [{ text: "Gracias a Lucy encontré un plan perfecto para mi mamá sin gastar de más. Fue muy fácil.", author: "María G. - Florida" }, { text: "Excelente atención, muy paciente y clara. Me sentí muy segura con la información.", author: "Carmen R. - Texas" }, { text: "Rápido y sencillo. Encontré justo lo que necesitaba para mi tranquilidad.", author: "José L. - California" }];
     const [idx, setIdx] = useState(0);
@@ -747,7 +542,7 @@ function LandingView({ onStartChat, onOpenLogin }) {
     );
 }
 
-// --- AGENTS MANAGER (CORREGIDO) ---
+// 10. AGENTS MANAGER
 function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, searchTerm }) {
     const [selectedAgent, setSelectedAgent] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -928,7 +723,7 @@ function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, 
     );
 }
 
-// --- ADMIN BRAIN (NUEVO: HORARIOS FLEXIBLES) ---
+// 11. ADMIN BRAIN (CONFIGURACIÓN)
 function AdminBrain({ aiConfig, onSaveConfig }) {
     const [c, setC] = useState(aiConfig);
     const [isSaving, setIsSaving] = useState(false);
@@ -1052,25 +847,21 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
     );
 }
 
-// --- LEADS LIST (MODIFICADO: Botón de Venta Reversible) ---
+// 12. LEADS LIST
 function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
     const [leadToDelete, setLeadToDelete] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
 
-    // Filtros de búsqueda
     const filteredLeads = leads.filter(l => String(l.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()));
 
     const handleSelectAll = (e) => e.target.checked ? setSelectedIds(filteredLeads.map(l => l.id)) : setSelectedIds([]);
     const handleSelectOne = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-    
-    // Acciones masivas
     const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
     const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
     const handleBulkAssignAction = (agentId) => { onOpenAssign(selectedIds); setSelectedIds([]); };
 
     return (
         <div className="animate-in fade-in duration-500">
-            {/* Modal de confirmación de eliminación */}
             {leadToDelete && (
                 <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm border border-gray-100 text-center">
@@ -1083,7 +874,6 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
             )}
 
             <div className="bg-white rounded-[24px] shadow-sm overflow-hidden border border-gray-100/50">
-                {/* Barra de acciones masivas */}
                 {selectedIds.length > 0 && (
                     <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 flex justify-between items-center animate-in fade-in sticky top-0 z-20">
                         <span className="text-xs font-bold text-blue-700">{selectedIds.length} seleccionados</span>
@@ -1125,8 +915,8 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
                                             {!isArchive && assignedAgent && (
                                                 <button 
                                                     onClick={() => onUpdateStatus([l.id], isSold ? 'active' : 'sold')} 
-                                                    className={`p-2 rounded-lg transition-all ${isSold ? 'bg-green-600 text-white shadow-md' : 'text-gray-400 hover:text-green-600 hover:bg-green-50'}`} 
-                                                    title={isSold ? "Desmarcar Venta (Volver a Activo)" : "Marcar como Vendido"}
+                                                    className={`p-2 rounded-lg transition-all ${isSold ? 'bg-green-100 text-green-700 shadow-sm ring-1 ring-green-200' : 'text-gray-400 hover:text-green-600 hover:bg-green-50'}`} 
+                                                    title={isSold ? "Desmarcar Venta" : "Marcar Vendido"}
                                                 >
                                                     <DollarSign size={16} strokeWidth={isSold ? 2.5 : 2} />
                                                 </button>
