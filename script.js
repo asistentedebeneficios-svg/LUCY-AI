@@ -59,7 +59,10 @@ const generateId = () => Date.now().toString(36) + Math.random().toString(36).su
 function cleanAiMessage(text) {
     if (!text) return '';
     let cleaned = text.replace(/```json[\s\S]*?```/g, '');
+    // Limpiamos etiquetas antiguas por si acaso
     cleaned = cleaned.replace(/\[MODE:[A-Z_]+\]/g, '');
+    // Limpiamos la nueva etiqueta de botones
+    cleaned = cleaned.replace(/\[BUTTONS:[\s\S]*?\]/g, '');
     return cleaned.trim();
 }
 
@@ -92,12 +95,8 @@ OBJETIVO: Recolectar obligatoriamente: Nombre, Edad, Estado (USA), Salud, Si Fum
 REGLAS DE INTERACCIÓN (FLUJO):
 1. SALUDO: Sé amable, rompe el hielo. Consigue el nombre.
 2. PERMISO: Pide Edad y Estado (Location) justificando que es para buscar planes en su zona.
-3. DETALLES (HÍBRIDO): 
-   - Pregunta por la Salud. AÑADE LA ETIQUETA [MODE:HEALTH] al final de tu pregunta.
-   - Pregunta si Fuma. AÑADE LA ETIQUETA [MODE:SMOKER] al final.
-   - Pregunta el Presupuesto (Capacidad de pago). AÑADE LA ETIQUETA [MODE:BUDGET] al final.
-4. CIERRE (HÍBRIDO):
-   - Solo cuando tengas TODOS los datos anteriores, muestra opciones de cierre. AÑADE LA ETIQUETA [MODE:CLOSING] al final.
+3. DETALLES: Pregunta Salud, Fuma y Presupuesto de forma conversacional.
+4. CIERRE: Solo cuando tengas TODOS los datos, ofrece agendar llamada.
 
 REGLAS ESPECIALES:
 - "VÍA RÁPIDA": Si el usuario pide hablar con un agente de inmediato o se muestra impaciente, activa el modo "Operadora". Diles: "Entendido. Para transferirle con el agente licenciado correcto en su estado, necesito confirmar su ficha técnica en 30 segundos." y pide los datos faltantes rápido.
@@ -1005,7 +1004,7 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
     const [urlCopied, setUrlCopied] = useState(false);
     
     // UI STATES (Botones contextuales)
-    const [uiState, setUiState] = useState(null); // 'health', 'smoker', 'budget', 'closing', null
+    const [uiState, setUiState] = useState(null); // Ahora guardará un array de botones
 
     const scrollRef = useRef(null);
     
@@ -1044,12 +1043,15 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
         setMsgs(newM);
 
         try {
+            // 1. Obtener status de horario y vacaciones
             const { isVacation, resumeDate } = agentStatus;
             let availabilityInstruction = "";
             if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA DEL SISTEMA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}. Sé muy amable y profesional, NO digas "vacaciones".`;
             
+            // 2. Obtener texto del horario
             const scheduleText = getScheduleText(aiConfig?.schedule);
             
+            // 3. Preparar prompt
             const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
             const prompt = `
@@ -1059,7 +1061,7 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
           IMPORTANTE - HORARIOS DE TRABAJO ACTUALES (EST / FLORIDA):
           ${scheduleText}
           
-          REGLA DE AGENDAMIENTO: 
+          REGLA DE AGENDAMIENTO ESTRICTA: 
           1. Verifica SIEMPRE el horario arriba mencionado antes de confirmar o sugerir una cita.
           2. NUNCA sugieras ni aceptes agendar una llamada fuera de esos rangos de tiempo. 
           3. Si el usuario propone una hora fuera del horario laboral, dile amablemente que en ese momento nuestros agentes no están disponibles y ofrece el espacio abierto más cercano dentro del horario.
@@ -1092,35 +1094,28 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
                     const jsonStr = jsonMatch[1];
                     const data = JSON.parse(jsonStr);
                     if (data.action === 'data_ready') {
-                        onSaveLead({ ...data, fullChat: newM });
+                        onSaveLead({
+                            ...data,
+                            fullChat: newM
+                        });
                     }
                 } catch (jsonErr) { console.error("Error parsing JSON", jsonErr); }
             }
 
-            // LIMPIAR RESPUESTA (Quitamos tags de botones y JSON)
+            // LIMPIAR RESPUESTA PARA EL USUARIO
             let finalReply = cleanAiMessage(rawText);
+            // Aseguramos quitar la etiqueta de botones
             finalReply = finalReply.replace(/\[BUTTONS:[\s\S]*?\]/g, '').trim();
 
             setMsgs([...newM, { role: 'assistant', content: finalReply }]);
-            setUiState(nextButtons); // Ahora uiState guardará el array de botones
+            setUiState(nextButtons); // Activar botones dinámicos
+
         } catch (e) {
             console.error(e);
             setMsgs([...newM, { role: 'assistant', content: "Lo siento, tuve un pequeño error de conexión. ¿Podría repetirme eso?" }]);
         }
         setLoading(false);
     };
-
-    // BOTONES DE RESPUESTA RÁPIDA
-    const QuickButton = ({ label, value, icon: Icon }) => (
-        <button 
-            onClick={() => send(value)} 
-            disabled={loading}
-            className="flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 rounded-2xl shadow-sm hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-all text-sm font-medium text-gray-700 active:scale-95"
-        >
-            {Icon && <Icon size={16} />}
-            {label}
-        </button>
-    );
 
     return (
         <div className="max-w-[480px] mx-auto flex flex-col h-full bg-white rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden relative font-sans">
@@ -1180,13 +1175,14 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
                         ))}
                     </div>
                 )}
+            </div>
 
             {/* INPUT AREA */}
             <form onSubmit={(e) => { e.preventDefault(); send(); }} className="p-4 bg-white/90 backdrop-blur-xl border-t border-gray-100 flex gap-3 items-center">
                 <input 
                     value={input} 
                     onChange={e => setInput(e.target.value)} 
-                    placeholder={uiState ? "O escribe tu respuesta aquí..." : "Escribe un mensaje..."}
+                    placeholder={uiState ? "O elige una opción..." : "Escribe un mensaje..."}
                     className="flex-1 bg-[#F2F2F7] border-0 rounded-full px-5 py-3 text-[16px] focus:ring-2 focus:ring-[#007AFF]/20 text-[#1d1d1f] placeholder:text-[#86868b] outline-none transition-all" 
                 />
                 <button 
