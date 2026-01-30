@@ -51,18 +51,27 @@ if (!OFFLINE_MODE) {
 }
 
 // -----------------------------------------------------------------------------
-// 3. UTILIDADES Y HELPERS
-// -----------------------------------------------------------------------------
-const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
-
-// Limpia el mensaje de IA de etiquetas internas y JSON
+// Limpia el mensaje de IA de etiquetas internas, JSON y prefijos de rol
 function cleanAiMessage(text) {
     if (!text) return '';
-    let cleaned = text.replace(/```json[\s\S]*?```/g, '');
-    // Limpiamos etiquetas antiguas por si acaso
+    let cleaned = text;
+
+    // 1. Quitar prefijos molestos como "assistant:", "model:", "lucy:"
+    cleaned = cleaned.replace(/^(assistant|model|lucy):\s*/i, '');
+
+    // 2. Quitar bloques JSON
+    cleaned = cleaned.replace(/```json[\s\S]*?```/g, '');
+
+    // 3. Quitar etiquetas antiguas
     cleaned = cleaned.replace(/\[MODE:[A-Z_]+\]/g, '');
-    // Limpiamos la nueva etiqueta de botones
-    cleaned = cleaned.replace(/\[BUTTONS:[\s\S]*?\]/g, '');
+
+    // 4. Quitar etiquetas de BOTONES (agresivo para que no queden corchetes sueltos)
+    // Borra desde [BUTTONS: hasta el último ] que encuentre
+    cleaned = cleaned.replace(/\[BUTTONS:[\s\S]*?\]+/g, '');
+
+    // 5. Limpieza final de seguridad (por si queda un "]" suelto al final)
+    cleaned = cleaned.replace(/[\]]+\s*$/, '');
+
     return cleaned.trim();
 }
 
