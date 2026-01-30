@@ -4,7 +4,6 @@ import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
 // -----------------------------------------------------------------------------
 // 1. IMPORTACIÓN DE ICONOS (LUCIDE REACT)
 // -----------------------------------------------------------------------------
-// Renombramos 'Link' a 'LinkIcon' para evitar conflictos con React
 import { 
   MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, 
   Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, 
@@ -25,7 +24,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassw
 // -----------------------------------------------------------------------------
 const OFFLINE_MODE = false;
 
-// CLAVE API DIVIDIDA (Seguridad básica)
+// CLAVE API DIVIDIDA
 const AI_KEY_PART_A = "AIzaSyAIOAO4-h7lRRK8";
 const AI_KEY_PART_B = "SKAC2hgomoE-MaCZ58M";
 const GEMINI_API_KEY = `${AI_KEY_PART_A}${AI_KEY_PART_B}`;
@@ -42,7 +41,7 @@ const FIREBASE_CONFIG = {
 
 const APP_ID = 'gastos-finales-v1';
 
-// Inicialización Segura de Firebase
+// Inicialización de Firebase
 let app, auth, db;
 if (!OFFLINE_MODE) {
     try {
@@ -86,9 +85,7 @@ const RichText = ({ content }) => {
 
 const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
 
-// -----------------------------------------------------------------------------
-// 4. LÓGICA DE HORARIOS ROBUSTA (MULTI-SLOT)
-// -----------------------------------------------------------------------------
+// Horario por defecto
 const DEFAULT_SCHEDULE = { 
     lunes: { enabled: true, slots: [{start: '09:00', end: '18:00'}] },
     martes: { enabled: true, slots: [{start: '09:00', end: '18:00'}] },
@@ -99,6 +96,9 @@ const DEFAULT_SCHEDULE = {
     domingo: { enabled: false, slots: [{start: '10:00', end: '14:00'}] }
 };
 
+// -----------------------------------------------------------------------------
+// 4. LÓGICA DE HORARIOS (MULTI-SLOT)
+// -----------------------------------------------------------------------------
 const getAgentStatus = (config) => {
     try {
         if (!config) return { isAgentAvailable: true, message: "Disponible" };
@@ -121,14 +121,19 @@ const getAgentStatus = (config) => {
         const dayName = days[now.getDay()];
         const dayConfig = config.schedule?.[dayName];
         
-        if (!dayConfig || !dayConfig.enabled) return { isAgentAvailable: false, message: "Cerrado hoy" };
+        if (!dayConfig || !dayConfig.enabled) {
+            return { isAgentAvailable: false, message: "Cerrado hoy" };
+        }
 
         // 3. Turnos (Slots)
         let activeSlots = dayConfig.slots || [];
         if (activeSlots.length === 0 && dayConfig.start && dayConfig.end) {
             activeSlots = [{ start: dayConfig.start, end: dayConfig.end }];
         }
-        if (activeSlots.length === 0) return { isAgentAvailable: false, message: "Sin turnos" };
+
+        if (activeSlots.length === 0) {
+             return { isAgentAvailable: false, message: "Sin turnos" };
+        }
 
         const currentMins = now.getHours() * 60 + now.getMinutes();
         const isOpenNow = activeSlots.some(slot => {
@@ -142,6 +147,7 @@ const getAgentStatus = (config) => {
         });
 
         return isOpenNow ? { isAgentAvailable: true, message: "Agentes Disponibles" } : { isAgentAvailable: false, message: "Cerrado ahora" };
+
     } catch (error) {
         console.error("Error calculando horario:", error);
         return { isAgentAvailable: true, message: "Disponible" }; 
@@ -201,10 +207,6 @@ const LucyAvatar = ({ className = "w-10 h-10" }) => (<img src="https://imnufit.c
 const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
 const BrainAvatar = ({ className = "w-10 h-10" }) => (<div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}><Sparkles size={20} strokeWidth={2} /></div>);
 
-// -----------------------------------------------------------------------------
-// 7. COMPONENTES DEL DASHBOARD
-// -----------------------------------------------------------------------------
-
 // --- REPORTES ---
 const ReportsDashboard = ({ leads, agents }) => {
     const [filterAgent, setFilterAgent] = useState('all');
@@ -225,15 +227,11 @@ const ReportsDashboard = ({ leads, agents }) => {
         });
     }, [leads, filterAgent, startDate, endDate]);
 
-    // Métricas Ajustadas: 
-    // - Asignados = Leads que tienen un agente (fueron "vendidos" al agente)
-    // - Cierres = Leads con status 'sold' (el agente cerró la venta)
     const assignedLeads = filteredLeads.filter(l => l.assignedAgentId).length;
     const closedSales = filteredLeads.filter(l => l.status === 'sold').length;
     const conversionRate = assignedLeads > 0 ? ((closedSales / assignedLeads) * 100).toFixed(1) : 0;
     const activeLeads = filteredLeads.filter(l => !l.assignedAgentId && l.status !== 'archived').length;
 
-    // Rendimiento por Agente
     const agentPerformance = useMemo(() => {
         return agents.map(agent => {
             const myLeads = filteredLeads.filter(l => l.assignedAgentId === agent.id);
@@ -276,7 +274,6 @@ const ReportsDashboard = ({ leads, agents }) => {
                                 <td className="px-6 py-4"><div className="flex items-center gap-2"><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full" style={{ width: `${agent.conversion}%` }}></div></div><span className="text-[10px] font-bold text-gray-500 w-8 text-right">{agent.conversion}%</span></div></td>
                             </tr>
                         ))}
-                         {agentPerformance.length === 0 && <tr><td colSpan="4" className="text-center py-8 text-gray-400 text-xs">No hay datos para mostrar.</td></tr>}
                     </tbody>
                 </table>
             </div>
@@ -284,7 +281,9 @@ const ReportsDashboard = ({ leads, agents }) => {
     );
 };
 
-// --- MODAL DETALLE LEAD (Diseño Restaurado) ---
+// -----------------------------------------------------------------------------
+// 9. MODALES DE GESTIÓN (LEADS Y ASIGNACIÓN)
+// -----------------------------------------------------------------------------
 const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus, isArchive }) => {
     if (!lead) return null;
     const assignedAgent = agents.find(a => a.id === lead.assignedAgentId);
@@ -363,7 +362,7 @@ const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
 };
 
 // -----------------------------------------------------------------------------
-// 8. APP PRINCIPAL
+// 10. APP PRINCIPAL
 // -----------------------------------------------------------------------------
 function App() {
     const [user, setUser] = useState(null);
@@ -425,7 +424,24 @@ function App() {
 
     const handleLogin = async (e) => { e.preventDefault(); setIsLoggingIn(true); setLoginError(null); if (OFFLINE_MODE) { setTimeout(() => { setIsAdmin(true); navigateTo('admin'); setShowLogin(false); setIsLoggingIn(false); }, 1000); return; } try { await signInWithEmailAndPassword(auth, email, password); setShowLogin(false); setEmail(''); setPassword(''); } catch (error) { setLoginError("Credenciales no válidas."); } setIsLoggingIn(false); };
     const handleLogout = async () => { if (!OFFLINE_MODE) await signOut(auth); setIsAdmin(false); navigateTo('landing'); };
-    const saveLeadToDb = async (leadData) => { if (OFFLINE_MODE) { alert("Modo Offline"); return; } await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'leads'), { ...leadData, createdAt: serverTimestamp(), status: 'active' }); };
+    const notifyNewLead = (lead) => { if (Notification.permission === "granted") new Notification("¡Nuevo Lead!", { body: lead.nombre, icon: IMAGES.lucy }); if (aiConfig.webhookUrl && lead.status === 'active') fetch(aiConfig.webhookUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead) }).catch(e => console.error(e)); };
+    
+    // GUARDAR LEAD Y DISPARAR WEBHOOK (CORREGIDO)
+    const saveLeadToDb = async (leadData) => { 
+        if (OFFLINE_MODE) { alert("Modo Offline"); return; } 
+        await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'leads'), { ...leadData, createdAt: serverTimestamp(), status: 'active' }); 
+        
+        // Disparar Webhook
+        if (aiConfig.webhookUrl) {
+             fetch(aiConfig.webhookUrl, { 
+                method: 'POST', 
+                mode: 'no-cors', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(leadData) 
+            }).catch(e => console.error("Error Webhook:", e));
+        }
+    };
+    
     const saveAiConfig = async (newConfig) => { if (OFFLINE_MODE) { setAiConfig(newConfig); return; } if (!user || !isAdmin) return; await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config'), newConfig); setAiConfig(newConfig); };
 
     const deleteLead = async (ids) => { const idArray = Array.isArray(ids) ? ids : [ids]; if (!isAdmin) return; const batch = writeBatch(db); idArray.forEach(id => { const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id); batch.delete(ref); }); await batch.commit(); }
@@ -556,9 +572,7 @@ function App() {
     );
 }
 
-// -----------------------------------------------------------------------------
-// 9. LANDING VIEW
-// -----------------------------------------------------------------------------
+// --- LANDING VIEW ---
 function LandingView({ onStartChat, onOpenLogin }) {
     const testimonials = [{ text: "Gracias a Lucy encontré un plan perfecto para mi mamá sin gastar de más. Fue muy fácil.", author: "María G. - Florida" }, { text: "Excelente atención, muy paciente y clara. Me sentí muy segura con la información.", author: "Carmen R. - Texas" }, { text: "Rápido y sencillo. Encontré justo lo que necesitaba para mi tranquilidad.", author: "José L. - California" }];
     const [idx, setIdx] = useState(0);
@@ -586,9 +600,7 @@ function LandingView({ onStartChat, onOpenLogin }) {
     );
 }
 
-// -----------------------------------------------------------------------------
-// 10. AGENTS MANAGER (CRUD AGENTES)
-// -----------------------------------------------------------------------------
+// --- AGENTS MANAGER (CORREGIDO) ---
 function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, searchTerm }) {
     const [selectedAgent, setSelectedAgent] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -769,9 +781,7 @@ function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, 
     );
 }
 
-// -----------------------------------------------------------------------------
-// 11. ADMIN BRAIN (CONFIGURACIÓN FLEXIBLE)
-// -----------------------------------------------------------------------------
+// --- ADMIN BRAIN (NUEVO: HORARIOS FLEXIBLES) ---
 function AdminBrain({ aiConfig, onSaveConfig }) {
     const [c, setC] = useState(aiConfig);
     const [isSaving, setIsSaving] = useState(false);
@@ -895,12 +905,14 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
     );
 }
 
-// -----------------------------------------------------------------------------
-// 12. LEADS LIST (MODIFICADO: Botón Venta)
-// -----------------------------------------------------------------------------
+// --- LEADS LIST (MODIFICADO: Con Modal de Asignación Masiva) ---
 function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
     const [leadToDelete, setLeadToDelete] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
+
+    // NUEVO: Estado para el Modal de Asignación Masiva
+    const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
+    const [bulkSearchTerm, setBulkSearchTerm] = useState('');
 
     const filteredLeads = leads.filter(l => String(l.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()));
 
@@ -908,10 +920,18 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
     const handleSelectOne = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
     const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
-    const handleBulkAssignAction = (agentId) => { onOpenAssign(selectedIds); setSelectedIds([]); };
+
+    // Filtrado de agentes en el modal
+    const filteredAgentsForBulk = agents.filter(a => a.nombre.toLowerCase().includes(bulkSearchTerm.toLowerCase()));
+
+    const handleBulkAssignAction = (agentId) => {
+        onOpenAssign(selectedIds);
+        setSelectedIds([]); // Limpiar selección tras abrir modal
+    };
 
     return (
         <div className="animate-in fade-in duration-500">
+
             {leadToDelete && (
                 <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm border border-gray-100 text-center">
@@ -948,6 +968,7 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
                     <tbody className="divide-y divide-gray-50">
                         {filteredLeads.map(l => {
                             const assignedAgent = agents.find(a => a.id === l.assignedAgentId);
+                            // Verificamos si está vendido
                             const isSold = l.status === 'sold';
                             
                             return (
@@ -1061,12 +1082,26 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
           ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
           
           INSTRUCCIÓN TÉCNICA CRÍTICA:
-          Si el usuario YA ha proporcionado Nombre, Edad, Email y algún dato de contacto, y consideras que la etapa de recolección de datos ha terminado, TU RESPUESTA DEBE INCLUIR UN BLOQUE JSON AL FINAL con este formato:
+          Tu OBJETIVO PRINCIPAL es recolectar: Nombre, Edad, Estado (Ubicación), Salud, Si fuma, Email y Teléfono.
+          
+          NO PUEDES FINALIZAR ni mostrar botones si falta alguno de estos datos.
+          Si el usuario pide programar, PREGUNTA "¿Para cuándo le gustaría la llamada?".
+
+          SOLO CUANDO TENGAS TODOS LOS DATOS (Nombre, Edad, Email, Telefono, Salud, Fuma, Estado), devuelve este JSON al final de tu respuesta:
           \`\`\`json
-          { "action": "data_ready", "nombre": "...", "edad": "...", "email": "...", "telefono": "...", "resumen_ai": "..." }
+          { 
+            "action": "data_ready", 
+            "nombre": "...", 
+            "edad": "...", 
+            "email": "...", 
+            "telefono": "...", 
+            "salud": "...",
+            "fuma": "...",
+            "estado": "...",
+            "resumen_ai": "..." 
+          }
           \`\`\`
-          IMPORTANTE: NO te despidas definitivamente todavía. Solo di que tienes opciones disponibles.
-          Si no, responde normalmente como Lucy.
+          Si falta algo, PÍDELO AMABLEMENTE.
         `;
 
             const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
@@ -1078,7 +1113,7 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
                     const jsonStr = jsonMatch[1];
                     const data = JSON.parse(jsonStr);
                     if (data.action === 'data_ready') {
-                        setPendingLeadData({ nombre: data.nombre || 'Anonimo', edad: data.edad || '', email: data.email || '', telefono: data.telefono || '', resumen_ai: data.resumen_ai || 'Lead capturado por Lucy', fullChat: newM });
+                        setPendingLeadData(data);
                         setShowOptions(true);
                         reply = rawText.replace(jsonMatch[0], '').trim();
                     }
