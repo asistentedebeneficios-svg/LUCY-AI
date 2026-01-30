@@ -276,7 +276,7 @@ const ReportsDashboard = ({ leads, agents }) => {
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><UserCheck size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{assignedLeads}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Leads Asignados</p></div>
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-green-50 text-green-600 rounded-lg"><DollarSign size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{closedSales}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Ventas Cerradas</p></div>
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><TrendingUp size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{conversionRate}%</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Tasa Cierre</p></div>
-                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><Inbox size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{activeLeads}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Sin Asignar</p></div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><Inbox size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{activeLeads}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Sin Asignar</p></div>
             </div>
 
             <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
@@ -489,7 +489,7 @@ function App() {
         
         // Disparar Webhook Inmediatamente
         if (aiConfig.webhookUrl) {
-             fetch(aiConfig.webhookUrl, { 
+            fetch(aiConfig.webhookUrl, { 
                 method: 'POST', 
                 mode: 'no-cors', 
                 headers: { 'Content-Type': 'application/json' }, 
@@ -601,8 +601,8 @@ function App() {
                                 adminTab === 'assigned' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active' || l.status === 'sold') && l.assignedAgentId)} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> :
                                     adminTab === 'archived' ? <LeadsList leads={leads.filter(l => l.status === 'archived')} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={true} searchTerm={searchTerm} /> :
                                         adminTab === 'reports' ? <ReportsDashboard leads={leads} agents={agents} /> :
-                                        adminTab === 'agents' ? <AgentsManager agents={agents} leads={leads} onOpenLead={(l) => setSelectedLead(l)} onSaveAgent={saveAgent} onDeleteAgent={deleteAgent} searchTerm={searchTerm} /> :
-                                            <AdminBrain aiConfig={aiConfig} onSaveConfig={saveAiConfig} />}
+                                            adminTab === 'agents' ? <AgentsManager agents={agents} leads={leads} onOpenLead={(l) => setSelectedLead(l)} onSaveAgent={saveAgent} onDeleteAgent={deleteAgent} searchTerm={searchTerm} /> :
+                                                <AdminBrain aiConfig={aiConfig} onSaveConfig={saveAiConfig} />}
                         </div>
                 )}
             </main>
@@ -787,7 +787,7 @@ function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, 
                 <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg">
                         <h3 className="text-lg font-bold mb-4">Nuevo Agente</h3>
-                        <form onSubmit={handleSave} className="space-y-4">
+                        <form onSubmit={handleFormSubmit} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-500 uppercase">Nombre</label><input required className="w-full p-2 border rounded-lg text-sm" value={formData.nombre || ''} onChange={e => setFormData({...formData, nombre: e.target.value})} /></div><div><label className="text-[10px] font-bold text-gray-500 uppercase">Teléfono</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.telefono || ''} onChange={e => setFormData({...formData, telefono: e.target.value})} /></div></div>
                             <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-500 uppercase">Email</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} /></div><div><label className="text-[10px] font-bold text-gray-500 uppercase">Foto URL</label><input className="w-full p-2 border rounded-lg text-sm" placeholder="https://..." value={formData.foto || ''} onChange={e => setFormData({...formData, foto: e.target.value})} /></div></div>
                             <div><label className="text-[10px] font-bold text-gray-500 uppercase">Estados</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.estados || ''} onChange={e => setFormData({...formData, estados: e.target.value})} /></div>
@@ -1042,15 +1042,20 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
             
             const scheduleText = getScheduleText(aiConfig?.schedule);
             
-            const DEFAULT_SYSTEM_PROMPT = `Eres Lucy...`; // Definido arriba
+            const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
             const prompt = `
-          ${aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT}
+          ${systemBase}
           ${availabilityInstruction}
           
           IMPORTANTE - HORARIOS DE TRABAJO ACTUALES (EST / FLORIDA):
           ${scheduleText}
-          (Usa esta información para confirmar citas. Si el usuario dice una hora, ASUME SU HORA LOCAL, pero internamente tú sabes que operamos en EST. Confírmale la hora que él dijo.)
+          
+          REGLA DE AGENDAMIENTO: 
+          1. Verifica SIEMPRE el horario arriba mencionado antes de confirmar o sugerir una cita.
+          2. NUNCA sugieras ni aceptes agendar una llamada fuera de esos rangos de tiempo. 
+          3. Si el usuario propone una hora fuera del horario laboral, dile amablemente que en ese momento nuestros agentes no están disponibles y ofrece el espacio abierto más cercano dentro del horario.
+          4. Asume que la hora que dice el usuario es SU HORA LOCAL, pero confírmale diciendo "Perfecto, agendado para sus [HORA]".
 
           HISTORIAL:
           ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
