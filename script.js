@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'https:
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
 
 // -----------------------------------------------------------------------------
-// 1. IMPORTACIÓN DE ICONOS
+// 1. IMPORTACIÓN DE ICONOS (LUCIDE REACT)
 // -----------------------------------------------------------------------------
 import { 
   MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, 
@@ -12,7 +12,7 @@ import {
   Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, 
   CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, 
   Mail, UserMinus, UserPlus, Link as LinkIcon, Plus, MinusCircle, 
-  BarChart3, TrendingUp, PieChart, Wallet, BadgeCheck, AlertCircle
+  BarChart3, TrendingUp, PieChart, Wallet, BadgeCheck, AlertCircle, ThumbsUp, ThumbsDown
 } from 'https://esm.sh/lucide-react@0.344.0';
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
@@ -20,11 +20,11 @@ import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, dele
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
 // -----------------------------------------------------------------------------
-// 2. CONFIGURACIÓN
+// 2. CONFIGURACIÓN DEL SISTEMA
 // -----------------------------------------------------------------------------
 const OFFLINE_MODE = false;
 
-// CLAVE API DIVIDIDA
+// CLAVE API DIVIDIDA (Seguridad básica)
 const AI_KEY_PART_A = "AIzaSyAIOAO4-h7lRRK8";
 const AI_KEY_PART_B = "SKAC2hgomoE-MaCZ58M";
 const GEMINI_API_KEY = `${AI_KEY_PART_A}${AI_KEY_PART_B}`;
@@ -41,7 +41,7 @@ const FIREBASE_CONFIG = {
 
 const APP_ID = 'gastos-finales-v1';
 
-// Inicialización
+// Inicialización de Firebase
 let app, auth, db;
 if (!OFFLINE_MODE) {
     try {
@@ -49,19 +49,23 @@ if (!OFFLINE_MODE) {
         auth = getAuth(app);
         db = getFirestore(app);
     } catch (e) {
-        console.error("Error Firebase:", e);
+        console.error("Error crítico inicializando Firebase:", e);
     }
 }
 
 // -----------------------------------------------------------------------------
-// 3. UTILIDADES
+// 3. UTILIDADES Y HELPERS
 // -----------------------------------------------------------------------------
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
+// Limpia el mensaje de IA de etiquetas internas y JSON
 function cleanAiMessage(text) {
     if (!text) return '';
-    let cleaned = text.replace(new RegExp('\\[Botón:.*?\\]', 'gi'), '').replace(new RegExp('\\[Button:.*?\\]', 'gi'), '');
-    return cleaned.split('***').join('').split('---').join('').trim();
+    // Eliminar bloques JSON
+    let cleaned = text.replace(/```json[\s\S]*?```/g, '');
+    // Eliminar etiquetas de modo [MODE:...]
+    cleaned = cleaned.replace(/\[MODE:[A-Z_]+\]/g, '');
+    return cleaned.trim();
 }
 
 function formatScheduledDate(d) {
@@ -85,6 +89,44 @@ const RichText = ({ content }) => {
 
 const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
 
+// PROMPT DEL SISTEMA POR DEFECTO (EL CEREBRO DE LUCY)
+const DEFAULT_SYSTEM_PROMPT = `
+Eres Lucy, una asistente experta y empática en "Gastos Finales" (Seguros de Vida para cobertura funeraria). Tu misión es educar y conectar, no vender agresivamente.
+
+OBJETIVO: Recolectar obligatoriamente: Nombre, Edad, Estado (USA), Salud, Si Fuma, y Presupuesto Mensual.
+
+REGLAS DE INTERACCIÓN (FLUJO):
+1. SALUDO: Sé amable, rompe el hielo. Consigue el nombre.
+2. PERMISO: Pide Edad y Estado (Location) justificando que es para buscar planes en su zona.
+3. DETALLES (HÍBRIDO): 
+   - Pregunta por la Salud. AÑADE LA ETIQUETA [MODE:HEALTH] al final de tu pregunta.
+   - Pregunta si Fuma. AÑADE LA ETIQUETA [MODE:SMOKER] al final.
+   - Pregunta el Presupuesto (Capacidad de pago). AÑADE LA ETIQUETA [MODE:BUDGET] al final.
+4. CIERRE (HÍBRIDO):
+   - Solo cuando tengas TODOS los datos anteriores, muestra opciones de cierre. AÑADE LA ETIQUETA [MODE:CLOSING] al final.
+
+REGLAS ESPECIALES:
+- "VÍA RÁPIDA": Si el usuario pide hablar con un agente de inmediato o se muestra impaciente, activa el modo "Operadora". Diles: "Entendido. Para transferirle con el agente licenciado correcto en su estado, necesito confirmar su ficha técnica en 30 segundos." y pide los datos faltantes rápido.
+- ZONA HORARIA: Tú calculas la hora. Si el usuario dice "Llámame a las 2pm", asume que es SU hora local. Tú internamente conviértelo mentalmente si es necesario, pero confírmale "A sus 2pm".
+
+FORMATO FINAL DE DATOS (Solo cuando tengas nombre, edad, estado, salud, fuma, presupuesto, email y teléfono):
+Al final, genera un JSON oculto:
+\`\`\`json
+{
+  "action": "data_ready",
+  "nombre": "...",
+  "edad": "...",
+  "estado": "...",
+  "salud": "...",
+  "fuma": "...",
+  "presupuesto": "...",
+  "email": "...",
+  "telefono": "...",
+  "resumen_ai": "..."
+}
+\`\`\`
+`;
+
 const DEFAULT_SCHEDULE = { 
     lunes: { enabled: true, slots: [{start: '09:00', end: '18:00'}] },
     martes: { enabled: true, slots: [{start: '09:00', end: '18:00'}] },
@@ -95,7 +137,9 @@ const DEFAULT_SCHEDULE = {
     domingo: { enabled: false, slots: [{start: '10:00', end: '14:00'}] }
 };
 
-// 4. LÓGICA DE HORARIOS
+// -----------------------------------------------------------------------------
+// 4. LÓGICA DE HORARIOS (MULTI-SLOT)
+// -----------------------------------------------------------------------------
 const getAgentStatus = (config) => {
     try {
         if (!config) return { isAgentAvailable: true, message: "Disponible" };
@@ -153,7 +197,9 @@ const getScheduleText = (schedule) => {
     }).join('\n');
 };
 
-// 5. API IA
+// -----------------------------------------------------------------------------
+// 5. CONEXIÓN IA (Auto-Retry)
+// -----------------------------------------------------------------------------
 async function fetchGeminiWithRetry(payload) {
     if (!rateLimit.check()) throw new Error("Espera unos segundos.");
     if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; }
@@ -173,23 +219,17 @@ async function fetchGeminiWithRetry(payload) {
     throw new Error(`Error de conexión AI: ${lastError || "Verifica tu conexión"}`);
 }
 
-function useInactivityTimer(action, timeout = 600000) { 
-    const savedAction = useRef(action);
-    useEffect(() => { savedAction.current = action; }, [action]);
-    useEffect(() => { 
-        let timer; 
-        const resetTimer = () => { clearTimeout(timer); timer = setTimeout(() => savedAction.current(), timeout); }; 
-        window.addEventListener('mousemove', resetTimer); window.addEventListener('click', resetTimer); window.addEventListener('keypress', resetTimer); window.addEventListener('touchstart', resetTimer); resetTimer(); 
-        return () => { clearTimeout(timer); window.removeEventListener('mousemove', resetTimer); window.removeEventListener('click', resetTimer); window.removeEventListener('keypress', resetTimer); window.removeEventListener('touchstart', resetTimer); }; 
-    }, [timeout]); 
-}
-
+// -----------------------------------------------------------------------------
 // 6. COMPONENTES VISUALES
+// -----------------------------------------------------------------------------
 const LucyAvatar = ({ className = "w-10 h-10" }) => (<img src="https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" alt="Lucy" className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"; }} />);
 const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
-const BrainAvatar = ({ className = "w-10 h-10" }) => (<div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}><Sparkles size={20} strokeWidth={2} /></div>);
 
-// --- DASHBOARD REPORTES ---
+// -----------------------------------------------------------------------------
+// 7. COMPONENTES DEL DASHBOARD
+// -----------------------------------------------------------------------------
+
+// --- REPORTES ---
 const ReportsDashboard = ({ leads, agents }) => {
     const [filterAgent, setFilterAgent] = useState('all');
     const [startDate, setStartDate] = useState('');
@@ -308,18 +348,18 @@ const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus,
                     {/* HISTORIAL DE CONVERSACIÓN CORREGIDO */}
                     <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                         <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-4 flex items-center gap-2"><MessageSquare size={12}/> Historial Completo</span>
-                        <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                        <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                             {lead.fullChat && Array.isArray(lead.fullChat) ? (
                                 lead.fullChat.map((m, i) => (
                                     <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-                                        <div className={`px-4 py-2.5 rounded-2xl text-xs max-w-[90%] leading-relaxed ${m.role === 'user' ? 'bg-[#0071e3] text-white rounded-br-none' : 'bg-white border border-gray-200 text-[#1d1d1f] rounded-bl-none shadow-sm'}`}>
+                                        <div className={`px-4 py-2.5 rounded-2xl text-xs max-w-[90%] leading-relaxed shadow-sm ${m.role === 'user' ? 'bg-[#0071e3] text-white rounded-br-none' : 'bg-white border border-gray-200 text-[#1d1d1f] rounded-bl-none'}`}>
                                             <RichText content={String(m.content || '')} />
                                         </div>
                                         <span className="text-[9px] text-gray-400 mt-1 px-1">{m.role === 'user' ? 'Usuario' : 'Lucy'}</span>
                                     </div>
                                 ))
                             ) : (
-                                <div className="text-center text-gray-400 text-xs py-4">No hay historial disponible.</div>
+                                <div className="text-center text-gray-400 text-xs py-4 flex flex-col items-center gap-2"><MessageSquare size={20} className="opacity-20"/> No hay historial disponible.</div>
                             )}
                         </div>
                     </div>
@@ -384,13 +424,27 @@ function App() {
     const [assignModalData, setAssignModalData] = useState({ isOpen: false, targetIds: [] });
 
     const [aiConfig, setAiConfig] = useState({
-        systemPrompt: `Eres Lucy...`, webhookUrl: "", assignmentWebhookUrl: "", schedule: DEFAULT_SCHEDULE,
-        vacationMode: false, vacationStart: "", vacationEnd: "", personality: "Empático"
+        systemPrompt: DEFAULT_SYSTEM_PROMPT, 
+        webhookUrl: "", 
+        assignmentWebhookUrl: "", 
+        schedule: DEFAULT_SCHEDULE,
+        vacationMode: false, 
+        vacationStart: "", 
+        vacationEnd: "", 
+        personality: "Empático"
     });
 
     useEffect(() => { const handlePopState = (event) => { if (event.state && event.state.view) setView(event.state.view); else setView('landing'); }; window.addEventListener('popstate', handlePopState); return () => window.removeEventListener('popstate', handlePopState); }, []);
     const navigateTo = (newView) => { setView(newView); window.history.pushState({ view: newView }, '', `#${newView}`); };
-    useInactivityTimer(() => { if (view !== 'landing') { if (isAdmin) handleLogout(); else navigateTo('landing'); } }, 600000);
+    
+    // Inactivity Handler
+    const savedLogout = useRef(() => { if(isAdmin) { signOut(auth); setIsAdmin(false); navigateTo('landing'); } else { navigateTo('landing'); } });
+    useEffect(() => {
+        let t; const reset = () => { clearTimeout(t); t = setTimeout(() => savedLogout.current(), 600000); };
+        window.addEventListener('mousemove', reset); window.addEventListener('click', reset);
+        reset();
+        return () => { clearTimeout(t); window.removeEventListener('mousemove', reset); window.removeEventListener('click', reset); };
+    }, [isAdmin]);
 
     useEffect(() => {
         if (OFFLINE_MODE) { setUser({ uid: 'offline', isAnonymous: true }); return; }
@@ -411,7 +465,14 @@ function App() {
             const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             setLeads(data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
         }, (error) => { if (error.code === 'permission-denied' && isAdmin) setPermissionError(true); });
-        getDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config')).then(s => s.exists() && setAiConfig(prev => ({ ...prev, ...s.data() }))).catch(e => console.log("Default Config"));
+        
+        getDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config')).then(s => {
+            if (s.exists()) {
+                // Merge con default para asegurar que no falten campos
+                setAiConfig(prev => ({ ...prev, ...s.data() }));
+            }
+        }).catch(e => console.log("Usando Config Default"));
+        
         return () => unsub();
     }, [user, isAdmin]);
 
@@ -424,11 +485,10 @@ function App() {
 
     const handleLogin = async (e) => { e.preventDefault(); setIsLoggingIn(true); setLoginError(null); if (OFFLINE_MODE) { setTimeout(() => { setIsAdmin(true); navigateTo('admin'); setShowLogin(false); setIsLoggingIn(false); }, 1000); return; } try { await signInWithEmailAndPassword(auth, email, password); setShowLogin(false); setEmail(''); setPassword(''); } catch (error) { setLoginError("Credenciales no válidas."); } setIsLoggingIn(false); };
     const handleLogout = async () => { if (!OFFLINE_MODE) await signOut(auth); setIsAdmin(false); navigateTo('landing'); };
-    const notifyNewLead = (lead) => { if (Notification.permission === "granted") new Notification("¡Nuevo Lead!", { body: lead.nombre, icon: IMAGES.lucy }); if (aiConfig.webhookUrl && lead.status === 'active') fetch(aiConfig.webhookUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead) }).catch(e => console.error(e)); };
     
     // GUARDAR LEAD Y DISPARAR WEBHOOK (CORREGIDO)
     const saveLeadToDb = async (leadData) => { 
-        if (OFFLINE_MODE) { alert("Modo Offline"); return; } 
+        if (OFFLINE_MODE) { alert("Modo Offline: Lead guardado localmente"); return; } 
         await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'leads'), { ...leadData, createdAt: serverTimestamp(), status: 'active' }); 
         
         // Disparar Webhook Inmediatamente
@@ -542,7 +602,7 @@ function App() {
                             </div>
 
                             {adminTab === 'active' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active') && !l.assignedAgentId)} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> :
-                                adminTab === 'assigned' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active') && l.assignedAgentId)} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> :
+                                adminTab === 'assigned' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active' || l.status === 'sold') && l.assignedAgentId)} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> :
                                     adminTab === 'archived' ? <LeadsList leads={leads.filter(l => l.status === 'archived')} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={true} searchTerm={searchTerm} /> :
                                         adminTab === 'reports' ? <ReportsDashboard leads={leads} agents={agents} /> :
                                         adminTab === 'agents' ? <AgentsManager agents={agents} leads={leads} onOpenLead={(l) => setSelectedLead(l)} onSaveAgent={saveAgent} onDeleteAgent={deleteAgent} searchTerm={searchTerm} /> :
@@ -725,54 +785,17 @@ function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, 
 
     return (
         <div className="animate-in fade-in space-y-6">
-            <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold text-gray-800">Gestión de Agentes</h2>
-                <div className="flex gap-2">
-                    {selectedIds.length > 0 && (<button onClick={handleDeleteSelected} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors flex items-center gap-2"><Trash2 size={16} /> Eliminar ({selectedIds.length})</button>)}
-                    <button onClick={() => openForm(null)} className="bg-black text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors flex items-center gap-2 shadow-lg shadow-gray-200"><UserCog size={16} /> Nuevo Agente</button>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredAgents.map(agent => (
-                    <div key={agent.id} className={`bg-white rounded-2xl p-5 border transition-all hover:shadow-md cursor-pointer relative group ${selectedIds.includes(agent.id) ? 'border-blue-500 bg-blue-50/10' : 'border-gray-100'}`} onClick={() => setSelectedAgent(agent)}>
-                        <div className="absolute top-4 right-4 z-10" onClick={e => e.stopPropagation()}><input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(agent.id)} onChange={() => handleSelectOne(agent.id)} /></div>
-                        <div className="flex items-center gap-4 mb-4">
-                            <img src={agent.foto || "https://ui-avatars.com/api/?name=" + agent.nombre} className="w-14 h-14 rounded-full object-cover bg-gray-200" />
-                            <div><h3 className="font-bold text-gray-900">{agent.nombre}</h3><p className="text-xs text-gray-500 font-medium">{agent.email}</p></div>
-                        </div>
-                        <div className="space-y-2 text-xs text-gray-600">
-                            <div className="flex items-center gap-2"><Phone size={12} /> {agent.telefono || 'N/A'}</div>
-                            <div className="flex items-center gap-2"><MapPin size={12} /> <span className="truncate max-w-[150px]">{agent.estados || 'Sin licencias'}</span></div>
-                        </div>
-                        <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Ver Bitácora</span>
-                            <button onClick={(e) => { e.stopPropagation(); openForm(agent); }} className="p-2 bg-gray-50 rounded-full text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"><Pencil size={14} /></button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-
+            <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-gray-800">Agentes</h2><div className="flex gap-2">{selectedIds.length > 0 && <button onClick={handleDeleteSelected} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-sm font-bold flex gap-2"><Trash2 size={16}/> Eliminar</button>}<button onClick={() => { setFormData({}); setIsEditing(true); }} className="bg-black text-white px-4 py-2 rounded-xl text-sm font-bold flex gap-2 shadow-lg"><UserCog size={16}/> Nuevo</button></div></div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">{filteredAgents.map(a => (<div key={a.id} className={`bg-white rounded-2xl p-5 border transition-all hover:shadow-md cursor-pointer relative ${selectedIds.includes(a.id) ? 'border-blue-500 bg-blue-50/10' : 'border-gray-100'}`} onClick={() => setSelectedAgent(a)}><div className="absolute top-4 right-4" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(a.id)} onChange={() => handleSelectOne(a.id)} className="custom-checkbox"/></div><div className="flex items-center gap-4 mb-4"><img src={a.foto || "https://ui-avatars.com/api/?name="+a.nombre} className="w-14 h-14 rounded-full object-cover bg-gray-200"/><div><h3 className="font-bold text-gray-900">{a.nombre}</h3><p className="text-xs text-gray-500">{a.email}</p></div></div><div className="text-xs text-gray-600 space-y-1"><div className="flex gap-2"><Phone size={12}/> {a.telefono}</div><div className="flex gap-2"><MapPin size={12}/> {a.estados}</div></div></div>))}</div>
             {isEditing && (
-                <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg">
-                        <h3 className="text-lg font-bold mb-4">{editingAgent ? 'Editar Agente' : 'Nuevo Agente'}</h3>
-                        <form onSubmit={handleFormSubmit} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div><label className="text-[10px] font-bold text-gray-500 uppercase">Nombre Completo</label><input required className="w-full p-2 border rounded-lg text-sm" value={formData.nombre} onChange={e => setFormData({ ...formData, nombre: e.target.value })} /></div>
-                                <div><label className="text-[10px] font-bold text-gray-500 uppercase">Teléfono</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.telefono} onChange={e => setFormData({ ...formData, telefono: e.target.value })} /></div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div><label className="text-[10px] font-bold text-gray-500 uppercase">Email</label><input type="email" className="w-full p-2 border rounded-lg text-sm" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} /></div>
-                                <div><label className="text-[10px] font-bold text-gray-500 uppercase">Foto (URL)</label><input className="w-full p-2 border rounded-lg text-sm" placeholder="https://..." value={formData.foto} onChange={e => setFormData({ ...formData, foto: e.target.value })} /></div>
-                            </div>
-                            <div><label className="text-[10px] font-bold text-gray-500 uppercase">Estados (Licencias)</label><input placeholder="Ej: FL, TX, CA" className="w-full p-2 border rounded-lg text-sm" value={formData.estados} onChange={e => setFormData({ ...formData, estados: e.target.value })} /></div>
-                            <div><label className="text-[10px] font-bold text-gray-500 uppercase">Mensaje Especial</label><textarea className="w-full p-2 border rounded-lg text-sm h-20" value={formData.mensaje} onChange={e => setFormData({ ...formData, mensaje: e.target.value })} /></div>
-
-                            <div className="flex gap-2 justify-end mt-4">
-                                <button type="button" onClick={() => { setIsEditing(false); setEditingAgent(null) }} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                                <button type="submit" className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800">Guardar</button>
-                            </div>
+                        <h3 className="text-lg font-bold mb-4">Nuevo Agente</h3>
+                        <form onSubmit={handleSave} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-500 uppercase">Nombre</label><input required className="w-full p-2 border rounded-lg text-sm" value={formData.nombre || ''} onChange={e => setFormData({...formData, nombre: e.target.value})} /></div><div><label className="text-[10px] font-bold text-gray-500 uppercase">Teléfono</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.telefono || ''} onChange={e => setFormData({...formData, telefono: e.target.value})} /></div></div>
+                            <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-500 uppercase">Email</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} /></div><div><label className="text-[10px] font-bold text-gray-500 uppercase">Foto URL</label><input className="w-full p-2 border rounded-lg text-sm" placeholder="https://..." value={formData.foto || ''} onChange={e => setFormData({...formData, foto: e.target.value})} /></div></div>
+                            <div><label className="text-[10px] font-bold text-gray-500 uppercase">Estados</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.estados || ''} onChange={e => setFormData({...formData, estados: e.target.value})} /></div>
+                            <div className="flex gap-2 justify-end mt-4"><button type="button" onClick={() => setIsEditing(false)} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button><button type="submit" className="px-4 py-2 text-sm bg-black text-white rounded-lg">Guardar</button></div>
                         </form>
                     </div>
                 </div>
@@ -793,36 +816,10 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
     const [authPassword, setAuthPassword] = useState('');
     const [authError, setAuthError] = useState(null);
 
-    // Funciones para Horarios Múltiples
-    const handleAddSlot = (day) => {
-        const currentSlots = c.schedule?.[day]?.slots || [];
-        // Valor por defecto si es el primer slot
-        const newSlot = { start: "09:00", end: "18:00" };
-        setC(prev => ({ ...prev, schedule: { ...prev.schedule, [day]: { ...(prev.schedule[day] || {}), enabled: true, slots: [...currentSlots, newSlot] } } }));
-    };
-
-    const handleRemoveSlot = (day, index) => {
-        const currentSlots = c.schedule?.[day]?.slots || [];
-        const newSlots = currentSlots.filter((_, i) => i !== index);
-        // Si borramos todos, deshabilitamos el día
-        setC(prev => ({ ...prev, schedule: { ...prev.schedule, [day]: { ...(prev.schedule[day] || {}), slots: newSlots, enabled: newSlots.length > 0 } } }));
-    };
-
-    const handleSlotChange = (day, index, field, value) => {
-        const currentSlots = [...(c.schedule?.[day]?.slots || [])];
-        if (currentSlots[index]) {
-            currentSlots[index] = { ...currentSlots[index], [field]: value };
-            setC(prev => ({ ...prev, schedule: { ...prev.schedule, [day]: { ...(prev.schedule[day] || {}), slots: currentSlots } } }));
-        }
-    };
-
-    const handleDayToggle = (day) => {
-        const isEnabled = !c.schedule?.[day]?.enabled;
-        let newSlots = c.schedule?.[day]?.slots || [];
-        if (isEnabled && newSlots.length === 0) newSlots = [{ start: "09:00", end: "18:00" }];
-        
-        setC(prev => ({ ...prev, schedule: { ...prev.schedule, [day]: { ...(prev.schedule[day] || {}), enabled: isEnabled, slots: newSlots } } }));
-    };
+    const handleAddSlot = (day) => { const slots = c.schedule?.[day]?.slots || []; setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule[day] || {}), enabled: true, slots: [...slots, {start: "09:00", end: "18:00"}] } } })); };
+    const handleRemoveSlot = (day, idx) => { const slots = (c.schedule?.[day]?.slots || []).filter((_, i) => i !== idx); setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule[day] || {}), slots, enabled: slots.length > 0 } } })); };
+    const handleSlotChange = (day, idx, field, val) => { const slots = [...(c.schedule?.[day]?.slots || [])]; if (slots[idx]) { slots[idx] = { ...slots[idx], [field]: val }; setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule[day] || {}), slots } } })); } };
+    const handleDayToggle = (day) => { const enabled = !c.schedule?.[day]?.enabled; let slots = c.schedule?.[day]?.slots || []; if (enabled && slots.length === 0) slots = [{start: "09:00", end: "18:00"}]; setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule[day] || {}), enabled, slots } } })); };
 
     const handleSave = async () => { setIsSaving(true); await onSaveConfig(c); setIsSaving(false); setIsEditingWebhook(false); setIsEditingAssignmentWebhook(false); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000); };
     const daysList = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
@@ -831,61 +828,36 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
 
     return (
         <div className="max-w-4xl mx-auto animate-in fade-in space-y-6">
-            <div className="bg-white p-8 rounded-[24px] shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100 flex flex-col md:flex-row gap-10">
+            <div className="bg-white p-8 rounded-[24px] shadow-sm border border-gray-100 flex flex-col md:flex-row gap-10">
                 <div className="flex-1 space-y-6">
-                    <div>
-                        <h3 className="font-semibold text-[#1d1d1f] mb-4 text-sm flex items-center gap-2">Configuración del Cerebro</h3>
-                        <div className="space-y-3 mb-6 bg-[#F5F5F7] p-5 rounded-2xl border border-gray-100">
-                            <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-2"><span className="text-xs font-bold uppercase tracking-wide text-slate-500 flex items-center gap-2"><Clock size={14} /> Horario Semanal</span><label className="flex items-center gap-2 cursor-pointer text-[10px] font-bold text-slate-500 bg-white px-2 py-1 rounded-md shadow-sm border border-slate-200"><input type="checkbox" checked={c.vacationMode} onChange={(e) => setC({ ...c, vacationMode: e.target.checked })} className="accent-orange-500" /> Modo Vacaciones</label></div>
-                            {c.vacationMode && (<div className="flex gap-4 items-center bg-orange-50 p-3 rounded-xl border border-orange-100 mb-3 animate-in fade-in"><div><label className="text-[10px] font-bold text-orange-600 uppercase block mb-1">Fecha Inicio</label><input type="date" value={c.vacationStart} onChange={(e) => setC({ ...c, vacationStart: e.target.value })} className="bg-white border border-orange-200 rounded-lg px-2 py-1 text-xs text-orange-800 outline-none focus:ring-2 focus:ring-orange-200" /></div><span className="text-orange-400 font-bold">→</span><div><label className="text-[10px] font-bold text-orange-600 uppercase block mb-1">Fecha Fin</label><input type="date" value={c.vacationEnd} onChange={(e) => setC({ ...c, vacationEnd: e.target.value })} className="bg-white border border-orange-200 rounded-lg px-2 py-1 text-xs text-orange-800 outline-none focus:ring-2 focus:ring-orange-200" /></div></div>)}
-                            
-                            {daysList.map(day => (
-                                <div key={day} className="border-b border-slate-200/50 pb-3 last:border-0 last:pb-0">
-                                    <div className="flex items-center justify-between group mb-2">
-                                        <div className="flex items-center gap-3">
-                                            <input type="checkbox" checked={c.schedule?.[day]?.enabled} onChange={() => handleDayToggle(day)} className="accent-black w-4 h-4 rounded cursor-pointer" />
-                                            <span className={`text-xs font-bold uppercase tracking-wide w-20 ${c.schedule?.[day]?.enabled ? 'text-slate-700' : 'text-slate-400'}`}>{day}</span>
-                                        </div>
-                                        {c.schedule?.[day]?.enabled && (
-                                            <button onClick={() => handleAddSlot(day)} className="p-1 bg-slate-200 hover:bg-slate-300 rounded-full text-slate-600 transition-colors" title="Agregar turno"><Plus size={12} /></button>
-                                        )}
-                                    </div>
-                                    
-                                    {c.schedule?.[day]?.enabled ? (
-                                        <div className="space-y-2 pl-8">
-                                            {(c.schedule[day].slots || []).map((slot, idx) => (
-                                                <div key={idx} className="flex gap-2 items-center animate-in fade-in">
-                                                    <input type="time" value={slot.start} onChange={(e) => handleSlotChange(day, idx, 'start', e.target.value)} className="bg-white border border-slate-200 p-1 rounded text-xs w-20 text-center font-medium" />
-                                                    <span className="text-slate-400 text-[10px]">a</span>
-                                                    <input type="time" value={slot.end} onChange={(e) => handleSlotChange(day, idx, 'end', e.target.value)} className="bg-white border border-slate-200 p-1 rounded text-xs w-20 text-center font-medium" />
-                                                    <button onClick={() => handleRemoveSlot(day, idx)} className="text-red-400 hover:text-red-600 ml-1"><MinusCircle size={14} /></button>
-                                                </div>
-                                            ))}
-                                            {/* Retrocompatibilidad visual si no hay slots array */}
-                                            {(!c.schedule[day].slots && c.schedule[day].start) && (
-                                                <div className="text-[10px] text-orange-400 italic">Formato antiguo detectado. Agrega un turno para actualizar.</div>
-                                            )}
-                                        </div>
-                                    ) : (<span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest px-8">Cerrado</span>)}
+                    <h3 className="font-bold text-gray-800">Configuración del Cerebro</h3>
+                    <div className="bg-[#F5F5F7] p-5 rounded-2xl border border-gray-100 space-y-4">
+                        <div className="flex justify-between items-center"><span className="text-xs font-bold uppercase text-gray-500">Horarios</span><label className="flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer"><input type="checkbox" checked={c.vacationMode} onChange={e => setC({...c, vacationMode: e.target.checked})} /> Modo Vacaciones</label></div>
+                        {c.vacationMode && <div className="flex gap-2 items-center bg-orange-50 p-2 rounded-lg border border-orange-100"><span className="text-[10px] font-bold text-orange-600">INICIO</span><input type="date" value={c.vacationStart} onChange={e => setC({...c, vacationStart: e.target.value})} className="bg-white border rounded px-2 py-1 text-xs"/><span className="text-[10px] font-bold text-orange-600">FIN</span><input type="date" value={c.vacationEnd} onChange={e => setC({...c, vacationEnd: e.target.value})} className="bg-white border rounded px-2 py-1 text-xs"/></div>}
+                        {daysList.map(d => (
+                            <div key={d} className="border-b border-slate-200/50 pb-3 last:border-0 last:pb-0">
+                                <div className="flex justify-between items-center mb-1">
+                                    <div className="flex items-center gap-2"><input type="checkbox" checked={c.schedule?.[d]?.enabled} onChange={() => handleDayToggle(d)} /><span className={`text-xs font-bold uppercase w-20 ${c.schedule?.[d]?.enabled ? 'text-black' : 'text-gray-400'}`}>{d}</span></div>
+                                    {c.schedule?.[d]?.enabled && <button onClick={() => handleAddSlot(d)} className="text-blue-500 hover:text-blue-700"><Plus size={14}/></button>}
                                 </div>
-                            ))}
-                        </div>
-                        <label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Instrucciones Base</label>
-                        <textarea value={c.systemPrompt} onChange={(e) => setC({ ...c, systemPrompt: e.target.value })} className="w-full h-32 p-4 bg-white border border-gray-200 rounded-xl text-xs font-mono text-[#1d1d1f] focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all shadow-sm leading-relaxed resize-none" />
+                                {c.schedule?.[d]?.enabled && (c.schedule[d].slots || []).map((s, i) => (
+                                    <div key={i} className="flex gap-2 items-center pl-6 mt-1">
+                                        <input type="time" value={s.start} onChange={e => handleSlotChange(d, i, 'start', e.target.value)} className="border rounded px-1 text-xs" />
+                                        <span className="text-xs text-gray-400">a</span>
+                                        <input type="time" value={s.end} onChange={e => handleSlotChange(d, i, 'end', e.target.value)} className="border rounded px-1 text-xs" />
+                                        <button onClick={() => handleRemoveSlot(d, i)} className="text-red-400 hover:text-red-600"><MinusCircle size={14}/></button>
+                                    </div>
+                                ))}
+                            </div>
+                        ))}
                     </div>
+                    <div><label className="text-[10px] font-bold text-gray-500 uppercase block mb-2">Instrucciones Base</label><textarea value={c.systemPrompt} onChange={e => setC({...c, systemPrompt: e.target.value})} className="w-full h-32 p-3 border rounded-xl text-xs font-mono resize-none" /></div>
                 </div>
-                <div className="md:w-72 space-y-6">
-                    <div>
-                        <div className="flex justify-between items-center mb-2"><label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide">Webhook: Nuevo Lead</label>{!isEditingWebhook && (<button onClick={() => handleEditWebhookClick('main')} className="text-blue-500 hover:text-blue-700 transition-colors" title="Editar Webhook"><Pencil size={12} /></button>)}</div>
-                        <input type={isEditingWebhook ? "text" : "password"} placeholder="https://hooks.zapier.com/..." value={c.webhookUrl || ""} onChange={(e) => setC({ ...c, webhookUrl: e.target.value })} disabled={!isEditingWebhook} className={`w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-medium text-[#1d1d1f] focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all shadow-sm ${!isEditingWebhook ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} />
-                    </div>
-                    <div>
-                        <div className="flex justify-between items-center mb-2"><label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide">Webhook: Notificar Cliente</label>{!isEditingAssignmentWebhook && (<button onClick={() => handleEditWebhookClick('assignment')} className="text-blue-500 hover:text-blue-700 transition-colors" title="Editar Webhook"><Pencil size={12} /></button>)}</div>
-                        <input type={isEditingAssignmentWebhook ? "text" : "password"} placeholder="https://hooks.zapier.com/..." value={c.assignmentWebhookUrl || ""} onChange={(e) => setC({ ...c, assignmentWebhookUrl: e.target.value })} disabled={!isEditingAssignmentWebhook} className={`w-full p-3 bg-white border border-gray-200 rounded-xl text-xs font-medium text-[#1d1d1f] focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all shadow-sm ${!isEditingAssignmentWebhook ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} />
-                        <p className="text-[9px] text-gray-400 mt-1">Se dispara al asignar un agente.</p>
-                    </div>
-                    <button onClick={handleSave} disabled={isSaving} className="w-full bg-black text-white font-medium py-3 rounded-xl hover:bg-gray-800 transition-all text-xs shadow-lg relative overflow-hidden">{isSaving ? "Guardando..." : "Guardar Cambios"}</button>
-                    {showSuccess && (<div className="animate-in fade-in bg-green-50 text-green-700 border border-green-100 rounded-xl p-3 flex items-center justify-center gap-2 text-xs font-medium shadow-sm mt-2"><CheckCircle size={14} /> Cambios guardados correctamente</div>)}
+                <div className="md:w-72 space-y-4">
+                    <div><label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Webhook Nuevo Lead</label><input type="password" value={c.webhookUrl || ''} onChange={e => setC({...c, webhookUrl: e.target.value})} className="w-full p-2 border rounded-lg text-xs" placeholder="https://..." /></div>
+                    <div><label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Webhook Asignación</label><input type="password" value={c.assignmentWebhookUrl || ''} onChange={e => setC({...c, assignmentWebhookUrl: e.target.value})} className="w-full p-2 border rounded-lg text-xs" placeholder="https://..." /></div>
+                    <button onClick={handleSave} disabled={isSaving} className="w-full bg-black text-white py-3 rounded-xl font-bold text-xs shadow-lg">{isSaving ? 'Guardando...' : 'Guardar Cambios'}</button>
+                    {showSuccess && <div className="bg-green-50 text-green-700 p-2 rounded-lg text-xs text-center font-bold flex items-center justify-center gap-2"><CheckCircle size={14}/> Guardado</div>}
                 </div>
             </div>
             {showAuthModal && (
@@ -905,7 +877,7 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
     );
 }
 
-// --- LEADS LIST (MODIFICADO: Con Modal de Asignación Masiva y Botón Venta) ---
+// --- LEADS LIST (MODIFICADO: Botón de Venta Reversible) ---
 function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
     const [leadToDelete, setLeadToDelete] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
@@ -993,24 +965,22 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
 }
 
 // -----------------------------------------------------------------------------
-// 13. CLIENT CHAT (ROBUSTO Y SEGURO)
+// 13. CLIENT CHAT (HÍBRIDO, BOTONES + TEXTO + ZONA HORARIA)
 // -----------------------------------------------------------------------------
 function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
     const [activeUsers, setActiveUsers] = useState(Math.floor(Math.random() * (28 - 18 + 1)) + 18);
     const [msgs, setMsgs] = useState([
-        { role: 'assistant', content: 'Hola, soy Lucy, su asistente personal experta en **Gastos Finales**. Mi misión es brindarle la información que necesita para su tranquilidad y la de su familia.\n\nTenga la plena seguridad de que **todo lo que hablemos es confidencial**; nada será divulgado sin su expresa autorización. Mi único objetivo es ayudarle, y si al final de nuestra charla usted lo desea, podré conectarle directamente con un **agente acreditado por su estado**.\n\n¿Cómo le podemos servir el día de hoy?' }
+        { role: 'assistant', content: 'Hola, soy Lucy, su asistente personal experta en **Gastos Finales**. Mi misión es brindarle la información que necesita para su tranquilidad y la de su familia.\n\nTenga la plena seguridad de que **todo lo que hablemos es confidencial**; nada será divulgado sin su expresa autorización. Mi único objetivo es ayudarle.\n\nPara poder servirle mejor, ¿Con quién tengo el gusto de hablar hoy?' }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    const [showOptions, setShowOptions] = useState(false);
-    const [pendingLeadData, setPendingLeadData] = useState(null);
-
     const [showShareModal, setShowShareModal] = useState(false);
     const [urlCopied, setUrlCopied] = useState(false);
+    
+    // UI STATES (Botones contextuales)
+    const [uiState, setUiState] = useState(null); // 'health', 'smoker', 'budget', 'closing', null
 
     const scrollRef = useRef(null);
-    
-    // Protección contra fallos en getAgentStatus si aiConfig es undefined
     const agentStatus = useMemo(() => getAgentStatus(aiConfig), [aiConfig]);
     const { isAgentAvailable } = agentStatus;
 
@@ -1021,7 +991,7 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
 
     useEffect(() => { 
         if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; 
-    }, [msgs, loading, showOptions]);
+    }, [msgs, loading, uiState]);
 
     const handleCopyLink = () => {
         const url = window.location.href;
@@ -1031,95 +1001,92 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
         });
     };
 
-    const handleOptionClick = (type) => {
-        if (pendingLeadData) {
-            const finalLead = {
-                ...pendingLeadData,
-                metodo_contacto: type,
-                horario_preferido: type === 'ahora' ? 'Inmediata' : 'Pendiente'
-            };
-            onSaveLead(finalLead);
-            setPendingLeadData(null);
-            setShowOptions(false);
-            const responseMsg = type === 'ahora' ? "¡Perfecto! Un agente se comunicará con usted en breve al número proporcionado." : "Excelente. Un agente le llamará para programar la cita en el horario que mejor le convenga.";
-            setMsgs(prev => [...prev, { role: 'assistant', content: responseMsg }]);
-        }
-    };
+    // FUNCIÓN CENTRAL: ENVIAR MENSAJE A LUCY
+    const send = async (textOverride = null) => {
+        const textToSend = textOverride || input;
+        if (!textToSend.trim() || loading) return;
 
-    const send = async (e) => {
-        e.preventDefault(); if (!input.trim() || loading) return;
-        const newM = [...msgs, { role: 'user', content: input }]; setMsgs(newM); setInput(''); setLoading(true);
+        // Limpiar estado de UI antes de enviar
+        setUiState(null);
+        setInput('');
+        setLoading(true);
+
+        const newM = [...msgs, { role: 'user', content: textToSend }];
+        setMsgs(newM);
+
         try {
             const { isVacation, resumeDate } = agentStatus;
             let availabilityInstruction = "";
             if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA DEL SISTEMA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}. Sé muy amable y profesional, NO digas "vacaciones".`;
             
-            // --- INYECCIÓN DE HORARIOS DINÁMICOS AL PROMPT ---
             const scheduleText = getScheduleText(aiConfig?.schedule);
             
             const prompt = `
-          ${aiConfig?.systemPrompt || ""}
+          ${aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT}
           ${availabilityInstruction}
           
-          IMPORTANTE - HORARIOS DE TRABAJO ACTUALES:
+          IMPORTANTE - HORARIOS DE TRABAJO ACTUALES (EST / FLORIDA):
           ${scheduleText}
-          (Usa esta información para confirmar citas o explicar disponibilidad)
+          (Usa esta información para confirmar citas. Si el usuario dice una hora, ASUME SU HORA LOCAL, pero internamente tú sabes que operamos en EST. Confírmale la hora que él dijo.)
 
           HISTORIAL:
           ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
-          
-          INSTRUCCIÓN TÉCNICA CRÍTICA:
-          Tu OBJETIVO PRINCIPAL es recolectar: Nombre, Edad, Estado (Ubicación), Salud, Si fuma, Email y Teléfono.
-          
-          NO PUEDES FINALIZAR ni mostrar botones si falta alguno de estos datos.
-          Si el usuario pide programar, PREGUNTA "¿Para cuándo le gustaría la llamada?".
-
-          SOLO CUANDO TENGAS TODOS LOS DATOS (Nombre, Edad, Email, Telefono, Salud, Fuma, Estado), devuelve este JSON al final de tu respuesta:
-          \`\`\`json
-          { 
-            "action": "data_ready", 
-            "nombre": "...", 
-            "edad": "...", 
-            "email": "...", 
-            "telefono": "...", 
-            "salud": "...",
-            "fuma": "...",
-            "estado": "...",
-            "resumen_ai": "..." 
-          }
-          \`\`\`
-          Si falta algo, PÍDELO AMABLEMENTE.
         `;
 
             const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
             const rawText = res.candidates[0].content.parts[0].text;
-            let reply = rawText;
+            
+            // DETECTAR SEÑALES OCULTAS EN EL TEXTO DE LUCY
+            let nextUiState = null;
+            if (rawText.includes('[MODE:HEALTH]')) nextUiState = 'health';
+            else if (rawText.includes('[MODE:SMOKER]')) nextUiState = 'smoker';
+            else if (rawText.includes('[MODE:BUDGET]')) nextUiState = 'budget';
+            else if (rawText.includes('[MODE:CLOSING]')) nextUiState = 'closing';
+
+            // PROCESAR JSON DE CIERRE (SI EXISTE)
             const jsonMatch = rawText.match(/```json([\s\S]*?)```/);
             if (jsonMatch) {
                 try {
                     const jsonStr = jsonMatch[1];
                     const data = JSON.parse(jsonStr);
                     if (data.action === 'data_ready') {
-                        setPendingLeadData({ 
-                            ...data, 
-                            fullChat: newM // GUARDAMOS EL CHAT AQUÍ
+                        // GUARDAR LEAD FINALMENTE
+                        onSaveLead({
+                            ...data,
+                            fullChat: newM // Guardar chat completo
                         });
-                        setShowOptions(true);
-                        reply = rawText.replace(jsonMatch[0], '').trim();
+                        // Lucy da despedida final (texto fuera del JSON)
                     }
                 } catch (jsonErr) { console.error("Error parsing JSON", jsonErr); }
             }
-            reply = cleanAiMessage(reply);
-            setMsgs([...newM, { role: 'assistant', content: reply }]);
+
+            // LIMPIAR RESPUESTA PARA EL USUARIO
+            const finalReply = cleanAiMessage(rawText);
+            setMsgs([...newM, { role: 'assistant', content: finalReply }]);
+            setUiState(nextUiState); // Activar botones si corresponde
+
         } catch (e) {
             console.error(e);
-            setMsgs([...newM, { role: 'assistant', content: `⚠️ ${e.message}` }]);
+            setMsgs([...newM, { role: 'assistant', content: "Lo siento, tuve un pequeño error de conexión. ¿Podría repetirme eso?" }]);
         }
         setLoading(false);
     };
 
+    // BOTONES DE RESPUESTA RÁPIDA
+    const QuickButton = ({ label, value, icon: Icon }) => (
+        <button 
+            onClick={() => send(value)} 
+            disabled={loading}
+            className="flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 rounded-2xl shadow-sm hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-all text-sm font-medium text-gray-700 active:scale-95"
+        >
+            {Icon && <Icon size={16} />}
+            {label}
+        </button>
+    );
+
     return (
         <div className="max-w-[480px] mx-auto flex flex-col h-full bg-white rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden relative font-sans">
+            {/* HEADER */}
             <div className="bg-white/90 backdrop-blur-xl p-5 border-b border-gray-100 flex items-center justify-between z-10 sticky top-0">
                 <div className="flex items-center gap-4">
                     <div className="relative"><LucyAvatar className="w-12 h-12" /></div>
@@ -1134,26 +1101,93 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
                 </div>
                 <button onClick={() => setShowShareModal(true)} className="p-2 bg-slate-50 text-slate-400 rounded-full hover:bg-slate-100 hover:text-blue-600 transition-colors" title="Guardar enlace"><Share2 size={20} /></button>
             </div>
+
+            {/* CHAT AREA */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-6 bg-white no-scrollbar">
                 {msgs.map((m, i) => (
                     <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                         {m.role === 'assistant' && <LucyAvatar className="w-8 h-8 mr-2 mt-auto shrink-0" />}
-                        <div className={`w-fit max-w-[75%] px-5 py-3 rounded-2xl text-[16px] leading-relaxed shadow-sm text-left ${m.role === 'user' ? 'bg-[#007AFF] text-white rounded-br-none' : 'bg-[#F2F2F7] text-[#1d1d1f] rounded-bl-none'}`}><RichText content={m.content} /></div>
+                        <div className={`w-fit max-w-[85%] px-5 py-3 rounded-2xl text-[15px] leading-relaxed shadow-sm text-left ${m.role === 'user' ? 'bg-[#007AFF] text-white rounded-br-none' : 'bg-[#F2F2F7] text-[#1d1d1f] rounded-bl-none'}`}>
+                            <RichText content={m.content} />
+                        </div>
                     </div>
                 ))}
-                {loading && <div className="flex justify-start pl-10"><div className="bg-[#F2F2F7] px-4 py-3 rounded-2xl rounded-bl-none flex gap-1.5 items-center w-fit"><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span></div></div>}
-                {showOptions && (
-                    <div className="flex flex-col gap-2 pt-2 animate-in zoom-in px-8">
-                        <button onClick={() => handleOptionClick('ahora')} disabled={!isAgentAvailable} className={`w-full font-medium py-3.5 rounded-xl transition-all text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 ${isAgentAvailable ? 'bg-[#007AFF] text-white hover:bg-[#0062cc]' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}>{isAgentAvailable ? <Zap size={16} fill="currentColor" /> : <Moon size={16} />} {isAgentAvailable ? 'Hablar con un Agente Ahora' : 'Agentes no disponibles'}</button>
-                        <button onClick={() => handleOptionClick('programada')} className="w-full bg-[#F2F2F7] text-[#007AFF] font-medium py-3.5 rounded-xl hover:bg-[#E5E5EA] transition-all text-sm flex items-center justify-center gap-2 active:scale-95"><Calendar size={16} /> Programar Llamada</button>
+                
+                {loading && (
+                    <div className="flex justify-start pl-10">
+                        <div className="bg-[#F2F2F7] px-4 py-3 rounded-2xl rounded-bl-none flex gap-1.5 items-center w-fit">
+                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span>
+                        </div>
+                    </div>
+                )}
+
+                {/* ZONA DE BOTONES DINÁMICOS */}
+                {!loading && uiState === 'health' && (
+                    <div className="flex flex-wrap gap-2 pl-10 animate-in fade-in slide-in-from-bottom-4">
+                        <QuickButton label="Excelente" value="Mi salud es excelente" icon={ThumbsUp} />
+                        <QuickButton label="Buena / Regular" value="Mi salud es buena en general" icon={Activity} />
+                        <QuickButton label="Condiciones Graves" value="Tengo condiciones de salud serias" icon={AlertCircle} />
+                    </div>
+                )}
+
+                {!loading && uiState === 'smoker' && (
+                    <div className="flex flex-wrap gap-2 pl-10 animate-in fade-in slide-in-from-bottom-4">
+                        <QuickButton label="Sí, fumo" value="Sí, fumo actualmente" icon={Check} />
+                        <QuickButton label="No fumo" value="No fumo" icon={X} />
+                        <QuickButton label="Lo dejé hace tiempo" value="Lo dejé hace más de 12 meses" icon={Clock} />
+                    </div>
+                )}
+
+                {!loading && uiState === 'budget' && (
+                    <div className="flex flex-col gap-2 pl-10 animate-in fade-in slide-in-from-bottom-4 max-w-[280px]">
+                        <QuickButton label="$30 - $50 al mes" value="Me siento cómodo pagando entre 30 y 50 dólares mensuales" icon={Wallet} />
+                        <QuickButton label="$50 - $80 al mes" value="Puedo pagar entre 50 y 80 dólares mensuales" icon={Wallet} />
+                        <QuickButton label="$80 - $100 al mes" value="Mi presupuesto es de 80 a 100 dólares" icon={Wallet} />
+                        <QuickButton label="Más de $100" value="Puedo invertir más de 100 dólares para mayor cobertura" icon={Star} />
+                    </div>
+                )}
+
+                {!loading && uiState === 'closing' && (
+                    <div className="flex flex-col gap-2 pl-10 animate-in zoom-in px-4">
+                        <button 
+                            onClick={() => send("Quiero hablar con un agente AHORA MISMO")} 
+                            disabled={!isAgentAvailable} 
+                            className={`w-full font-medium py-3.5 rounded-xl transition-all text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 ${isAgentAvailable ? 'bg-[#007AFF] text-white hover:bg-[#0062cc]' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}
+                        >
+                            {isAgentAvailable ? <Zap size={16} fill="currentColor" /> : <Moon size={16} />} 
+                            {isAgentAvailable ? 'Hablar con un Agente AHORA' : 'Agentes no disponibles'}
+                        </button>
+                        <button 
+                            onClick={() => send("Quiero PROGRAMAR una llamada para después")} 
+                            className="w-full bg-[#F2F2F7] text-[#007AFF] font-medium py-3.5 rounded-xl hover:bg-[#E5E5EA] transition-all text-sm flex items-center justify-center gap-2 active:scale-95"
+                        >
+                            <Calendar size={16} /> Programar Llamada
+                        </button>
                     </div>
                 )}
             </div>
-            <form onSubmit={send} className="p-4 bg-white/90 backdrop-blur-xl border-t border-gray-100 flex gap-3">
-                <input value={input} onChange={e => setInput(e.target.value)} placeholder="Escribe un mensaje..." className="flex-1 bg-[#F2F2F7] border-0 rounded-full px-5 py-3 text-[16px] focus:ring-2 focus:ring-[#007AFF]/20 text-[#1d1d1f] placeholder:text-[#86868b] outline-none transition-all" />
-                <button disabled={loading} className="w-12 h-12 bg-[#007AFF] text-white rounded-full hover:bg-[#0062cc] transition-all active:scale-90 disabled:opacity-50 disabled:scale-100 flex items-center justify-center shrink-0 shadow-md"><Send size={20} fill="currentColor" className="ml-0.5" /></button>
+
+            {/* INPUT AREA */}
+            <form onSubmit={(e) => send()} className="p-4 bg-white/90 backdrop-blur-xl border-t border-gray-100 flex gap-3 items-center">
+                <input 
+                    value={input} 
+                    onChange={e => setInput(e.target.value)} 
+                    placeholder={uiState ? "O escribe tu respuesta aquí..." : "Escribe un mensaje..."}
+                    className="flex-1 bg-[#F2F2F7] border-0 rounded-full px-5 py-3 text-[16px] focus:ring-2 focus:ring-[#007AFF]/20 text-[#1d1d1f] placeholder:text-[#86868b] outline-none transition-all" 
+                />
+                <button 
+                    disabled={loading || !input.trim()} 
+                    className="w-12 h-12 bg-[#007AFF] text-white rounded-full hover:bg-[#0062cc] transition-all active:scale-90 disabled:opacity-50 disabled:scale-100 flex items-center justify-center shrink-0 shadow-md"
+                >
+                    <Send size={20} fill="currentColor" className="ml-0.5" />
+                </button>
             </form>
+
             <div className="text-center py-2 bg-white border-t border-gray-50">{onOpenLogin && <button onClick={onOpenLogin} className="text-[9px] text-slate-300 hover:text-slate-400 transition-colors">Acceso Corporativo</button>}</div>
+            
+            {/* SHARE MODAL */}
             {showShareModal && (
                 <div className="absolute inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
                     <div className="bg-white rounded-[24px] shadow-2xl p-6 w-full max-w-sm animate-in zoom-in-95">
