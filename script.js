@@ -12,7 +12,7 @@ import {
   Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, 
   CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, 
   Mail, UserMinus, UserPlus, Link as LinkIcon, Plus, MinusCircle, 
-  BarChart3, TrendingUp, PieChart, Wallet, BadgeCheck, AlertCircle, ThumbsUp, ThumbsDown
+  BarChart3, TrendingUp, PieChart, Wallet, AlertCircle
 } from 'https://esm.sh/lucide-react@0.344.0';
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
@@ -23,8 +23,6 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassw
 // 2. CONFIGURACIÓN DEL SISTEMA
 // -----------------------------------------------------------------------------
 const OFFLINE_MODE = false;
-
-// CLAVE API DIVIDIDA
 const AI_KEY_PART_A = "AIzaSyAIOAO4-h7lRRK8";
 const AI_KEY_PART_B = "SKAC2hgomoE-MaCZ58M";
 const GEMINI_API_KEY = `${AI_KEY_PART_A}${AI_KEY_PART_B}`;
@@ -41,7 +39,6 @@ const FIREBASE_CONFIG = {
 
 const APP_ID = 'gastos-finales-v1';
 
-// Inicialización de Firebase
 let app, auth, db;
 if (!OFFLINE_MODE) {
     try {
@@ -61,9 +58,7 @@ const generateId = () => Date.now().toString(36) + Math.random().toString(36).su
 // Limpia el mensaje de IA de etiquetas internas y JSON
 function cleanAiMessage(text) {
     if (!text) return '';
-    // Eliminar bloques JSON
     let cleaned = text.replace(/```json[\s\S]*?```/g, '');
-    // Eliminar etiquetas de modo [MODE:...]
     cleaned = cleaned.replace(/\[MODE:[A-Z_]+\]/g, '');
     return cleaned.trim();
 }
@@ -89,7 +84,6 @@ const RichText = ({ content }) => {
 
 const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
 
-// PROMPT DEL SISTEMA POR DEFECTO (EL CEREBRO DE LUCY)
 const DEFAULT_SYSTEM_PROMPT = `
 Eres Lucy, una asistente experta y empática en "Gastos Finales" (Seguros de Vida para cobertura funeraria). Tu misión es educar y conectar, no vender agresivamente.
 
@@ -137,9 +131,7 @@ const DEFAULT_SCHEDULE = {
     domingo: { enabled: false, slots: [{start: '10:00', end: '14:00'}] }
 };
 
-// -----------------------------------------------------------------------------
-// 4. LÓGICA DE HORARIOS (MULTI-SLOT)
-// -----------------------------------------------------------------------------
+// 4. LÓGICA DE HORARIOS
 const getAgentStatus = (config) => {
     try {
         if (!config) return { isAgentAvailable: true, message: "Disponible" };
@@ -197,9 +189,7 @@ const getScheduleText = (schedule) => {
     }).join('\n');
 };
 
-// -----------------------------------------------------------------------------
-// 5. CONEXIÓN IA (Auto-Retry)
-// -----------------------------------------------------------------------------
+// 5. API IA
 async function fetchGeminiWithRetry(payload) {
     if (!rateLimit.check()) throw new Error("Espera unos segundos.");
     if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; }
@@ -230,9 +220,7 @@ function useInactivityTimer(action, timeout = 600000) {
     }, [timeout]); 
 }
 
-// -----------------------------------------------------------------------------
 // 6. COMPONENTES VISUALES
-// -----------------------------------------------------------------------------
 const LucyAvatar = ({ className = "w-10 h-10" }) => (<img src="https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" alt="Lucy" className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"; }} />);
 const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
 const BrainAvatar = ({ className = "w-10 h-10" }) => (<div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}><Sparkles size={20} strokeWidth={2} /></div>);
@@ -244,7 +232,7 @@ const ReportsDashboard = ({ leads, agents }) => {
     const [endDate, setEndDate] = useState('');
 
     const filteredLeads = useMemo(() => {
-        return leads.filter(l => {
+        return (leads || []).filter(l => {
             const matchesAgent = filterAgent === 'all' || l.assignedAgentId === filterAgent;
             let matchesDate = true;
             if (startDate && endDate) {
@@ -263,7 +251,7 @@ const ReportsDashboard = ({ leads, agents }) => {
     const activeLeads = filteredLeads.filter(l => !l.assignedAgentId && l.status !== 'archived').length;
 
     const agentPerformance = useMemo(() => {
-        return agents.map(agent => {
+        return (agents || []).map(agent => {
             const myLeads = filteredLeads.filter(l => l.assignedAgentId === agent.id);
             const mySales = myLeads.filter(l => l.status === 'sold').length;
             const myConversion = myLeads.length > 0 ? ((mySales / myLeads.length) * 100).toFixed(0) : 0;
@@ -278,7 +266,7 @@ const ReportsDashboard = ({ leads, agents }) => {
                 <div className="flex gap-2 items-center">
                     <select className="bg-gray-50 border border-gray-200 text-xs rounded-xl px-3 py-2 outline-none" value={filterAgent} onChange={e => setFilterAgent(e.target.value)}>
                         <option value="all">Todos los Agentes</option>
-                        {agents.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                        {(agents || []).map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
                     </select>
                     <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1"><input type="date" className="bg-transparent text-xs outline-none" value={startDate} onChange={e => setStartDate(e.target.value)} /><span className="text-gray-300">-</span><input type="date" className="bg-transparent text-xs outline-none" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
                 </div>
@@ -316,7 +304,7 @@ const ReportsDashboard = ({ leads, agents }) => {
 // -----------------------------------------------------------------------------
 const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus, isArchive }) => {
     if (!lead) return null;
-    const assignedAgent = agents.find(a => a.id === lead.assignedAgentId);
+    const assignedAgent = (agents || []).find(a => a.id === lead.assignedAgentId);
 
     return (
         <div className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in-95 duration-300">
@@ -384,7 +372,7 @@ const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus,
 const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
     const [search, setSearch] = useState('');
     if (!isOpen) return null;
-    const filtered = agents.filter(a => a.nombre.toLowerCase().includes(search.toLowerCase()));
+    const filtered = (agents || []).filter(a => a.nombre.toLowerCase().includes(search.toLowerCase()));
 
     return (
         <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
@@ -794,7 +782,7 @@ function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, 
     return (
         <div className="animate-in fade-in space-y-6">
             <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-gray-800">Agentes</h2><div className="flex gap-2">{selectedIds.length > 0 && <button onClick={handleDeleteSelected} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-sm font-bold flex gap-2"><Trash2 size={16}/> Eliminar</button>}<button onClick={() => { setFormData({}); setIsEditing(true); }} className="bg-black text-white px-4 py-2 rounded-xl text-sm font-bold flex gap-2 shadow-lg"><UserCog size={16}/> Nuevo</button></div></div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">{filteredAgents.map(a => (<div key={a.id} className={`bg-white rounded-2xl p-5 border transition-all hover:shadow-md cursor-pointer relative group ${selectedIds.includes(a.id) ? 'border-blue-500 bg-blue-50/10' : 'border-gray-100'}`} onClick={() => setSelectedAgent(a)}><div className="absolute top-4 right-4" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(a.id)} onChange={() => handleSelectOne(a.id)} className="custom-checkbox"/></div><div className="flex items-center gap-4 mb-4"><img src={a.foto || "https://ui-avatars.com/api/?name="+a.nombre} className="w-14 h-14 rounded-full object-cover bg-gray-200"/><div><h3 className="font-bold text-gray-900">{a.nombre}</h3><p className="text-xs text-gray-500">{a.email}</p></div></div><div className="text-xs text-gray-600 space-y-1"><div className="flex gap-2"><Phone size={12}/> {a.telefono}</div><div className="flex gap-2"><MapPin size={12}/> {a.estados}</div></div></div>))}</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">{filteredAgents.map(a => (<div key={a.id} className={`bg-white rounded-2xl p-5 border transition-all hover:shadow-md cursor-pointer relative ${selectedIds.includes(a.id) ? 'border-blue-500 bg-blue-50/10' : 'border-gray-100'}`} onClick={() => setSelectedAgent(a)}><div className="absolute top-4 right-4" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(a.id)} onChange={() => handleSelectOne(a.id)} className="custom-checkbox"/></div><div className="flex items-center gap-4 mb-4"><img src={a.foto || "https://ui-avatars.com/api/?name="+a.nombre} className="w-14 h-14 rounded-full object-cover bg-gray-200"/><div><h3 className="font-bold text-gray-900">{a.nombre}</h3><p className="text-xs text-gray-500">{a.email}</p></div></div><div className="text-xs text-gray-600 space-y-1"><div className="flex gap-2"><Phone size={12}/> {a.telefono}</div><div className="flex gap-2"><MapPin size={12}/> {a.estados}</div></div></div>))}</div>
             {isEditing && (
                 <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg">
@@ -824,36 +812,10 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
     const [authPassword, setAuthPassword] = useState('');
     const [authError, setAuthError] = useState(null);
 
-    // Funciones para Horarios Múltiples
-    const handleAddSlot = (day) => {
-        const currentSlots = c.schedule?.[day]?.slots || [];
-        // Valor por defecto si es el primer slot
-        const newSlot = { start: "09:00", end: "18:00" };
-        setC(prev => ({ ...prev, schedule: { ...prev.schedule, [day]: { ...(prev.schedule[day] || {}), enabled: true, slots: [...currentSlots, newSlot] } } }));
-    };
-
-    const handleRemoveSlot = (day, index) => {
-        const currentSlots = c.schedule?.[day]?.slots || [];
-        const newSlots = currentSlots.filter((_, i) => i !== index);
-        // Si borramos todos, deshabilitamos el día
-        setC(prev => ({ ...prev, schedule: { ...prev.schedule, [day]: { ...(prev.schedule[day] || {}), slots: newSlots, enabled: newSlots.length > 0 } } }));
-    };
-
-    const handleSlotChange = (day, index, field, value) => {
-        const currentSlots = [...(c.schedule?.[day]?.slots || [])];
-        if (currentSlots[index]) {
-            currentSlots[index] = { ...currentSlots[index], [field]: value };
-            setC(prev => ({ ...prev, schedule: { ...prev.schedule, [day]: { ...(prev.schedule[day] || {}), slots: currentSlots } } }));
-        }
-    };
-
-    const handleDayToggle = (day) => {
-        const isEnabled = !c.schedule?.[day]?.enabled;
-        let newSlots = c.schedule?.[day]?.slots || [];
-        if (isEnabled && newSlots.length === 0) newSlots = [{ start: "09:00", end: "18:00" }];
-        
-        setC(prev => ({ ...prev, schedule: { ...prev.schedule, [day]: { ...(prev.schedule[day] || {}), enabled: isEnabled, slots: newSlots } } }));
-    };
+    const handleAddSlot = (day) => { const slots = c.schedule?.[day]?.slots || []; setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule[day] || {}), enabled: true, slots: [...slots, {start: "09:00", end: "18:00"}] } } })); };
+    const handleRemoveSlot = (day, idx) => { const slots = (c.schedule?.[day]?.slots || []).filter((_, i) => i !== idx); setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule[day] || {}), slots, enabled: slots.length > 0 } } })); };
+    const handleSlotChange = (day, idx, field, val) => { const slots = [...(c.schedule?.[day]?.slots || [])]; if (slots[idx]) { slots[idx] = { ...slots[idx], [field]: val }; setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule[day] || {}), slots } } })); } };
+    const handleDayToggle = (day) => { const enabled = !c.schedule?.[day]?.enabled; let slots = c.schedule?.[day]?.slots || []; if (enabled && slots.length === 0) slots = [{start: "09:00", end: "18:00"}]; setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule[day] || {}), enabled, slots } } })); };
 
     const handleSave = async () => { setIsSaving(true); await onSaveConfig(c); setIsSaving(false); setIsEditingWebhook(false); setIsEditingAssignmentWebhook(false); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000); };
     const daysList = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
@@ -862,7 +824,7 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
 
     return (
         <div className="max-w-4xl mx-auto animate-in fade-in space-y-6">
-            <div className="bg-white p-8 rounded-[24px] shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100 flex flex-col md:flex-row gap-10">
+            <div className="bg-white p-8 rounded-[24px] shadow-sm border border-gray-100 flex flex-col md:flex-row gap-10">
                 <div className="flex-1 space-y-6">
                     <div>
                         <h3 className="font-semibold text-[#1d1d1f] mb-4 text-sm flex items-center gap-2">Configuración del Cerebro</h3>
@@ -936,6 +898,91 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
     );
 }
 
+// --- LEADS LIST (MODIFICADO: Botón de Venta Reversible) ---
+function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
+    const [leadToDelete, setLeadToDelete] = useState(null);
+    const [selectedIds, setSelectedIds] = useState([]);
+
+    const filteredLeads = (leads || []).filter(l => String(l.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()));
+    const handleSelectAll = (e) => e.target.checked ? setSelectedIds(filteredLeads.map(l => l.id)) : setSelectedIds([]);
+    const handleSelectOne = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
+    const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
+    const handleBulkAssignAction = (agentId) => { onOpenAssign(selectedIds); setSelectedIds([]); };
+
+    return (
+        <div className="animate-in fade-in duration-500">
+            {leadToDelete && (
+                <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm border border-gray-100 text-center">
+                        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500"><Trash2 size={24} /></div>
+                        <h3 className="font-bold text-lg text-slate-800 mb-2">{Array.isArray(leadToDelete) && leadToDelete.length > 1 ? `¿Eliminar ${leadToDelete.length} Leads?` : "¿Eliminar este Lead?"}</h3>
+                        <p className="text-sm text-slate-500 mb-6">Esta acción es irreversible.</p>
+                        <div className="flex gap-3"><button onClick={() => setLeadToDelete(null)} className="flex-1 py-2.5 bg-white border border-gray-200 text-slate-600 rounded-xl font-medium text-sm hover:bg-gray-50 transition-colors">Cancelar</button><button onClick={confirmDelete} className="flex-1 py-2.5 bg-red-500 text-white rounded-xl font-medium text-sm hover:bg-red-600 transition-colors shadow-lg shadow-red-200">Eliminar</button></div>
+                    </div>
+                </div>
+            )}
+
+            <div className="bg-white rounded-[24px] shadow-sm overflow-hidden border border-gray-100/50">
+                {selectedIds.length > 0 && (
+                    <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 flex justify-between items-center animate-in fade-in sticky top-0 z-20">
+                        <span className="text-xs font-bold text-blue-700">{selectedIds.length} seleccionados</span>
+                        <div className="flex gap-2 items-center">
+                            <button onClick={handleBulkAssignAction} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"><UserPlus size={14} /> Acciones Agente</button>
+                            <button onClick={handleBulkArchive} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors">{isArchive ? <RotateCcw size={14} /> : <Archive size={14} />}{isArchive ? 'Restaurar' : 'Archivar'}</button>
+                            <button onClick={() => setLeadToDelete(selectedIds)} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"><Trash2 size={14} /> Eliminar</button>
+                        </div>
+                    </div>
+                )}
+
+                <table className="w-full text-left table-fixed">
+                    <thead className="bg-[#FBFBFD] border-b border-gray-100">
+                        <tr>
+                            <th className="px-4 py-4 w-12 text-center"><input type="checkbox" className="custom-checkbox" checked={filteredLeads.length > 0 && selectedIds.length === filteredLeads.length} onChange={handleSelectAll} /></th>
+                            <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/4">Nombre</th>
+                            <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/4">Agente</th>
+                            <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/3">Resumen</th>
+                            <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase text-center w-32">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {filteredLeads.map(l => {
+                            const assignedAgent = (agents || []).find(a => a.id === l.assignedAgentId);
+                            const isSold = l.status === 'sold';
+                            
+                            return (
+                                <tr key={l.id} onClick={() => onOpenLead(l)} className={`hover:bg-[#F5F5F7] transition-colors cursor-pointer group ${selectedIds.includes(l.id) ? 'bg-blue-50/30' : ''} ${isSold ? 'bg-green-50/40' : ''}`}>
+                                    <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
+                                        <input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(l.id)} onChange={() => handleSelectOne(l.id)} />
+                                    </td>
+                                    <td className="px-4 py-5 truncate"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-gradient-to-b from-gray-100 to-gray-200 flex items-center justify-center font-semibold text-xs text-gray-500 shrink-0 border border-white shadow-sm">{l.nombre ? l.nombre.charAt(0).toUpperCase() : '?'}</div><div className="min-w-0"><div className="text-sm font-semibold text-[#1d1d1f] truncate">{String(l.nombre || 'Anónimo')}</div><div className="text-[11px] text-[#86868b] mt-0.5">{String(l.edad || '')} años • {String(l.estado || '')}</div></div></div></td>
+                                    <td className="px-4 py-5">{assignedAgent ? (<div className="flex items-center gap-2"><img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-5 h-5 rounded-full object-cover" /><span className="text-xs font-medium text-gray-700 truncate">{assignedAgent.nombre}</span></div>) : (<span className="text-[10px] text-gray-400 italic">-- Sin Asignar --</span>)}</td>
+                                    <td className="px-4 py-5"><p className="text-xs text-[#1d1d1f] truncate opacity-80">"{String(l.resumen_ai || '')}"</p></td>
+                                    <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                            {!isArchive && assignedAgent && (
+                                                <button 
+                                                    onClick={() => onUpdateStatus([l.id], isSold ? 'active' : 'sold')} 
+                                                    className={`p-2 rounded-lg transition-all ${isSold ? 'bg-green-100 text-green-700 shadow-sm ring-1 ring-green-200' : 'text-gray-400 hover:text-green-600 hover:bg-green-50'}`} 
+                                                    title={isSold ? "Desmarcar Venta" : "Marcar Vendido"}
+                                                >
+                                                    <DollarSign size={16} strokeWidth={isSold ? 2.5 : 2} />
+                                                </button>
+                                            )}
+                                            <button onClick={() => onUpdateStatus(l.id, isArchive ? 'active' : 'archived')} className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-white rounded-lg transition-all">{isArchive ? <RotateCcw size={16} strokeWidth={1.5} /> : <Archive size={16} strokeWidth={1.5} />}</button>
+                                            <button onClick={() => setLeadToDelete(l.id)} className="p-2 text-[#86868b] hover:text-red-500 hover:bg-white rounded-lg transition-all"><Trash2 size={16} strokeWidth={1.5} /></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
 // -----------------------------------------------------------------------------
 // 13. CLIENT CHAT (HÍBRIDO, BOTONES + TEXTO + ZONA HORARIA)
 // -----------------------------------------------------------------------------
@@ -953,6 +1000,8 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
     const [uiState, setUiState] = useState(null); // 'health', 'smoker', 'budget', 'closing', null
 
     const scrollRef = useRef(null);
+    
+    // Protección contra fallos en getAgentStatus si aiConfig es undefined
     const agentStatus = useMemo(() => getAgentStatus(aiConfig), [aiConfig]);
     const { isAgentAvailable } = agentStatus;
 
@@ -993,6 +1042,8 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
             
             const scheduleText = getScheduleText(aiConfig?.schedule);
             
+            const DEFAULT_SYSTEM_PROMPT = `Eres Lucy...`; // Definido arriba
+
             const prompt = `
           ${aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT}
           ${availabilityInstruction}
@@ -1022,12 +1073,10 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
                     const jsonStr = jsonMatch[1];
                     const data = JSON.parse(jsonStr);
                     if (data.action === 'data_ready') {
-                        // GUARDAR LEAD FINALMENTE
                         onSaveLead({
                             ...data,
-                            fullChat: newM // Guardar chat completo
+                            fullChat: newM
                         });
-                        // Lucy da despedida final (texto fuera del JSON)
                     }
                 } catch (jsonErr) { console.error("Error parsing JSON", jsonErr); }
             }
@@ -1098,7 +1147,7 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
                 {/* ZONA DE BOTONES DINÁMICOS */}
                 {!loading && uiState === 'health' && (
                     <div className="flex flex-wrap gap-2 pl-10 animate-in fade-in slide-in-from-bottom-4">
-                        <QuickButton label="Excelente" value="Mi salud es excelente" icon={ThumbsUp} />
+                        <QuickButton label="Excelente" value="Mi salud es excelente" icon={Check} />
                         <QuickButton label="Buena / Regular" value="Mi salud es buena en general" icon={Activity} />
                         <QuickButton label="Condiciones Graves" value="Tengo condiciones de salud serias" icon={AlertCircle} />
                     </div>
