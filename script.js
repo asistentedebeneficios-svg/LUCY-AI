@@ -975,14 +975,10 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
     );
 }
 
-// --- LEADS LIST (MODIFICADO: Con Modal de Asignación Masiva) ---
+// --- LEADS LIST (MODIFICADO: Venta Reversible) ---
 function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
     const [leadToDelete, setLeadToDelete] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
-
-    // NUEVO: Estado para el Modal de Asignación Masiva
-    const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
-    const [bulkSearchTerm, setBulkSearchTerm] = useState('');
 
     const filteredLeads = leads.filter(l => String(l.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()));
 
@@ -990,18 +986,10 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
     const handleSelectOne = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
     const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
-
-    // Filtrado de agentes en el modal
-    const filteredAgentsForBulk = agents.filter(a => a.nombre.toLowerCase().includes(bulkSearchTerm.toLowerCase()));
-
-    const handleBulkAssignAction = (agentId) => {
-        onOpenAssign(selectedIds);
-        setSelectedIds([]); // Limpiar selección tras abrir modal
-    };
+    const handleBulkAssignAction = (agentId) => { onOpenAssign(selectedIds); setSelectedIds([]); };
 
     return (
         <div className="animate-in fade-in duration-500">
-
             {leadToDelete && (
                 <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm border border-gray-100 text-center">
@@ -1038,10 +1026,11 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
                     <tbody className="divide-y divide-gray-50">
                         {filteredLeads.map(l => {
                             const assignedAgent = agents.find(a => a.id === l.assignedAgentId);
+                            // Verificamos si está vendido
                             const isSold = l.status === 'sold';
                             
                             return (
-                                <tr key={l.id} onClick={() => onOpenLead(l)} className={`hover:bg-[#F5F5F7] transition-colors cursor-pointer group ${selectedIds.includes(l.id) ? 'bg-blue-50/30' : ''} ${isSold ? 'bg-green-50/30' : ''}`}>
+                                <tr key={l.id} onClick={() => onOpenLead(l)} className={`hover:bg-[#F5F5F7] transition-colors cursor-pointer group ${selectedIds.includes(l.id) ? 'bg-blue-50/30' : ''} ${isSold ? 'bg-green-50/40' : ''}`}>
                                     <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
                                         <input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(l.id)} onChange={() => handleSelectOne(l.id)} />
                                     </td>
@@ -1050,8 +1039,15 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
                                     <td className="px-4 py-5"><p className="text-xs text-[#1d1d1f] truncate opacity-80">"{String(l.resumen_ai || '')}"</p></td>
                                     <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                            {!isSold && !isArchive && (
-                                                <button onClick={() => onUpdateStatus([l.id], 'sold')} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-all" title="Marcar Vendido"><DollarSign size={16} strokeWidth={2.5}/></button>
+                                            {/* BOTÓN VENTA (INTERRUPTOR) */}
+                                            {!isArchive && (
+                                                <button 
+                                                    onClick={() => onUpdateStatus([l.id], isSold ? 'active' : 'sold')} 
+                                                    className={`p-2 rounded-lg transition-all ${isSold ? 'bg-green-600 text-white shadow-md' : 'text-gray-400 hover:text-green-600 hover:bg-green-50'}`} 
+                                                    title={isSold ? "Desmarcar Venta (Volver a Activo)" : "Marcar como Vendido"}
+                                                >
+                                                    <DollarSign size={16} strokeWidth={isSold ? 2.5 : 2} />
+                                                </button>
                                             )}
                                             <button onClick={() => onUpdateStatus(l.id, isArchive ? 'active' : 'archived')} className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-white rounded-lg transition-all">{isArchive ? <RotateCcw size={16} strokeWidth={1.5} /> : <Archive size={16} strokeWidth={1.5} />}</button>
                                             <button onClick={() => setLeadToDelete(l.id)} className="p-2 text-[#86868b] hover:text-red-500 hover:bg-white rounded-lg transition-all"><Trash2 size={16} strokeWidth={1.5} /></button>
