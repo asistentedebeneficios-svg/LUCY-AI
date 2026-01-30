@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'https:
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
 
 // -----------------------------------------------------------------------------
-// 1. IMPORTACIÓN DE ICONOS (LUCIDE REACT)
+// 1. IMPORTACIÓN DE ICONOS
 // -----------------------------------------------------------------------------
 import { 
   MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, 
@@ -20,7 +20,7 @@ import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, dele
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
 // -----------------------------------------------------------------------------
-// 2. CONFIGURACIÓN DEL SISTEMA
+// 2. CONFIGURACIÓN
 // -----------------------------------------------------------------------------
 const OFFLINE_MODE = false;
 
@@ -41,7 +41,7 @@ const FIREBASE_CONFIG = {
 
 const APP_ID = 'gastos-finales-v1';
 
-// Inicialización de Firebase
+// Inicialización
 let app, auth, db;
 if (!OFFLINE_MODE) {
     try {
@@ -49,12 +49,12 @@ if (!OFFLINE_MODE) {
         auth = getAuth(app);
         db = getFirestore(app);
     } catch (e) {
-        console.error("Error crítico inicializando Firebase:", e);
+        console.error("Error Firebase:", e);
     }
 }
 
 // -----------------------------------------------------------------------------
-// 3. UTILIDADES Y HELPERS
+// 3. UTILIDADES
 // -----------------------------------------------------------------------------
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
@@ -85,7 +85,6 @@ const RichText = ({ content }) => {
 
 const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
 
-// Horario por defecto
 const DEFAULT_SCHEDULE = { 
     lunes: { enabled: true, slots: [{start: '09:00', end: '18:00'}] },
     martes: { enabled: true, slots: [{start: '09:00', end: '18:00'}] },
@@ -96,16 +95,12 @@ const DEFAULT_SCHEDULE = {
     domingo: { enabled: false, slots: [{start: '10:00', end: '14:00'}] }
 };
 
-// -----------------------------------------------------------------------------
-// 4. LÓGICA DE HORARIOS (MULTI-SLOT)
-// -----------------------------------------------------------------------------
+// 4. LÓGICA DE HORARIOS
 const getAgentStatus = (config) => {
     try {
         if (!config) return { isAgentAvailable: true, message: "Disponible" };
-        
         const now = new Date();
         
-        // 1. Vacaciones
         if (config.vacationMode && config.vacationStart && config.vacationEnd) {
             const vStart = new Date(config.vacationStart + 'T00:00:00');
             const vEnd = new Date(config.vacationEnd + 'T23:59:59');
@@ -116,27 +111,20 @@ const getAgentStatus = (config) => {
             }
         }
         
-        // 2. Día de la semana
         const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
         const dayName = days[now.getDay()];
         const dayConfig = config.schedule?.[dayName];
         
-        if (!dayConfig || !dayConfig.enabled) {
-            return { isAgentAvailable: false, message: "Cerrado hoy" };
-        }
+        if (!dayConfig || !dayConfig.enabled) return { isAgentAvailable: false, message: "Cerrado hoy" };
 
-        // 3. Turnos (Slots)
-        let activeSlots = dayConfig.slots || [];
-        if (activeSlots.length === 0 && dayConfig.start && dayConfig.end) {
-            activeSlots = [{ start: dayConfig.start, end: dayConfig.end }];
+        let slots = dayConfig.slots || [];
+        if (slots.length === 0 && dayConfig.start && dayConfig.end) {
+            slots = [{ start: dayConfig.start, end: dayConfig.end }];
         }
-
-        if (activeSlots.length === 0) {
-             return { isAgentAvailable: false, message: "Sin turnos" };
-        }
+        if (slots.length === 0) return { isAgentAvailable: false, message: "Sin turnos" };
 
         const currentMins = now.getHours() * 60 + now.getMinutes();
-        const isOpenNow = activeSlots.some(slot => {
+        const isOpenNow = slots.some(slot => {
             if (!slot.start || !slot.end) return false;
             const [sH, sM] = slot.start.split(':').map(Number);
             const [eH, eM] = slot.end.split(':').map(Number);
@@ -147,9 +135,7 @@ const getAgentStatus = (config) => {
         });
 
         return isOpenNow ? { isAgentAvailable: true, message: "Agentes Disponibles" } : { isAgentAvailable: false, message: "Cerrado ahora" };
-
     } catch (error) {
-        console.error("Error calculando horario:", error);
         return { isAgentAvailable: true, message: "Disponible" }; 
     }
 };
@@ -167,9 +153,7 @@ const getScheduleText = (schedule) => {
     }).join('\n');
 };
 
-// -----------------------------------------------------------------------------
-// 5. CONEXIÓN IA (Auto-Retry)
-// -----------------------------------------------------------------------------
+// 5. API IA
 async function fetchGeminiWithRetry(payload) {
     if (!rateLimit.check()) throw new Error("Espera unos segundos.");
     if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; }
@@ -200,14 +184,12 @@ function useInactivityTimer(action, timeout = 600000) {
     }, [timeout]); 
 }
 
-// -----------------------------------------------------------------------------
 // 6. COMPONENTES VISUALES
-// -----------------------------------------------------------------------------
 const LucyAvatar = ({ className = "w-10 h-10" }) => (<img src="https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" alt="Lucy" className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"; }} />);
 const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
 const BrainAvatar = ({ className = "w-10 h-10" }) => (<div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}><Sparkles size={20} strokeWidth={2} /></div>);
 
-// --- REPORTES ---
+// --- DASHBOARD REPORTES ---
 const ReportsDashboard = ({ leads, agents }) => {
     const [filterAgent, setFilterAgent] = useState('all');
     const [startDate, setStartDate] = useState('');
@@ -282,7 +264,7 @@ const ReportsDashboard = ({ leads, agents }) => {
 };
 
 // -----------------------------------------------------------------------------
-// 9. MODALES DE GESTIÓN (LEADS Y ASIGNACIÓN)
+// 7. MODALES DE GESTIÓN (LEADS Y ASIGNACIÓN)
 // -----------------------------------------------------------------------------
 const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus, isArchive }) => {
     if (!lead) return null;
@@ -322,10 +304,28 @@ const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus,
                         <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Salud</span><p className="font-medium text-[#1d1d1f] text-sm truncate">{String(lead.salud || '-')}</p></div>
                     </div>
                     <div className="relative"><div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-full"></div><div className="pl-5 py-1"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2 flex items-center gap-1"><Sparkles size={12} className="text-blue-500"/> Análisis Lucy</span><p className="text-sm text-[#1d1d1f] leading-relaxed">"{String(lead.resumen_ai || '')}"</p></div></div>
-                    <div><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-4">Historial</span><div className="space-y-3">{lead.fullChat?.map((m, i) => (<div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}><div className={`px-4 py-2.5 rounded-2xl text-xs max-w-[90%] leading-relaxed ${m.role === 'user' ? 'bg-[#0071e3] text-white' : 'bg-[#F5F5F7] text-[#1d1d1f]'}`}><RichText content={String(m.content || '')} /></div></div>))}</div></div>
+                    
+                    {/* HISTORIAL DE CONVERSACIÓN CORREGIDO */}
+                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                        <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-4 flex items-center gap-2"><MessageSquare size={12}/> Historial Completo</span>
+                        <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                            {lead.fullChat && Array.isArray(lead.fullChat) ? (
+                                lead.fullChat.map((m, i) => (
+                                    <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+                                        <div className={`px-4 py-2.5 rounded-2xl text-xs max-w-[90%] leading-relaxed ${m.role === 'user' ? 'bg-[#0071e3] text-white rounded-br-none' : 'bg-white border border-gray-200 text-[#1d1d1f] rounded-bl-none shadow-sm'}`}>
+                                            <RichText content={String(m.content || '')} />
+                                        </div>
+                                        <span className="text-[9px] text-gray-400 mt-1 px-1">{m.role === 'user' ? 'Usuario' : 'Lucy'}</span>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center text-gray-400 text-xs py-4">No hay historial disponible.</div>
+                            )}
+                        </div>
+                    </div>
                 </div>
                 <div className="p-6 border-t border-gray-100 flex gap-3 bg-white">
-                    <button onClick={() => { const text = `Lead: ${lead.nombre}\nTel: ${lead.telefono}`; navigator.clipboard.writeText(text); }} className="flex-1 py-3 bg-black text-white rounded-xl font-medium text-xs hover:bg-gray-800 transition-all">Copiar Ficha</button>
+                    <button onClick={() => { const text = `Lead: ${lead.nombre}\nTel: ${lead.telefono}\nEmail: ${lead.email}`; navigator.clipboard.writeText(text); }} className="flex-1 py-3 bg-black text-white rounded-xl font-medium text-xs hover:bg-gray-800 transition-all">Copiar Ficha</button>
                     <button onClick={() => { onUpdateStatus(lead.id, isArchive ? 'active' : 'archived'); onClose(); }} className="flex-1 py-3 bg-[#F5F5F7] text-[#1d1d1f] rounded-xl font-medium text-xs hover:bg-[#E8E8ED] transition-all">{isArchive ? 'Restaurar' : 'Archivar'}</button>
                 </div>
             </div>
@@ -362,7 +362,7 @@ const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
 };
 
 // -----------------------------------------------------------------------------
-// 10. APP PRINCIPAL
+// 8. APP PRINCIPAL
 // -----------------------------------------------------------------------------
 function App() {
     const [user, setUser] = useState(null);
@@ -431,7 +431,7 @@ function App() {
         if (OFFLINE_MODE) { alert("Modo Offline"); return; } 
         await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'leads'), { ...leadData, createdAt: serverTimestamp(), status: 'active' }); 
         
-        // Disparar Webhook
+        // Disparar Webhook Inmediatamente
         if (aiConfig.webhookUrl) {
              fetch(aiConfig.webhookUrl, { 
                 method: 'POST', 
@@ -542,7 +542,7 @@ function App() {
                             </div>
 
                             {adminTab === 'active' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active') && !l.assignedAgentId)} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> :
-                                adminTab === 'assigned' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active' || l.status === 'sold') && l.assignedAgentId)} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> :
+                                adminTab === 'assigned' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active') && l.assignedAgentId)} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> :
                                     adminTab === 'archived' ? <LeadsList leads={leads.filter(l => l.status === 'archived')} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={true} searchTerm={searchTerm} /> :
                                         adminTab === 'reports' ? <ReportsDashboard leads={leads} agents={agents} /> :
                                         adminTab === 'agents' ? <AgentsManager agents={agents} leads={leads} onOpenLead={(l) => setSelectedLead(l)} onSaveAgent={saveAgent} onDeleteAgent={deleteAgent} searchTerm={searchTerm} /> :
@@ -905,14 +905,10 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
     );
 }
 
-// --- LEADS LIST (MODIFICADO: Con Modal de Asignación Masiva) ---
+// --- LEADS LIST (MODIFICADO: Con Modal de Asignación Masiva y Botón Venta) ---
 function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
     const [leadToDelete, setLeadToDelete] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
-
-    // NUEVO: Estado para el Modal de Asignación Masiva
-    const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
-    const [bulkSearchTerm, setBulkSearchTerm] = useState('');
 
     const filteredLeads = leads.filter(l => String(l.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()));
 
@@ -920,18 +916,10 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
     const handleSelectOne = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
     const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
-
-    // Filtrado de agentes en el modal
-    const filteredAgentsForBulk = agents.filter(a => a.nombre.toLowerCase().includes(bulkSearchTerm.toLowerCase()));
-
-    const handleBulkAssignAction = (agentId) => {
-        onOpenAssign(selectedIds);
-        setSelectedIds([]); // Limpiar selección tras abrir modal
-    };
+    const handleBulkAssignAction = (agentId) => { onOpenAssign(selectedIds); setSelectedIds([]); };
 
     return (
         <div className="animate-in fade-in duration-500">
-
             {leadToDelete && (
                 <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm border border-gray-100 text-center">
@@ -968,7 +956,6 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
                     <tbody className="divide-y divide-gray-50">
                         {filteredLeads.map(l => {
                             const assignedAgent = agents.find(a => a.id === l.assignedAgentId);
-                            // Verificamos si está vendido
                             const isSold = l.status === 'sold';
                             
                             return (
@@ -1113,7 +1100,10 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
                     const jsonStr = jsonMatch[1];
                     const data = JSON.parse(jsonStr);
                     if (data.action === 'data_ready') {
-                        setPendingLeadData(data);
+                        setPendingLeadData({ 
+                            ...data, 
+                            fullChat: newM // GUARDAMOS EL CHAT AQUÍ
+                        });
                         setShowOptions(true);
                         reply = rawText.replace(jsonMatch[0], '').trim();
                     }
