@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from 'https://esm.sh/react@18.2.0';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
-// IMPORTACIÓN DE ICONOS (Con el arreglo crítico de Link -> LinkIcon)
+
+// --- IMPORTACIÓN DE ICONOS ---
+// Usamos LinkIcon para evitar conflictos con componentes de enrutado
 import { 
   MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, 
   Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, 
@@ -8,17 +10,18 @@ import {
   Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, 
   Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, 
   CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, 
-  Mail, UserMinus, UserPlus, Link as LinkIcon, Plus, MinusCircle 
+  Mail, UserMinus, UserPlus, Link as LinkIcon, Plus, MinusCircle, 
+  BarChart3, TrendingUp, PieChart, Wallet
 } from 'https://esm.sh/lucide-react@0.344.0';
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
-// --- CONFIGURACIÓN PRINCIPAL ---
+// --- CONFIGURACIÓN DEL SISTEMA ---
 const OFFLINE_MODE = false;
 
-// CLAVE API DE GEMINI (Tu nueva clave, dividida por seguridad)
+// CLAVE API (Dividida por seguridad básica)
 const AI_KEY_PART_A = "AIzaSyAIOAO4-h7lRRK8";
 const AI_KEY_PART_B = "SKAC2hgomoE-MaCZ58M";
 const GEMINI_API_KEY = `${AI_KEY_PART_A}${AI_KEY_PART_B}`;
@@ -35,7 +38,7 @@ const FIREBASE_CONFIG = {
 
 const APP_ID = 'gastos-finales-v1';
 
-// INICIALIZACIÓN DE FIREBASE
+// Inicialización de Firebase
 let app, auth, db;
 if (!OFFLINE_MODE) {
     try {
@@ -43,13 +46,14 @@ if (!OFFLINE_MODE) {
         auth = getAuth(app);
         db = getFirestore(app);
     } catch (e) {
-        console.error("Firebase init error", e);
+        console.error("Error crítico inicializando Firebase:", e);
     }
 }
 
 // --- UTILIDADES ---
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
+// Limpia el texto de la IA de marcadores internos
 function cleanAiMessage(text) {
     if (!text) return '';
     let cleaned = text.replace(new RegExp('\\[Botón:.*?\\]', 'gi'), '').replace(new RegExp('\\[Button:.*?\\]', 'gi'), '');
@@ -77,7 +81,7 @@ const RichText = ({ content }) => {
 
 const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
 
-// --- LÓGICA DE HORARIOS FLEXIBLES ---
+// Horario por defecto (Estructura Nueva)
 const DEFAULT_SCHEDULE = { 
     lunes: { enabled: true, slots: [{start: '09:00', end: '18:00'}] },
     martes: { enabled: true, slots: [{start: '09:00', end: '18:00'}] },
@@ -88,13 +92,14 @@ const DEFAULT_SCHEDULE = {
     domingo: { enabled: false, slots: [{start: '10:00', end: '14:00'}] }
 };
 
+// --- VALIDACIÓN DE HORARIOS (Soporta múltiples turnos) ---
 const getAgentStatus = (config) => {
     try {
-        if (!config) return { isAgentAvailable: true, message: "Disponible" }; // Fallback seguro
+        if (!config) return { isAgentAvailable: true, message: "Disponible" };
         
         const now = new Date();
         
-        // 1. Verificar Vacaciones
+        // 1. Verificar Modo Vacaciones
         if (config.vacationMode && config.vacationStart && config.vacationEnd) {
             const vStart = new Date(config.vacationStart + 'T00:00:00');
             const vEnd = new Date(config.vacationEnd + 'T23:59:59');
@@ -105,7 +110,7 @@ const getAgentStatus = (config) => {
             }
         }
         
-        // 2. Verificar Día de la Semana
+        // 2. Verificar Día de la semana
         const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
         const dayName = days[now.getDay()];
         const dayConfig = config.schedule?.[dayName];
@@ -115,7 +120,7 @@ const getAgentStatus = (config) => {
         }
 
         // 3. Verificar SLOTS (Turnos)
-        // Normalizamos: si existe 'slots', lo usamos. Si no, miramos si existe start/end antiguo y lo convertimos.
+        // Normalizamos: si existe 'slots', lo usamos. Si no, miramos si existe start/end antiguo.
         let activeSlots = dayConfig.slots || [];
         if (activeSlots.length === 0 && dayConfig.start && dayConfig.end) {
             activeSlots = [{ start: dayConfig.start, end: dayConfig.end }];
@@ -133,7 +138,6 @@ const getAgentStatus = (config) => {
             const [sH, sM] = slot.start.split(':').map(Number);
             const [eH, eM] = slot.end.split(':').map(Number);
             
-            // Validación de números
             if (isNaN(sH) || isNaN(eH)) return false;
 
             const startMins = sH * 60 + (sM || 0);
@@ -169,12 +173,12 @@ const getScheduleText = (schedule) => {
     }).join('\n');
 };
 
-// --- CONEXIÓN IA CON SISTEMA DE REINTENTOS ---
+// --- CONEXIÓN IA CON AUTO-NEGOCIACIÓN ---
 async function fetchGeminiWithRetry(payload) {
-    if (!rateLimit.check()) throw new Error("Por favor espera unos segundos.");
+    if (!rateLimit.check()) throw new Error("Espera unos segundos.");
     if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; }
 
-    // Orden de prioridad de modelos: 2.0 (Nuevo) -> 1.5 Flash (Rápido) -> 1.5 Pro (Potente) -> 1.0 Pro (Estable)
+    // Orden de prioridad: Lo más nuevo a lo más estable
     const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'];
     let lastError = null;
 
@@ -188,18 +192,16 @@ async function fetchGeminiWithRetry(payload) {
             });
             
             if (res.ok) {
-                return await res.json(); // ¡Éxito! Salimos del loop.
+                return await res.json(); // Éxito
             } else {
                 const errorText = await res.text();
-                // Si es un error 404 (Modelo no encontrado) o 400, probamos el siguiente
-                console.warn(`Modelo ${model} falló (${res.status}), probando siguiente...`);
-                lastError = `Error ${res.status}: ${errorText}`;
+                lastError = `Modelo ${model} falló: ${res.status}`;
+                // Continuamos al siguiente modelo en el bucle
             }
         } catch (e) {
             lastError = e.message;
         }
     }
-    // Si llegamos aquí, ningún modelo funcionó
     throw new Error(`Error de conexión AI: ${lastError || "Verifica tu conexión"}`);
 }
 
@@ -219,7 +221,152 @@ const LucyAvatar = ({ className = "w-10 h-10" }) => (<img src="https://imnufit.c
 const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
 const BrainAvatar = ({ className = "w-10 h-10" }) => (<div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}><Sparkles size={20} strokeWidth={2} /></div>);
 
-// --- MODAL DETALLE LEAD (Diseño Restaurado) ---
+// --- DASHBOARD DE REPORTES (NUEVO) ---
+const ReportsDashboard = ({ leads, agents }) => {
+    const [filterAgent, setFilterAgent] = useState('all');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+
+    // Filtrar leads según selección
+    const filteredLeads = useMemo(() => {
+        return leads.filter(l => {
+            const matchesAgent = filterAgent === 'all' || l.assignedAgentId === filterAgent;
+            let matchesDate = true;
+            if (startDate && endDate) {
+                const d = l.createdAt?.toDate ? l.createdAt.toDate() : new Date(l.createdAt?.seconds * 1000);
+                const start = new Date(startDate);
+                start.setHours(0,0,0,0);
+                const end = new Date(endDate);
+                end.setHours(23,59,59,999);
+                matchesDate = d >= start && d <= end;
+            }
+            return matchesAgent && matchesDate;
+        });
+    }, [leads, filterAgent, startDate, endDate]);
+
+    // Métricas
+    const totalLeads = filteredLeads.length;
+    const soldLeads = filteredLeads.filter(l => l.status === 'sold').length;
+    const conversionRate = totalLeads > 0 ? ((soldLeads / totalLeads) * 100).toFixed(1) : 0;
+    const activeLeads = filteredLeads.filter(l => l.status === 'active' || l.status === 'assigned').length;
+
+    // Rendimiento por Agente
+    const agentPerformance = useMemo(() => {
+        return agents.map(agent => {
+            const agentLeads = filteredLeads.filter(l => l.assignedAgentId === agent.id);
+            const sales = agentLeads.filter(l => l.status === 'sold').length;
+            return {
+                ...agent,
+                leadsCount: agentLeads.length,
+                salesCount: sales,
+                conversion: agentLeads.length > 0 ? ((sales / agentLeads.length) * 100).toFixed(0) : 0
+            };
+        }).sort((a, b) => b.salesCount - a.salesCount);
+    }, [agents, filteredLeads]);
+
+    return (
+        <div className="animate-in fade-in space-y-8">
+            {/* Header y Filtros */}
+            <div className="flex flex-col md:flex-row justify-between items-end gap-4 bg-white p-5 rounded-[24px] shadow-sm border border-gray-100">
+                <div>
+                    <h2 className="text-xl font-bold text-gray-900">Reportes de Rendimiento</h2>
+                    <p className="text-xs text-gray-500 mt-1">Métricas clave en tiempo real</p>
+                </div>
+                <div className="flex gap-2 items-center">
+                    <select 
+                        className="bg-gray-50 border border-gray-200 text-xs rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-blue-100"
+                        value={filterAgent}
+                        onChange={e => setFilterAgent(e.target.value)}
+                    >
+                        <option value="all">Todos los Agentes</option>
+                        {agents.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                    </select>
+                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
+                        <input type="date" className="bg-transparent text-xs outline-none text-gray-600" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                        <span className="text-gray-300">-</span>
+                        <input type="date" className="bg-transparent text-xs outline-none text-gray-600" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                    </div>
+                </div>
+            </div>
+
+            {/* Tarjetas KPI */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Users size={18}/></div>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900">{totalLeads}</p>
+                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Total Leads</p>
+                </div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-green-50 text-green-600 rounded-lg"><DollarSign size={18}/></div>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900">{soldLeads}</p>
+                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Ventas Cerradas</p>
+                </div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><TrendingUp size={18}/></div>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900">{conversionRate}%</p>
+                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Tasa Conversión</p>
+                </div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><Activity size={18}/></div>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900">{activeLeads}</p>
+                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">En Proceso</p>
+                </div>
+            </div>
+
+            {/* Tabla Rendimiento Agentes */}
+            <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-100 bg-[#FBFBFD]">
+                    <h3 className="font-bold text-gray-800 text-sm">Ranking de Agentes</h3>
+                </div>
+                <table className="w-full text-left">
+                    <thead className="border-b border-gray-100">
+                        <tr>
+                            <th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Agente</th>
+                            <th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Leads</th>
+                            <th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Ventas</th>
+                            <th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase w-1/3">Efectividad</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {agentPerformance.map(agent => (
+                            <tr key={agent.id} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-6 py-4">
+                                    <div className="flex items-center gap-3">
+                                        <img src={agent.foto || "https://ui-avatars.com/api/?name="+agent.nombre} className="w-8 h-8 rounded-full object-cover bg-gray-200 border border-white shadow-sm"/>
+                                        <span className="text-sm font-semibold text-gray-700">{agent.nombre}</span>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 text-xs font-medium text-gray-600">{agent.leadsCount}</td>
+                                <td className="px-6 py-4 text-xs font-bold text-green-600">{agent.salesCount}</td>
+                                <td className="px-6 py-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                            <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-500" style={{ width: `${agent.conversion}%` }}></div>
+                                        </div>
+                                        <span className="text-[10px] font-bold text-gray-500 w-8 text-right">{agent.conversion}%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                        {agentPerformance.length === 0 && (
+                            <tr><td colSpan="4" className="text-center py-8 text-gray-400 text-xs">No hay datos para mostrar.</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+// --- MODALES (Restaurado Diseño Original) ---
 const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus, isArchive }) => {
     if (!lead) return null;
     const assignedAgent = agents.find(a => a.id === lead.assignedAgentId);
@@ -274,7 +421,6 @@ const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus,
     );
 };
 
-// --- MODAL ASIGNACIÓN ---
 const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
     const [search, setSearch] = useState('');
     if (!isOpen) return null;
@@ -457,16 +603,18 @@ function App() {
                                 <div className="flex gap-1 bg-[#E8E8ED]/50 p-1 rounded-xl w-fit self-start">
                                     <button onClick={() => setAdminTab('active')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'active' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><Inbox size={14} /> Activos</button>
                                     <button onClick={() => setAdminTab('assigned')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'assigned' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><UserCheck size={14} /> Asignados</button>
+                                    <button onClick={() => setAdminTab('reports')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'reports' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><BarChart3 size={14} /> Reportes</button>
                                     <button onClick={() => setAdminTab('archived')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'archived' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><Archive size={14} /> Archivo</button>
                                     <button onClick={() => setAdminTab('agents')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'agents' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><Briefcase size={14} /> Agentes</button>
                                     <button onClick={() => setAdminTab('brain')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${adminTab === 'brain' ? 'bg-white text-black shadow-sm' : 'text-[#86868b] hover:text-black'}`}><Sparkles size={14} /> Inteligencia</button>
                                 </div>
-                                {adminTab !== 'brain' && <div className="relative group w-full md:w-auto"><Search className="absolute left-3 top-2.5 text-gray-400" size={14} /><input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-8 py-2 bg-white border-0 rounded-xl text-sm w-full md:w-64 outline-none shadow-sm" />{searchTerm && (<button onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"><X size={14} /></button>)}</div>}
+                                {adminTab !== 'brain' && adminTab !== 'reports' && <div className="relative group w-full md:w-auto"><Search className="absolute left-3 top-2.5 text-gray-400" size={14} /><input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 pr-8 py-2 bg-white border-0 rounded-xl text-sm w-full md:w-64 outline-none shadow-sm" />{searchTerm && (<button onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"><X size={14} /></button>)}</div>}
                             </div>
 
                             {adminTab === 'active' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active') && !l.assignedAgentId)} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> :
-                                adminTab === 'assigned' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active') && l.assignedAgentId)} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> :
+                                adminTab === 'assigned' ? <LeadsList leads={leads.filter(l => (!l.status || l.status === 'active' || l.status === 'sold') && l.assignedAgentId)} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={false} searchTerm={searchTerm} /> :
                                     adminTab === 'archived' ? <LeadsList leads={leads.filter(l => l.status === 'archived')} agents={agents} onOpenLead={(l) => setSelectedLead(l)} onOpenAssign={openAssignModal} onDeleteLead={deleteLead} onUpdateStatus={updateLeadStatus} isArchive={true} searchTerm={searchTerm} /> :
+                                        adminTab === 'reports' ? <ReportsDashboard leads={leads} agents={agents} /> :
                                         adminTab === 'agents' ? <AgentsManager agents={agents} leads={leads} onOpenLead={(l) => setSelectedLead(l)} onSaveAgent={saveAgent} onDeleteAgent={deleteAgent} searchTerm={searchTerm} /> :
                                             <AdminBrain aiConfig={aiConfig} onSaveConfig={saveAiConfig} />}
                         </div>
@@ -494,7 +642,7 @@ function App() {
     );
 }
 
-// --- LANDING VIEW (Diseño Original Restaurado) ---
+// --- LANDING VIEW ---
 function LandingView({ onStartChat, onOpenLogin }) {
     const testimonials = [{ text: "Gracias a Lucy encontré un plan perfecto para mi mamá sin gastar de más. Fue muy fácil.", author: "María G. - Florida" }, { text: "Excelente atención, muy paciente y clara. Me sentí muy segura con la información.", author: "Carmen R. - Texas" }, { text: "Rápido y sencillo. Encontré justo lo que necesitaba para mi tranquilidad.", author: "José L. - California" }];
     const [idx, setIdx] = useState(0);
@@ -517,12 +665,12 @@ function LandingView({ onStartChat, onOpenLogin }) {
                     <div className="flex flex-col items-center gap-1.5"><div className="p-2 bg-pink-50 text-pink-600 rounded-xl"><Heart size={20} /></div><span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center">Soporte Familiar</span></div>
                 </div>
             </div>
-            <div className="p-4 text-center"><p className="text-[10px] text-slate-300">&copy; 2024 Asistente de Beneficios. Privacidad Garantizada.</p><button onClick={onOpenLogin} className="mt-2 text-[9px] text-slate-200 hover:text-slate-400 transition-colors">Acceso Corporativo</button></div>
+            <div className="p-4 text-center"><p className="text-[10px] text-slate-300">&copy; 2024 Asistente de Beneficios. Privacidad Garantizada.</p>{onOpenLogin && <button onClick={onOpenLogin} className="mt-2 text-[9px] text-slate-200 hover:text-slate-400 transition-colors">Acceso Corporativo</button>}</div>
         </div>
     );
 }
 
-// --- AGENTS MANAGER ---
+// --- AGENTS MANAGER (CORREGIDO) ---
 function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, searchTerm }) {
     const [selectedAgent, setSelectedAgent] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -598,7 +746,7 @@ function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, 
         const agentLeads = getAgentLeads(selectedAgent.id);
         return (
             <div className="animate-in fade-in space-y-6">
-                <button onClick={() => setSelectedAgent(null)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-black transition-colors mb-4"><RotateCcw size={14}/> Volver a la lista</button>
+                <button onClick={() => setSelectedAgent(null)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-black transition-colors mb-4"><RotateCcw size={14} /> Volver a la lista</button>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-6 items-center md:items-start">
                     <img src={selectedAgent.foto || "https://ui-avatars.com/api/?name=" + selectedAgent.nombre} className="w-24 h-24 rounded-full object-cover border-4 border-gray-50 shadow-md" />
                     <div className="flex-1 text-center md:text-left space-y-2">
@@ -752,7 +900,7 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
     const handleAuthSubmit = async (e) => { e.preventDefault(); setAuthError(null); try { const user = auth.currentUser; if (user && user.email) { await signInWithEmailAndPassword(auth, user.email, authPassword); setShowAuthModal(false); if (targetWebhook === 'main') setIsEditingWebhook(true); if (targetWebhook === 'assignment') setIsEditingAssignmentWebhook(true); } else { setAuthError("No se pudo verificar la sesión."); } } catch (error) { console.error("Auth check failed", error); setAuthError("Contraseña incorrecta."); } };
 
     return (
-        <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="max-w-4xl mx-auto animate-in fade-in space-y-6">
             <div className="bg-white p-8 rounded-[24px] shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100 flex flex-col md:flex-row gap-10">
                 <div className="flex-1 space-y-6">
                     <div>
@@ -783,6 +931,7 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
                                                     <button onClick={() => handleRemoveSlot(day, idx)} className="text-red-400 hover:text-red-600 ml-1"><MinusCircle size={14} /></button>
                                                 </div>
                                             ))}
+                                            {/* Retrocompatibilidad visual si no hay slots array */}
                                             {(!c.schedule[day].slots && c.schedule[day].start) && (
                                                 <div className="text-[10px] text-orange-400 italic">Formato antiguo detectado. Agrega un turno para actualizar.</div>
                                             )}
@@ -826,20 +975,33 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
     );
 }
 
-// --- LEADS LIST ---
+// --- LEADS LIST (MODIFICADO: Con Modal de Asignación Masiva) ---
 function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
     const [leadToDelete, setLeadToDelete] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
+
+    // NUEVO: Estado para el Modal de Asignación Masiva
+    const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
+    const [bulkSearchTerm, setBulkSearchTerm] = useState('');
+
     const filteredLeads = leads.filter(l => String(l.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()));
-    
+
     const handleSelectAll = (e) => e.target.checked ? setSelectedIds(filteredLeads.map(l => l.id)) : setSelectedIds([]);
     const handleSelectOne = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
     const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
-    const handleBulkAssignAction = (agentId) => { onOpenAssign(selectedIds); setSelectedIds([]); };
+
+    // Filtrado de agentes en el modal
+    const filteredAgentsForBulk = agents.filter(a => a.nombre.toLowerCase().includes(bulkSearchTerm.toLowerCase()));
+
+    const handleBulkAssignAction = (agentId) => {
+        onOpenAssign(selectedIds);
+        setSelectedIds([]); // Limpiar selección tras abrir modal
+    };
 
     return (
         <div className="animate-in fade-in duration-500">
+
             {leadToDelete && (
                 <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm border border-gray-100 text-center">
@@ -850,6 +1012,7 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
                     </div>
                 </div>
             )}
+
             <div className="bg-white rounded-[24px] shadow-sm overflow-hidden border border-gray-100/50">
                 {selectedIds.length > 0 && (
                     <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 flex justify-between items-center animate-in fade-in sticky top-0 z-20">
@@ -861,10 +1024,11 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
                         </div>
                     </div>
                 )}
+
                 <table className="w-full text-left table-fixed">
                     <thead className="bg-[#FBFBFD] border-b border-gray-100">
                         <tr>
-                            <th className="px-4 py-4 w-12 text-center"><input type="checkbox" onChange={handleSelectAll} checked={filteredLeads.length > 0 && selectedIds.length === filteredLeads.length} className="custom-checkbox"/></th>
+                            <th className="px-4 py-4 w-12 text-center"><input type="checkbox" className="custom-checkbox" checked={filteredLeads.length > 0 && selectedIds.length === filteredLeads.length} onChange={handleSelectAll} /></th>
                             <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/4">Nombre</th>
                             <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/4">Agente</th>
                             <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/3">Resumen</th>
@@ -874,13 +1038,25 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
                     <tbody className="divide-y divide-gray-50">
                         {filteredLeads.map(l => {
                             const assignedAgent = agents.find(a => a.id === l.assignedAgentId);
+                            const isSold = l.status === 'sold';
+                            
                             return (
-                                <tr key={l.id} onClick={() => onOpenLead(l)} className={`hover:bg-[#F5F5F7] transition-colors cursor-pointer group ${selectedIds.includes(l.id) ? 'bg-blue-50/30' : ''}`}>
-                                    <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}><input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(l.id)} onChange={() => handleSelectOne(l.id)} /></td>
+                                <tr key={l.id} onClick={() => onOpenLead(l)} className={`hover:bg-[#F5F5F7] transition-colors cursor-pointer group ${selectedIds.includes(l.id) ? 'bg-blue-50/30' : ''} ${isSold ? 'bg-green-50/30' : ''}`}>
+                                    <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
+                                        <input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(l.id)} onChange={() => handleSelectOne(l.id)} />
+                                    </td>
                                     <td className="px-4 py-5 truncate"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-gradient-to-b from-gray-100 to-gray-200 flex items-center justify-center font-semibold text-xs text-gray-500 shrink-0 border border-white shadow-sm">{l.nombre ? l.nombre.charAt(0).toUpperCase() : '?'}</div><div className="min-w-0"><div className="text-sm font-semibold text-[#1d1d1f] truncate">{String(l.nombre || 'Anónimo')}</div><div className="text-[11px] text-[#86868b] mt-0.5">{String(l.edad || '')} años • {String(l.estado || '')}</div></div></div></td>
-                                    <td className="px-4 py-5">{assignedAgent ? (<div className="flex items-center gap-2"><img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-5 h-5 rounded-full object-cover"/><span className="text-xs font-medium text-gray-700 truncate">{assignedAgent.nombre}</span></div>) : (<span className="text-[10px] text-gray-400 italic">-- Sin Asignar --</span>)}</td>
+                                    <td className="px-4 py-5">{assignedAgent ? (<div className="flex items-center gap-2"><img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-5 h-5 rounded-full object-cover" /><span className="text-xs font-medium text-gray-700 truncate">{assignedAgent.nombre}</span></div>) : (<span className="text-[10px] text-gray-400 italic">-- Sin Asignar --</span>)}</td>
                                     <td className="px-4 py-5"><p className="text-xs text-[#1d1d1f] truncate opacity-80">"{String(l.resumen_ai || '')}"</p></td>
-                                    <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}><div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"><button onClick={() => onUpdateStatus(l.id, isArchive ? 'active' : 'archived')} className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-white rounded-lg transition-all">{isArchive ? <RotateCcw size={16} strokeWidth={1.5} /> : <Archive size={16} strokeWidth={1.5} />}</button><button onClick={() => setLeadToDelete(l.id)} className="p-2 text-[#86868b] hover:text-red-500 hover:bg-white rounded-lg transition-all"><Trash2 size={16} strokeWidth={1.5} /></button></div></td>
+                                    <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                            {!isSold && !isArchive && (
+                                                <button onClick={() => onUpdateStatus([l.id], 'sold')} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-all" title="Marcar Vendido"><DollarSign size={16} strokeWidth={2.5}/></button>
+                                            )}
+                                            <button onClick={() => onUpdateStatus(l.id, isArchive ? 'active' : 'archived')} className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-white rounded-lg transition-all">{isArchive ? <RotateCcw size={16} strokeWidth={1.5} /> : <Archive size={16} strokeWidth={1.5} />}</button>
+                                            <button onClick={() => setLeadToDelete(l.id)} className="p-2 text-[#86868b] hover:text-red-500 hover:bg-white rounded-lg transition-all"><Trash2 size={16} strokeWidth={1.5} /></button>
+                                        </div>
+                                    </td>
                                 </tr>
                             );
                         })}
@@ -901,23 +1077,49 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
     const [loading, setLoading] = useState(false);
     const [showOptions, setShowOptions] = useState(false);
     const [pendingLeadData, setPendingLeadData] = useState(null);
+
     const [showShareModal, setShowShareModal] = useState(false);
     const [urlCopied, setUrlCopied] = useState(false);
+
     const scrollRef = useRef(null);
     const { isAgentAvailable, message: statusMessage, isVacation, resumeDate } = getAgentStatus(aiConfig);
 
-    useEffect(() => { const i = setInterval(() => setActiveUsers(p => p + (Math.random() > 0.5 ? 1 : -1)), 5000); return () => clearInterval(i); }, []);
+    useEffect(() => {
+        const i = setInterval(() => setActiveUsers(p => p + (Math.random() > 0.5 ? 1 : -1)), 5000);
+        return () => clearInterval(i);
+    }, []);
+
     useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [msgs, loading, showOptions]);
 
-    const handleCopyLink = () => { const url = window.location.href; navigator.clipboard.writeText(url).then(() => { setUrlCopied(true); setTimeout(() => setUrlCopied(false), 2500); }); };
-    const handleOptionClick = (type) => { if (pendingLeadData) { const finalLead = { ...pendingLeadData, metodo_contacto: type, horario_preferido: type === 'ahora' ? 'Inmediata' : 'Pendiente' }; onSaveLead(finalLead); setPendingLeadData(null); setShowOptions(false); const responseMsg = type === 'ahora' ? "¡Perfecto! Un agente se comunicará con usted en breve al número proporcionado." : "Excelente. Un agente le llamará para programar la cita en el horario que mejor le convenga."; setMsgs(prev => [...prev, { role: 'assistant', content: responseMsg }]); } };
+    const handleCopyLink = () => {
+        const url = window.location.href;
+        navigator.clipboard.writeText(url).then(() => {
+            setUrlCopied(true);
+            setTimeout(() => setUrlCopied(false), 2500);
+        });
+    };
+
+    const handleOptionClick = (type) => {
+        if (pendingLeadData) {
+            const finalLead = {
+                ...pendingLeadData,
+                metodo_contacto: type,
+                horario_preferido: type === 'ahora' ? 'Inmediata' : 'Pendiente'
+            };
+            onSaveLead(finalLead);
+            setPendingLeadData(null);
+            setShowOptions(false);
+            const responseMsg = type === 'ahora' ? "¡Perfecto! Un agente se comunicará con usted en breve al número proporcionado." : "Excelente. Un agente le llamará para programar la cita en el horario que mejor le convenga.";
+            setMsgs(prev => [...prev, { role: 'assistant', content: responseMsg }]);
+        }
+    };
 
     const send = async (e) => {
         e.preventDefault(); if (!input.trim() || loading) return;
         const newM = [...msgs, { role: 'user', content: input }]; setMsgs(newM); setInput(''); setLoading(true);
         try {
             let availabilityInstruction = "";
-            if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}.`;
+            if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA DEL SISTEMA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}. Sé muy amable y profesional, NO digas "vacaciones".`;
             
             // --- INYECCIÓN DE HORARIOS DINÁMICOS AL PROMPT ---
             const scheduleText = getScheduleText(aiConfig?.schedule);
@@ -933,40 +1135,84 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
           HISTORIAL:
           ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
           
-          INSTRUCCIÓN TÉCNICA:
-          Si el usuario YA ha proporcionado Nombre, Edad, Email y algún dato de contacto, devuelve JSON:
+          INSTRUCCIÓN TÉCNICA CRÍTICA:
+          Si el usuario YA ha proporcionado Nombre, Edad, Email y algún dato de contacto, y consideras que la etapa de recolección de datos ha terminado, TU RESPUESTA DEBE INCLUIR UN BLOQUE JSON AL FINAL con este formato:
           \`\`\`json
           { "action": "data_ready", "nombre": "...", "edad": "...", "email": "...", "telefono": "...", "resumen_ai": "..." }
           \`\`\`
+          IMPORTANTE: NO te despidas definitivamente todavía. Solo di que tienes opciones disponibles.
+          Si no, responde normalmente como Lucy.
         `;
+
             const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
-            let reply = res.candidates[0].content.parts[0].text;
-            const jsonMatch = reply.match(/```json([\s\S]*?)```/);
-            if (jsonMatch) { try { const jsonStr = jsonMatch[1]; const data = JSON.parse(jsonStr); if (data.action === 'data_ready') { setPendingLeadData({ nombre: data.nombre || 'Anonimo', edad: data.edad || '', email: data.email || '', telefono: data.telefono || '', resumen_ai: data.resumen_ai || 'Lead capturado por Lucy', fullChat: newM }); setShowOptions(true); reply = rawText.replace(jsonMatch[0], '').trim(); } } catch (jsonErr) { console.error("Error parsing JSON", jsonErr); } }
-            reply = cleanAiMessage(reply); setMsgs([...newM, { role: 'assistant', content: reply }]);
-        } catch (e) { console.error(e); setMsgs([...newM, { role: 'assistant', content: `⚠️ ${e.message}` }]); }
+            const rawText = res.candidates[0].content.parts[0].text;
+            let reply = rawText;
+            const jsonMatch = rawText.match(/```json([\s\S]*?)```/);
+            if (jsonMatch) {
+                try {
+                    const jsonStr = jsonMatch[1];
+                    const data = JSON.parse(jsonStr);
+                    if (data.action === 'data_ready') {
+                        setPendingLeadData({ nombre: data.nombre || 'Anonimo', edad: data.edad || '', email: data.email || '', telefono: data.telefono || '', resumen_ai: data.resumen_ai || 'Lead capturado por Lucy', fullChat: newM });
+                        setShowOptions(true);
+                        reply = rawText.replace(jsonMatch[0], '').trim();
+                    }
+                } catch (jsonErr) { console.error("Error parsing JSON", jsonErr); }
+            }
+            reply = cleanAiMessage(reply);
+            setMsgs([...newM, { role: 'assistant', content: reply }]);
+        } catch (e) {
+            console.error(e);
+            setMsgs([...newM, { role: 'assistant', content: `⚠️ ${e.message}` }]);
+        }
         setLoading(false);
     };
 
     return (
         <div className="max-w-[480px] mx-auto flex flex-col h-full bg-white rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden relative font-sans">
             <div className="bg-white/90 backdrop-blur-xl p-5 border-b border-gray-100 flex items-center justify-between z-10 sticky top-0">
-                <div className="flex items-center gap-4"><div className="relative"><LucyAvatar className="w-12 h-12" /></div><div><h2 className="font-bold text-[#1d1d1f] text-lg tracking-tight">Lucy</h2><div className="flex items-center gap-2"><div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full bg-green-500 animate-pulse`}></span><p className="text-xs text-[#86868b] font-medium">En Línea</p></div><span className="text-[#86868b] text-[10px]">•</span><p className="text-xs text-blue-600 font-medium">{activeUsers} personas</p></div></div></div>
+                <div className="flex items-center gap-4">
+                    <div className="relative"><LucyAvatar className="w-12 h-12" /></div>
+                    <div>
+                        <h2 className="font-bold text-[#1d1d1f] text-lg tracking-tight">Lucy</h2>
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full bg-green-500 animate-pulse`}></span><p className="text-xs text-[#86868b] font-medium">En Línea</p></div>
+                            <span className="text-[#86868b] text-[10px]">•</span>
+                            <p className="text-xs text-blue-600 font-medium">{activeUsers} personas</p>
+                        </div>
+                    </div>
+                </div>
                 <button onClick={() => setShowShareModal(true)} className="p-2 bg-slate-50 text-slate-400 rounded-full hover:bg-slate-100 hover:text-blue-600 transition-colors" title="Guardar enlace"><Share2 size={20} /></button>
             </div>
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-6 bg-white no-scrollbar">
-                {msgs.map((m, i) => (<div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>{m.role === 'assistant' && <LucyAvatar className="w-8 h-8 mr-2 mt-auto shrink-0" />}<div className={`w-fit max-w-[75%] px-5 py-3 rounded-2xl text-[16px] leading-relaxed shadow-sm text-left ${m.role === 'user' ? 'bg-[#007AFF] text-white rounded-br-none' : 'bg-[#F2F2F7] text-[#1d1d1f] rounded-bl-none'}`}><RichText content={m.content} /></div></div>))}
+                {msgs.map((m, i) => (
+                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                        {m.role === 'assistant' && <LucyAvatar className="w-8 h-8 mr-2 mt-auto shrink-0" />}
+                        <div className={`w-fit max-w-[75%] px-5 py-3 rounded-2xl text-[16px] leading-relaxed shadow-sm text-left ${m.role === 'user' ? 'bg-[#007AFF] text-white rounded-br-none' : 'bg-[#F2F2F7] text-[#1d1d1f] rounded-bl-none'}`}><RichText content={m.content} /></div>
+                    </div>
+                ))}
                 {loading && <div className="flex justify-start pl-10"><div className="bg-[#F2F2F7] px-4 py-3 rounded-2xl rounded-bl-none flex gap-1.5 items-center w-fit"><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span></div></div>}
                 {showOptions && (
                     <div className="flex flex-col gap-2 pt-2 animate-in zoom-in px-8">
-                        <button onClick={() => handleOptionClick('ahora')} disabled={!isAgentAvailable} className={`w-full font-medium py-3.5 rounded-xl transition-all text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 ${isAgentAvailable ? 'bg-[#007AFF] text-white hover:bg-[#0062cc]' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}>{isAgentAvailable ? <Zap size={16} fill="currentColor"/> : <Moon size={16}/>} {isAgentAvailable ? 'Hablar con un Agente Ahora' : 'Agentes no disponibles'}</button>
-                        <button onClick={() => handleOptionClick('programada')} className="w-full bg-[#F2F2F7] text-[#007AFF] font-medium py-3.5 rounded-xl hover:bg-[#E5E5EA] transition-all text-sm flex items-center justify-center gap-2 active:scale-95"><Calendar size={16}/> Programar Llamada</button>
+                        <button onClick={() => handleOptionClick('ahora')} disabled={!isAgentAvailable} className={`w-full font-medium py-3.5 rounded-xl transition-all text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 ${isAgentAvailable ? 'bg-[#007AFF] text-white hover:bg-[#0062cc]' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}>{isAgentAvailable ? <Zap size={16} fill="currentColor" /> : <Moon size={16} />} {isAgentAvailable ? 'Hablar con un Agente Ahora' : 'Agentes no disponibles'}</button>
+                        <button onClick={() => handleOptionClick('programada')} className="w-full bg-[#F2F2F7] text-[#007AFF] font-medium py-3.5 rounded-xl hover:bg-[#E5E5EA] transition-all text-sm flex items-center justify-center gap-2 active:scale-95"><Calendar size={16} /> Programar Llamada</button>
                     </div>
                 )}
             </div>
-            <form onSubmit={send} className="p-4 bg-white/90 backdrop-blur-xl border-t border-gray-100 flex gap-3"><input value={input} onChange={e => setInput(e.target.value)} placeholder="Escribe un mensaje..." className="flex-1 bg-[#F2F2F7] border-0 rounded-full px-5 py-3 text-[16px] focus:ring-2 focus:ring-[#007AFF]/20 text-[#1d1d1f] placeholder:text-[#86868b] outline-none transition-all"/><button disabled={loading} className="w-12 h-12 bg-[#007AFF] text-white rounded-full hover:bg-[#0062cc] transition-all active:scale-90 disabled:opacity-50 disabled:scale-100 flex items-center justify-center shrink-0 shadow-md"><Send size={20} fill="currentColor" className="ml-0.5" /></button></form>
+            <form onSubmit={send} className="p-4 bg-white/90 backdrop-blur-xl border-t border-gray-100 flex gap-3">
+                <input value={input} onChange={e => setInput(e.target.value)} placeholder="Escribe un mensaje..." className="flex-1 bg-[#F2F2F7] border-0 rounded-full px-5 py-3 text-[16px] focus:ring-2 focus:ring-[#007AFF]/20 text-[#1d1d1f] placeholder:text-[#86868b] outline-none transition-all" />
+                <button disabled={loading} className="w-12 h-12 bg-[#007AFF] text-white rounded-full hover:bg-[#0062cc] transition-all active:scale-90 disabled:opacity-50 disabled:scale-100 flex items-center justify-center shrink-0 shadow-md"><Send size={20} fill="currentColor" className="ml-0.5" /></button>
+            </form>
             <div className="text-center py-2 bg-white border-t border-gray-50">{onOpenLogin && <button onClick={onOpenLogin} className="text-[9px] text-slate-300 hover:text-slate-400 transition-colors">Acceso Corporativo</button>}</div>
-            {showShareModal && (<div className="absolute inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in"><div className="bg-white rounded-[24px] shadow-2xl p-6 w-full max-w-sm animate-in zoom-in-95"><div className="flex justify-between items-start mb-4"><div><h3 className="text-lg font-bold text-slate-800">Guardar conversación</h3><p className="text-xs text-slate-500 mt-1">Copie este enlace para volver a hablar con Lucy más tarde sin perder el contacto.</p></div><button onClick={() => setShowShareModal(false)} className="p-1 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full"><X size={16} /></button></div><div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center gap-2 mb-4"><input type="text" readOnly value={window.location.href} className="bg-transparent border-0 text-xs text-slate-600 w-full outline-none font-mono truncate" /></div><button onClick={handleCopyLink} className={`w-full py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 shadow-lg ${urlCopied ? 'bg-green-500 text-white' : 'bg-black text-white hover:bg-slate-800'}`}>{urlCopied ? <CheckCircle size={16} /> : <Copy size={16} />}{urlCopied ? '¡Enlace Copiado!' : 'Copiar Enlace'}</button></div></div>)}
+            {showShareModal && (
+                <div className="absolute inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
+                    <div className="bg-white rounded-[24px] shadow-2xl p-6 w-full max-w-sm animate-in zoom-in-95">
+                        <div className="flex justify-between items-start mb-4"><div><h3 className="text-lg font-bold text-slate-800">Guardar conversación</h3><p className="text-xs text-slate-500 mt-1">Copie este enlace para volver a hablar con Lucy más tarde sin perder el contacto.</p></div><button onClick={() => setShowShareModal(false)} className="p-1 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full"><X size={16} /></button></div>
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center gap-2 mb-4"><input type="text" readOnly value={window.location.href} className="bg-transparent border-0 text-xs text-slate-600 w-full outline-none font-mono truncate" /></div>
+                        <button onClick={handleCopyLink} className={`w-full py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 shadow-lg ${urlCopied ? 'bg-green-500 text-white' : 'bg-black text-white hover:bg-slate-800'}`}>{urlCopied ? <CheckCircle size={16} /> : <Copy size={16} />}{urlCopied ? '¡Enlace Copiado!' : 'Copiar Enlace'}</button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
