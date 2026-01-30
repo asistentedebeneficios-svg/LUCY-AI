@@ -863,7 +863,15 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
                                 </div>
                             ))}
                         </div>
-                        <label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Instrucciones Base</label>
+                        <div className="flex justify-between items-end mb-2">
+                            <label className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide">Instrucciones Base</label>
+                            <div className="text-[9px] text-gray-400 text-right">
+                                Para botones copia y pega esto al final de tu instrucción:<br/>
+                                <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600 select-all">
+                                    [BUTTONS:[{'{'}"label":"Texto","value":"Lo que envía"{'}'}]]
+                                </code>
+                            </div>
+                        </div>
                         <textarea value={c.systemPrompt} onChange={(e) => setC({ ...c, systemPrompt: e.target.value })} className="w-full h-32 p-4 bg-white border border-gray-200 rounded-xl text-xs font-mono text-[#1d1d1f] focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all shadow-sm leading-relaxed resize-none" />
                     </div>
                 </div>
@@ -1064,33 +1072,37 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
             const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
             const rawText = res.candidates[0].content.parts[0].text;
             
-            // DETECTAR SEÑALES OCULTAS EN EL TEXTO DE LUCY
-            let nextUiState = null;
-            if (rawText.includes('[MODE:HEALTH]')) nextUiState = 'health';
-            else if (rawText.includes('[MODE:SMOKER]')) nextUiState = 'smoker';
-            else if (rawText.includes('[MODE:BUDGET]')) nextUiState = 'budget';
-            else if (rawText.includes('[MODE:CLOSING]')) nextUiState = 'closing';
+            // DETECTAR BOTONES DINÁMICOS (SINTAXIS JSON)
+            // Busca: [BUTTONS:[{"label":"Si","value":"Si"},{"label":"No","value":"No"}]]
+            let nextButtons = null;
+            const buttonMatch = rawText.match(/\[BUTTONS:(\[\s*\{[\s\S]*?\}\s*\])\]/);
+            
+            if (buttonMatch && buttonMatch[1]) {
+                try {
+                    nextButtons = JSON.parse(buttonMatch[1]);
+                } catch (e) {
+                    console.error("Error parseando botones dinámicos:", e);
+                }
+            }
 
-            // PROCESAR JSON DE CIERRE (SI EXISTE)
+            // PROCESAR JSON DE CIERRE (DATA READY)
             const jsonMatch = rawText.match(/```json([\s\S]*?)```/);
             if (jsonMatch) {
                 try {
                     const jsonStr = jsonMatch[1];
                     const data = JSON.parse(jsonStr);
                     if (data.action === 'data_ready') {
-                        onSaveLead({
-                            ...data,
-                            fullChat: newM
-                        });
+                        onSaveLead({ ...data, fullChat: newM });
                     }
                 } catch (jsonErr) { console.error("Error parsing JSON", jsonErr); }
             }
 
-            // LIMPIAR RESPUESTA PARA EL USUARIO
-            const finalReply = cleanAiMessage(rawText);
-            setMsgs([...newM, { role: 'assistant', content: finalReply }]);
-            setUiState(nextUiState); // Activar botones si corresponde
+            // LIMPIAR RESPUESTA (Quitamos tags de botones y JSON)
+            let finalReply = cleanAiMessage(rawText);
+            finalReply = finalReply.replace(/\[BUTTONS:[\s\S]*?\]/g, '').trim();
 
+            setMsgs([...newM, { role: 'assistant', content: finalReply }]);
+            setUiState(nextButtons); // Ahora uiState guardará el array de botones
         } catch (e) {
             console.error(e);
             setMsgs([...newM, { role: 'assistant', content: "Lo siento, tuve un pequeño error de conexión. ¿Podría repetirme eso?" }]);
@@ -1150,50 +1162,24 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
                 )}
 
                 {/* ZONA DE BOTONES DINÁMICOS */}
-                {!loading && uiState === 'health' && (
-                    <div className="flex flex-wrap gap-2 pl-10 animate-in fade-in slide-in-from-bottom-4">
-                        <QuickButton label="Excelente" value="Mi salud es excelente" icon={Check} />
-                        <QuickButton label="Buena / Regular" value="Mi salud es buena en general" icon={Activity} />
-                        <QuickButton label="Condiciones Graves" value="Tengo condiciones de salud serias" icon={AlertCircle} />
+                {!loading && uiState && Array.isArray(uiState) && (
+                    <div className="flex flex-wrap gap-2 pl-10 animate-in fade-in slide-in-from-bottom-4 pr-4">
+                        {uiState.map((btn, idx) => (
+                            <button 
+                                key={idx}
+                                onClick={() => send(btn.value)} 
+                                disabled={loading}
+                                className={`flex items-center gap-2 px-5 py-3 border rounded-2xl shadow-sm transition-all text-sm font-medium active:scale-95 ${
+                                    btn.style === 'primary' 
+                                    ? 'bg-[#007AFF] text-white border-transparent hover:bg-[#0062cc]' 
+                                    : 'bg-white border-gray-200 text-gray-700 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600'
+                                }`}
+                            >
+                                {btn.label}
+                            </button>
+                        ))}
                     </div>
                 )}
-
-                {!loading && uiState === 'smoker' && (
-                    <div className="flex flex-wrap gap-2 pl-10 animate-in fade-in slide-in-from-bottom-4">
-                        <QuickButton label="Sí, fumo" value="Sí, fumo actualmente" icon={Check} />
-                        <QuickButton label="No fumo" value="No fumo" icon={X} />
-                        <QuickButton label="Lo dejé hace tiempo" value="Lo dejé hace más de 12 meses" icon={Clock} />
-                    </div>
-                )}
-
-                {!loading && uiState === 'budget' && (
-                    <div className="flex flex-col gap-2 pl-10 animate-in fade-in slide-in-from-bottom-4 max-w-[280px]">
-                        <QuickButton label="$30 - $50 al mes" value="Me siento cómodo pagando entre 30 y 50 dólares mensuales" icon={Wallet} />
-                        <QuickButton label="$50 - $80 al mes" value="Puedo pagar entre 50 y 80 dólares mensuales" icon={Wallet} />
-                        <QuickButton label="$80 - $100 al mes" value="Mi presupuesto es de 80 a 100 dólares" icon={Wallet} />
-                        <QuickButton label="Más de $100" value="Puedo invertir más de 100 dólares para mayor cobertura" icon={Star} />
-                    </div>
-                )}
-
-                {!loading && uiState === 'closing' && (
-                    <div className="flex flex-col gap-2 pl-10 animate-in zoom-in px-4">
-                        <button 
-                            onClick={() => send("Quiero hablar con un agente AHORA MISMO")} 
-                            disabled={!isAgentAvailable} 
-                            className={`w-full font-medium py-3.5 rounded-xl transition-all text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 ${isAgentAvailable ? 'bg-[#007AFF] text-white hover:bg-[#0062cc]' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}
-                        >
-                            {isAgentAvailable ? <Zap size={16} fill="currentColor" /> : <Moon size={16} />} 
-                            {isAgentAvailable ? 'Hablar con un Agente AHORA' : 'Agentes no disponibles'}
-                        </button>
-                        <button 
-                            onClick={() => send("Quiero PROGRAMAR una llamada para después")} 
-                            className="w-full bg-[#F2F2F7] text-[#007AFF] font-medium py-3.5 rounded-xl hover:bg-[#E5E5EA] transition-all text-sm flex items-center justify-center gap-2 active:scale-95"
-                        >
-                            <Calendar size={16} /> Programar Llamada
-                        </button>
-                    </div>
-                )}
-            </div>
 
             {/* INPUT AREA */}
             <form onSubmit={(e) => { e.preventDefault(); send(); }} className="p-4 bg-white/90 backdrop-blur-xl border-t border-gray-100 flex gap-3 items-center">
