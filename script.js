@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
 
-// --- IMPORTACIÓN DE ICONOS (LUCIDE REACT) ---
-// Nota: Renombramos 'Link' a 'LinkIcon' para evitar conflictos con routers de React
+// --- IMPORTACIÓN DE ICONOS ---
 import { 
   MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, 
   Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, 
@@ -19,9 +18,9 @@ import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, dele
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
 // --- CONFIGURACIÓN DEL SISTEMA ---
-const OFFLINE_MODE = false; // Cambiar a true si no hay internet para diseño
+const OFFLINE_MODE = false;
 
-// CLAVE API DE GEMINI (Dividida para evitar bloqueos automáticos simples)
+// CLAVE API (Dividida por seguridad)
 const AI_KEY_PART_A = "AIzaSyAIOAO4-h7lRRK8";
 const AI_KEY_PART_B = "SKAC2hgomoE-MaCZ58M";
 const GEMINI_API_KEY = `${AI_KEY_PART_A}${AI_KEY_PART_B}`;
@@ -38,7 +37,7 @@ const FIREBASE_CONFIG = {
 
 const APP_ID = 'gastos-finales-v1';
 
-// Inicialización de Firebase (Protegida)
+// Inicialización Segura
 let app, auth, db;
 if (!OFFLINE_MODE) {
     try {
@@ -51,10 +50,8 @@ if (!OFFLINE_MODE) {
 }
 
 // --- UTILIDADES ---
-
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
-// Limpia la respuesta de la IA de marcadores internos como [Botón]
 function cleanAiMessage(text) {
     if (!text) return '';
     let cleaned = text.replace(new RegExp('\\[Botón:.*?\\]', 'gi'), '').replace(new RegExp('\\[Button:.*?\\]', 'gi'), '');
@@ -75,16 +72,14 @@ function formatFirestoreDate(ts) {
     } catch (e) { return 'Fecha inválida'; }
 }
 
-// Renderizador de texto enriquecido (Negritas)
 const RichText = ({ content }) => {
     if (!content || typeof content !== 'string') return null;
     return <span className="text-sm leading-relaxed">{content.split(/(\*\*.*?\*\*)/g).map((part, i) => part.startsWith('**') ? <strong key={i} className="text-slate-900 font-bold">{part.slice(2, -2)}</strong> : part)}</span>;
 };
 
-// Limitador de peticiones para no saturar la API
 const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
 
-// Horario por defecto (Estructura Nueva Multi-Slot)
+// Horario por defecto
 const DEFAULT_SCHEDULE = { 
     lunes: { enabled: true, slots: [{start: '09:00', end: '18:00'}] },
     martes: { enabled: true, slots: [{start: '09:00', end: '18:00'}] },
@@ -95,14 +90,14 @@ const DEFAULT_SCHEDULE = {
     domingo: { enabled: false, slots: [{start: '10:00', end: '14:00'}] }
 };
 
-// --- VALIDACIÓN DE HORARIOS (Soporta múltiples turnos y previene pantalla blanca) ---
+// --- VALIDACIÓN DE HORARIOS ---
 const getAgentStatus = (config) => {
     try {
         if (!config) return { isAgentAvailable: true, message: "Disponible" };
         
         const now = new Date();
         
-        // 1. Verificar Modo Vacaciones
+        // 1. Vacaciones
         if (config.vacationMode && config.vacationStart && config.vacationEnd) {
             const vStart = new Date(config.vacationStart + 'T00:00:00');
             const vEnd = new Date(config.vacationEnd + 'T23:59:59');
@@ -113,7 +108,7 @@ const getAgentStatus = (config) => {
             }
         }
         
-        // 2. Verificar Día de la semana
+        // 2. Día de la semana
         const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
         const dayName = days[now.getDay()];
         const dayConfig = config.schedule?.[dayName];
@@ -122,9 +117,8 @@ const getAgentStatus = (config) => {
             return { isAgentAvailable: false, message: "Cerrado hoy" };
         }
 
-        // 3. Verificar SLOTS (Turnos)
+        // 3. Turnos (Slots)
         let activeSlots = dayConfig.slots || [];
-        // Compatibilidad con formato antiguo
         if (activeSlots.length === 0 && dayConfig.start && dayConfig.end) {
             activeSlots = [{ start: dayConfig.start, end: dayConfig.end }];
         }
@@ -134,30 +128,21 @@ const getAgentStatus = (config) => {
         }
 
         const currentMins = now.getHours() * 60 + now.getMinutes();
-        
-        // Comprobamos si la hora actual cae dentro de ALGUNO de los slots activos
         const isOpenNow = activeSlots.some(slot => {
             if (!slot.start || !slot.end) return false;
             const [sH, sM] = slot.start.split(':').map(Number);
             const [eH, eM] = slot.end.split(':').map(Number);
-            
             if (isNaN(sH) || isNaN(eH)) return false;
-
             const startMins = sH * 60 + (sM || 0);
             const endMins = eH * 60 + (eM || 0);
-
             return currentMins >= startMins && currentMins < endMins;
         });
 
-        if (!isOpenNow) {
-             return { isAgentAvailable: false, message: "Cerrado ahora" };
-        }
-
-        return { isAgentAvailable: true, message: "Agentes Disponibles" };
+        return isOpenNow ? { isAgentAvailable: true, message: "Agentes Disponibles" } : { isAgentAvailable: false, message: "Cerrado ahora" };
 
     } catch (error) {
         console.error("Error calculando horario:", error);
-        return { isAgentAvailable: true, message: "Disponible" }; // Ante la duda, abierto
+        return { isAgentAvailable: true, message: "Disponible" }; 
     }
 };
 
@@ -167,43 +152,29 @@ const getScheduleText = (schedule) => {
     return days.map(d => {
         const c = schedule[d];
         if (!c?.enabled) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: Cerrado`;
-        
         const slots = c.slots || (c.start ? [{start: c.start, end: c.end}] : []);
         if (slots.length === 0) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: Sin horario`;
-
         const times = slots.map(s => `${s.start} a ${s.end}`).join(' y de ');
         return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: ${times}`;
     }).join('\n');
 };
 
-// --- CONEXIÓN IA CON AUTO-NEGOCIACIÓN ---
+// --- CONEXIÓN IA ---
 async function fetchGeminiWithRetry(payload) {
     if (!rateLimit.check()) throw new Error("Espera unos segundos.");
     if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; }
 
-    // Orden de prioridad: Lo más nuevo a lo más estable
     const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'];
     let lastError = null;
 
     for (const model of models) {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
         try {
-            const res = await fetch(url, { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify(payload) 
-            });
-            
-            if (res.ok) {
-                return await res.json(); // Éxito
-            } else {
-                const errorText = await res.text();
-                lastError = `Modelo ${model} falló: ${res.status}`;
-                // Continuamos al siguiente modelo en el bucle
-            }
-        } catch (e) {
-            lastError = e.message;
-        }
+            const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (res.ok) return await res.json();
+            const errorText = await res.text();
+            lastError = `Modelo ${model} falló: ${res.status}`;
+        } catch (e) { lastError = e.message; }
     }
     throw new Error(`Error de conexión AI: ${lastError || "Verifica tu conexión"}`);
 }
@@ -214,17 +185,16 @@ function useInactivityTimer(action, timeout = 600000) {
     useEffect(() => { 
         let timer; 
         const resetTimer = () => { clearTimeout(timer); timer = setTimeout(() => savedAction.current(), timeout); }; 
-        window.addEventListener('mousemove', resetTimer); window.addEventListener('keypress', resetTimer); window.addEventListener('click', resetTimer); window.addEventListener('touchstart', resetTimer); resetTimer(); 
-        return () => { clearTimeout(timer); window.removeEventListener('mousemove', resetTimer); window.removeEventListener('keypress', resetTimer); window.removeEventListener('click', resetTimer); window.removeEventListener('touchstart', resetTimer); }; 
+        window.addEventListener('mousemove', resetTimer); window.addEventListener('click', resetTimer); window.addEventListener('keypress', resetTimer); window.addEventListener('touchstart', resetTimer); resetTimer(); 
+        return () => { clearTimeout(timer); window.removeEventListener('mousemove', resetTimer); window.removeEventListener('click', resetTimer); window.removeEventListener('keypress', resetTimer); window.removeEventListener('touchstart', resetTimer); }; 
     }, [timeout]); 
 }
 
 // --- COMPONENTES VISUALES ---
 const LucyAvatar = ({ className = "w-10 h-10" }) => (<img src="https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" alt="Lucy" className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"; }} />);
 const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
-const BrainAvatar = ({ className = "w-10 h-10" }) => (<div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}><Sparkles size={20} strokeWidth={2} /></div>);
 
-// --- DASHBOARD DE REPORTES ---
+// --- DASHBOARD DE REPORTES (CON LÓGICA DE VENTA CORRECTA) ---
 const ReportsDashboard = ({ leads, agents }) => {
     const [filterAgent, setFilterAgent] = useState('all');
     const [startDate, setStartDate] = useState('');
@@ -245,12 +215,12 @@ const ReportsDashboard = ({ leads, agents }) => {
     }, [leads, filterAgent, startDate, endDate]);
 
     // Métricas Ajustadas: 
-    // - Asignados = Leads que tienen un agente (fueron "vendidos" al agente)
-    // - Ventas = Leads con status 'sold' (el agente cerró la venta)
+    // - Asignados (Vendidos al Agente)
+    // - Cierres (Vendidos al Cliente)
     const assignedLeads = filteredLeads.filter(l => l.assignedAgentId).length;
     const closedSales = filteredLeads.filter(l => l.status === 'sold').length;
     const conversionRate = assignedLeads > 0 ? ((closedSales / assignedLeads) * 100).toFixed(1) : 0;
-    const activeLeads = filteredLeads.filter(l => l.status === 'active').length;
+    const activeLeads = filteredLeads.filter(l => !l.assignedAgentId && l.status !== 'archived').length;
 
     // Rendimiento por Agente
     const agentPerformance = useMemo(() => {
@@ -258,62 +228,34 @@ const ReportsDashboard = ({ leads, agents }) => {
             const myLeads = filteredLeads.filter(l => l.assignedAgentId === agent.id);
             const mySales = myLeads.filter(l => l.status === 'sold').length;
             const myConversion = myLeads.length > 0 ? ((mySales / myLeads.length) * 100).toFixed(0) : 0;
-            return { 
-                ...agent, 
-                assigned: myLeads.length, 
-                closed: mySales, 
-                conversion: myConversion 
-            };
+            return { ...agent, assigned: myLeads.length, closed: mySales, conversion: myConversion };
         }).sort((a, b) => b.closed - a.closed);
     }, [agents, filteredLeads]);
 
     return (
         <div className="animate-in fade-in space-y-8">
             <div className="flex flex-col md:flex-row justify-between items-end gap-4 bg-white p-5 rounded-[24px] shadow-sm border border-gray-100">
-                <div>
-                    <h2 className="text-xl font-bold text-gray-900">Reportes de Rendimiento</h2>
-                    <p className="text-xs text-gray-500 mt-1">Métricas de Cierre y Asignación</p>
-                </div>
+                <div><h2 className="text-xl font-bold text-gray-900">Reportes de Rendimiento</h2><p className="text-xs text-gray-500 mt-1">Métricas de Cierre y Asignación</p></div>
                 <div className="flex gap-2 items-center">
                     <select className="bg-gray-50 border border-gray-200 text-xs rounded-xl px-3 py-2 outline-none" value={filterAgent} onChange={e => setFilterAgent(e.target.value)}>
                         <option value="all">Todos los Agentes</option>
                         {agents.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
                     </select>
-                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
-                        <input type="date" className="bg-transparent text-xs outline-none" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                        <span className="text-gray-300">-</span>
-                        <input type="date" className="bg-transparent text-xs outline-none" value={endDate} onChange={e => setEndDate(e.target.value)} />
-                    </div>
+                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1"><input type="date" className="bg-transparent text-xs outline-none" value={startDate} onChange={e => setStartDate(e.target.value)} /><span className="text-gray-300">-</span><input type="date" className="bg-transparent text-xs outline-none" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
                 </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-start mb-2"><div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><UserCheck size={18}/></div></div>
-                    <p className="text-2xl font-bold text-gray-900">{assignedLeads}</p>
-                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Leads Asignados</p>
-                </div>
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-start mb-2"><div className="p-2 bg-green-50 text-green-600 rounded-lg"><DollarSign size={18}/></div></div>
-                    <p className="text-2xl font-bold text-gray-900">{closedSales}</p>
-                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Ventas Cerradas</p>
-                </div>
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-start mb-2"><div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><TrendingUp size={18}/></div></div>
-                    <p className="text-2xl font-bold text-gray-900">{conversionRate}%</p>
-                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Tasa Cierre</p>
-                </div>
-                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <div className="flex justify-between items-start mb-2"><div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><Inbox size={18}/></div></div>
-                    <p className="text-2xl font-bold text-gray-900">{activeLeads}</p>
-                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Sin Asignar</p>
-                </div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><UserCheck size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{assignedLeads}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Leads Asignados</p></div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-green-50 text-green-600 rounded-lg"><DollarSign size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{closedSales}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Ventas Cerradas</p></div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><TrendingUp size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{conversionRate}%</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Tasa Cierre</p></div>
+                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><Inbox size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{activeLeads}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Sin Asignar</p></div>
             </div>
 
             <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 bg-[#FBFBFD]"><h3 className="font-bold text-gray-800 text-sm">Ranking de Agentes</h3></div>
+                <div className="px-6 py-4 border-b border-gray-100 bg-[#FBFBFD]"><h3 className="font-bold text-gray-800 text-sm">Ranking de Cierre por Agente</h3></div>
                 <table className="w-full text-left">
-                    <thead className="border-b border-gray-100"><tr><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Agente</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Leads Asignados</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Ventas</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase w-1/3">Efectividad</th></tr></thead>
+                    <thead className="border-b border-gray-100"><tr><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Agente</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Asignados</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Cierres</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase w-1/3">Efectividad</th></tr></thead>
                     <tbody className="divide-y divide-gray-50">
                         {agentPerformance.map(agent => (
                             <tr key={agent.id} className="hover:bg-gray-50 transition-colors">
@@ -331,7 +273,7 @@ const ReportsDashboard = ({ leads, agents }) => {
     );
 };
 
-// --- MODAL DETALLE LEAD (Diseño Restaurado) ---
+// --- MODAL DETALLE LEAD ---
 const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus, isArchive }) => {
     if (!lead) return null;
     const assignedAgent = agents.find(a => a.id === lead.assignedAgentId);
@@ -342,32 +284,17 @@ const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus,
                 <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-10">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-[#F5F5F7] rounded-full flex items-center justify-center text-gray-400"><User size={24} strokeWidth={1.5} /></div>
-                        <div>
-                            <h3 className="font-semibold text-[#1d1d1f] text-xl tracking-tight">{String(lead.nombre || 'Anónimo')}</h3>
-                            <p className="text-xs text-[#86868b] mt-0.5 font-medium">{formatFirestoreDate(lead.createdAt)}</p>
-                        </div>
+                        <div><h3 className="font-semibold text-[#1d1d1f] text-xl tracking-tight">{String(lead.nombre || 'Anónimo')}</h3><p className="text-xs text-[#86868b] mt-0.5 font-medium">{formatFirestoreDate(lead.createdAt)}</p></div>
                     </div>
                     <button onClick={onClose} className="p-2 bg-[#F5F5F7] hover:bg-[#E8E8ED] rounded-full transition-colors text-[#86868b]"><X size={18}/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-white">
-                    {/* Tarjeta Agente */}
-                    <div className={`p-4 rounded-xl flex items-center justify-between border ${assignedAgent ? 'bg-blue-50 border-blue-100' : 'bg-gray-50 border-gray-100'}`}>
-                        <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${assignedAgent ? 'bg-white' : 'bg-gray-200'}`}>
-                                {assignedAgent ? <img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-full h-full rounded-full object-cover"/> : <UserMinus size={18} className="text-gray-400"/>}
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-wide opacity-60">Agente Asignado</p>
-                                <p className={`text-sm font-semibold ${assignedAgent ? 'text-blue-900' : 'text-gray-500'}`}>{assignedAgent ? assignedAgent.nombre : 'Sin asignar'}</p>
-                            </div>
+                    {assignedAgent && (
+                        <div className="bg-blue-50 p-4 rounded-xl flex items-center justify-between border border-blue-100">
+                            <div className="flex items-center gap-3"><img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-10 h-10 rounded-full object-cover border-2 border-white" /><div><p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Agente Responsable</p><p className="font-bold text-blue-900 text-sm">{assignedAgent.nombre}</p></div></div>
+                            {onAssignClick && (<button onClick={() => onAssignClick([lead.id], 'unassign')} className="p-2 bg-white text-red-500 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-100 transition-all" title="Desvincular"><LinkIcon size={16} className="rotate-45"/></button>)}
                         </div>
-                        {assignedAgent && onAssignClick && (
-                            <button onClick={() => onAssignClick([lead.id], 'unassign')} className="p-2 bg-white text-red-500 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-100 transition-all" title="Desvincular">
-                                <LinkIcon size={16} className="rotate-45"/>
-                            </button>
-                        )}
-                    </div>
-
+                    )}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span><a href={`https://wa.me/${String(lead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(lead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
                         <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Programado</span><p className="font-medium text-[#1d1d1f]">{formatScheduledDate(String(lead.horario_preferido || 'Inmediata'))}</p></div>
@@ -395,13 +322,7 @@ const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
         <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden flex flex-col max-h-[80vh]">
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white"><h3 className="font-bold text-gray-800">Seleccionar Agente</h3><button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X size={18}/></button></div>
-                <div className="p-4 bg-gray-50 border-b border-gray-100">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                        <input autoFocus type="text" placeholder="Buscar agente..." className="w-full pl-9 pr-8 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-100" value={search} onChange={(e) => setSearch(e.target.value)} />
-                        {search && (<button onClick={() => setSearch('')} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"><X size={14} /></button>)}
-                    </div>
-                </div>
+                <div className="p-4 bg-gray-50 border-b border-gray-100"><div className="relative"><Search className="absolute left-3 top-2.5 text-gray-400" size={16} /><input autoFocus type="text" placeholder="Buscar agente..." className="w-full pl-9 pr-8 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-100" value={search} onChange={(e) => setSearch(e.target.value)} />{search && (<button onClick={() => setSearch('')} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"><X size={14} /></button>)}</div></div>
                 <div className="overflow-y-auto flex-1 p-2 space-y-1">
                     <button onClick={() => onAssign('unassign')} className="w-full flex items-center gap-3 p-3 hover:bg-red-50 rounded-xl transition-colors text-left group"><div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 group-hover:bg-red-200"><UserMinus size={18}/></div><div><p className="font-bold text-red-600 text-sm">Desasignar / Liberar</p><p className="text-[10px] text-red-400">Dejar sin agente</p></div></button>
                     <div className="h-px bg-gray-100 my-1 mx-4"></div>
@@ -475,7 +396,6 @@ function App() {
 
     const handleLogin = async (e) => { e.preventDefault(); setIsLoggingIn(true); setLoginError(null); if (OFFLINE_MODE) { setTimeout(() => { setIsAdmin(true); navigateTo('admin'); setShowLogin(false); setIsLoggingIn(false); }, 1000); return; } try { await signInWithEmailAndPassword(auth, email, password); setShowLogin(false); setEmail(''); setPassword(''); } catch (error) { setLoginError("Credenciales no válidas."); } setIsLoggingIn(false); };
     const handleLogout = async () => { if (!OFFLINE_MODE) await signOut(auth); setIsAdmin(false); navigateTo('landing'); };
-    const notifyNewLead = (lead) => { if (Notification.permission === "granted") new Notification("¡Nuevo Lead!", { body: lead.nombre, icon: IMAGES.lucy }); if (aiConfig.webhookUrl && lead.status === 'active') fetch(aiConfig.webhookUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead) }).catch(e => console.error(e)); };
     const saveLeadToDb = async (leadData) => { if (OFFLINE_MODE) { alert("Modo Offline"); return; } await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'leads'), { ...leadData, createdAt: serverTimestamp(), status: 'active' }); };
     const saveAiConfig = async (newConfig) => { if (OFFLINE_MODE) { setAiConfig(newConfig); return; } if (!user || !isAdmin) return; await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config'), newConfig); setAiConfig(newConfig); };
 
@@ -586,7 +506,7 @@ function App() {
                 )}
             </main>
 
-            <LeadDetailModal lead={selectedLead} agents={agents} onClose={() => setSelectedLead(null)} onAssignClick={handleAssignAgent} onUpdateStatus={updateLeadStatus} isArchive={adminTab === 'archived'} />
+            <LeadDetailModal lead={selectedLead} agents={agents} onClose={() => setSelectedLead(null)} onAssignClick={openAssignModal} onUpdateStatus={updateLeadStatus} isArchive={adminTab === 'archived'} />
             <AgentAssignmentModal isOpen={assignModalData.isOpen} agents={agents} onClose={() => setAssignModalData({ ...assignModalData, isOpen: false })} onAssign={handleAssignAgent} />
 
             {showLogin && (
@@ -940,25 +860,33 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
     );
 }
 
-// --- LEADS LIST (MODIFICADO: Botón de Venta Reversible) ---
+// --- LEADS LIST (MODIFICADO: Con Modal de Asignación Masiva) ---
 function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
     const [leadToDelete, setLeadToDelete] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
 
-    // Filtros de búsqueda
+    // NUEVO: Estado para el Modal de Asignación Masiva
+    const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
+    const [bulkSearchTerm, setBulkSearchTerm] = useState('');
+
     const filteredLeads = leads.filter(l => String(l.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()));
 
     const handleSelectAll = (e) => e.target.checked ? setSelectedIds(filteredLeads.map(l => l.id)) : setSelectedIds([]);
     const handleSelectOne = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-    
-    // Acciones masivas
     const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
     const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
-    const handleBulkAssignAction = (agentId) => { onOpenAssign(selectedIds); setSelectedIds([]); };
+
+    // Filtrado de agentes en el modal
+    const filteredAgentsForBulk = agents.filter(a => a.nombre.toLowerCase().includes(bulkSearchTerm.toLowerCase()));
+
+    const handleBulkAssignAction = (agentId) => {
+        onOpenAssign(selectedIds);
+        setSelectedIds([]); // Limpiar selección tras abrir modal
+    };
 
     return (
         <div className="animate-in fade-in duration-500">
-            {/* Modal de confirmación de eliminación */}
+
             {leadToDelete && (
                 <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm border border-gray-100 text-center">
@@ -971,7 +899,6 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
             )}
 
             <div className="bg-white rounded-[24px] shadow-sm overflow-hidden border border-gray-100/50">
-                {/* Barra de acciones masivas */}
                 {selectedIds.length > 0 && (
                     <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 flex justify-between items-center animate-in fade-in sticky top-0 z-20">
                         <span className="text-xs font-bold text-blue-700">{selectedIds.length} seleccionados</span>
@@ -996,11 +923,10 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
                     <tbody className="divide-y divide-gray-50">
                         {filteredLeads.map(l => {
                             const assignedAgent = agents.find(a => a.id === l.assignedAgentId);
-                            // Verificamos si está vendido
                             const isSold = l.status === 'sold';
                             
                             return (
-                                <tr key={l.id} onClick={() => onOpenLead(l)} className={`hover:bg-[#F5F5F7] transition-colors cursor-pointer group ${selectedIds.includes(l.id) ? 'bg-blue-50/30' : ''} ${isSold ? 'bg-green-50/40' : ''}`}>
+                                <tr key={l.id} onClick={() => onOpenLead(l)} className={`hover:bg-[#F5F5F7] transition-colors cursor-pointer group ${selectedIds.includes(l.id) ? 'bg-blue-50/30' : ''} ${isSold ? 'bg-green-50/30' : ''}`}>
                                     <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
                                         <input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(l.id)} onChange={() => handleSelectOne(l.id)} />
                                     </td>
@@ -1009,12 +935,11 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
                                     <td className="px-4 py-5"><p className="text-xs text-[#1d1d1f] truncate opacity-80">"{String(l.resumen_ai || '')}"</p></td>
                                     <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                            {/* BOTÓN VENTA (TOGGLE) - SOLO SI TIENE AGENTE */}
                                             {!isArchive && assignedAgent && (
                                                 <button 
                                                     onClick={() => onUpdateStatus([l.id], isSold ? 'active' : 'sold')} 
-                                                    className={`p-2 rounded-lg transition-all ${isSold ? 'bg-green-600 text-white shadow-md' : 'text-gray-400 hover:text-green-600 hover:bg-green-50'}`} 
-                                                    title={isSold ? "Desmarcar Venta (Volver a Activo)" : "Marcar como Vendido"}
+                                                    className={`p-2 rounded-lg transition-all ${isSold ? 'bg-green-100 text-green-700 shadow-sm ring-1 ring-green-200' : 'text-gray-400 hover:text-green-600 hover:bg-green-50'}`} 
+                                                    title={isSold ? "Desmarcar Venta" : "Marcar Vendido"}
                                                 >
                                                     <DollarSign size={16} strokeWidth={isSold ? 2.5 : 2} />
                                                 </button>
