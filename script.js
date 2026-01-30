@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
 
-// 1. IMPORTACIÓN DE ICONOS (LUCIDE)
-// Renombramos Link a LinkIcon para evitar conflictos
+// -----------------------------------------------------------------------------
+// 1. IMPORTACIÓN DE ICONOS (LUCIDE REACT)
+// -----------------------------------------------------------------------------
+// Renombramos 'Link' a 'LinkIcon' para evitar conflictos con React
 import { 
   MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, 
   Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, 
@@ -18,8 +20,12 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebas
 import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
-// 2. CONFIGURACIÓN
+// -----------------------------------------------------------------------------
+// 2. CONFIGURACIÓN DEL SISTEMA
+// -----------------------------------------------------------------------------
 const OFFLINE_MODE = false;
+
+// CLAVE API DIVIDIDA (Seguridad básica)
 const AI_KEY_PART_A = "AIzaSyAIOAO4-h7lRRK8";
 const AI_KEY_PART_B = "SKAC2hgomoE-MaCZ58M";
 const GEMINI_API_KEY = `${AI_KEY_PART_A}${AI_KEY_PART_B}`;
@@ -36,6 +42,7 @@ const FIREBASE_CONFIG = {
 
 const APP_ID = 'gastos-finales-v1';
 
+// Inicialización Segura de Firebase
 let app, auth, db;
 if (!OFFLINE_MODE) {
     try {
@@ -43,11 +50,13 @@ if (!OFFLINE_MODE) {
         auth = getAuth(app);
         db = getFirestore(app);
     } catch (e) {
-        console.error("Firebase Error:", e);
+        console.error("Error crítico inicializando Firebase:", e);
     }
 }
 
-// 3. UTILIDADES
+// -----------------------------------------------------------------------------
+// 3. UTILIDADES Y HELPERS
+// -----------------------------------------------------------------------------
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
 function cleanAiMessage(text) {
@@ -77,6 +86,9 @@ const RichText = ({ content }) => {
 
 const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
 
+// -----------------------------------------------------------------------------
+// 4. LÓGICA DE HORARIOS ROBUSTA (MULTI-SLOT)
+// -----------------------------------------------------------------------------
 const DEFAULT_SCHEDULE = { 
     lunes: { enabled: true, slots: [{start: '09:00', end: '18:00'}] },
     martes: { enabled: true, slots: [{start: '09:00', end: '18:00'}] },
@@ -87,12 +99,13 @@ const DEFAULT_SCHEDULE = {
     domingo: { enabled: false, slots: [{start: '10:00', end: '14:00'}] }
 };
 
-// 4. LÓGICA DE HORARIOS
 const getAgentStatus = (config) => {
     try {
         if (!config) return { isAgentAvailable: true, message: "Disponible" };
+        
         const now = new Date();
         
+        // 1. Vacaciones
         if (config.vacationMode && config.vacationStart && config.vacationEnd) {
             const vStart = new Date(config.vacationStart + 'T00:00:00');
             const vEnd = new Date(config.vacationEnd + 'T23:59:59');
@@ -103,20 +116,22 @@ const getAgentStatus = (config) => {
             }
         }
         
+        // 2. Día de la semana
         const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
         const dayName = days[now.getDay()];
         const dayConfig = config.schedule?.[dayName];
         
         if (!dayConfig || !dayConfig.enabled) return { isAgentAvailable: false, message: "Cerrado hoy" };
 
-        let slots = dayConfig.slots || [];
-        if (slots.length === 0 && dayConfig.start && dayConfig.end) {
-            slots = [{ start: dayConfig.start, end: dayConfig.end }];
+        // 3. Turnos (Slots)
+        let activeSlots = dayConfig.slots || [];
+        if (activeSlots.length === 0 && dayConfig.start && dayConfig.end) {
+            activeSlots = [{ start: dayConfig.start, end: dayConfig.end }];
         }
-        if (slots.length === 0) return { isAgentAvailable: false, message: "Sin turnos" };
+        if (activeSlots.length === 0) return { isAgentAvailable: false, message: "Sin turnos" };
 
         const currentMins = now.getHours() * 60 + now.getMinutes();
-        const isOpenNow = slots.some(slot => {
+        const isOpenNow = activeSlots.some(slot => {
             if (!slot.start || !slot.end) return false;
             const [sH, sM] = slot.start.split(':').map(Number);
             const [eH, eM] = slot.end.split(':').map(Number);
@@ -128,6 +143,7 @@ const getAgentStatus = (config) => {
 
         return isOpenNow ? { isAgentAvailable: true, message: "Agentes Disponibles" } : { isAgentAvailable: false, message: "Cerrado ahora" };
     } catch (error) {
+        console.error("Error calculando horario:", error);
         return { isAgentAvailable: true, message: "Disponible" }; 
     }
 };
@@ -145,7 +161,9 @@ const getScheduleText = (schedule) => {
     }).join('\n');
 };
 
-// 5. API IA
+// -----------------------------------------------------------------------------
+// 5. CONEXIÓN IA (Auto-Retry)
+// -----------------------------------------------------------------------------
 async function fetchGeminiWithRetry(payload) {
     if (!rateLimit.check()) throw new Error("Espera unos segundos.");
     if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; }
@@ -176,10 +194,18 @@ function useInactivityTimer(action, timeout = 600000) {
     }, [timeout]); 
 }
 
+// -----------------------------------------------------------------------------
+// 6. COMPONENTES VISUALES
+// -----------------------------------------------------------------------------
 const LucyAvatar = ({ className = "w-10 h-10" }) => (<img src="https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" alt="Lucy" className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"; }} />);
 const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
+const BrainAvatar = ({ className = "w-10 h-10" }) => (<div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}><Sparkles size={20} strokeWidth={2} /></div>);
 
-// 6. DASHBOARD REPORTES
+// -----------------------------------------------------------------------------
+// 7. COMPONENTES DEL DASHBOARD
+// -----------------------------------------------------------------------------
+
+// --- REPORTES ---
 const ReportsDashboard = ({ leads, agents }) => {
     const [filterAgent, setFilterAgent] = useState('all');
     const [startDate, setStartDate] = useState('');
@@ -199,11 +225,15 @@ const ReportsDashboard = ({ leads, agents }) => {
         });
     }, [leads, filterAgent, startDate, endDate]);
 
+    // Métricas Ajustadas: 
+    // - Asignados = Leads que tienen un agente (fueron "vendidos" al agente)
+    // - Cierres = Leads con status 'sold' (el agente cerró la venta)
     const assignedLeads = filteredLeads.filter(l => l.assignedAgentId).length;
     const closedSales = filteredLeads.filter(l => l.status === 'sold').length;
     const conversionRate = assignedLeads > 0 ? ((closedSales / assignedLeads) * 100).toFixed(1) : 0;
     const activeLeads = filteredLeads.filter(l => !l.assignedAgentId && l.status !== 'archived').length;
 
+    // Rendimiento por Agente
     const agentPerformance = useMemo(() => {
         return agents.map(agent => {
             const myLeads = filteredLeads.filter(l => l.assignedAgentId === agent.id);
@@ -246,6 +276,7 @@ const ReportsDashboard = ({ leads, agents }) => {
                                 <td className="px-6 py-4"><div className="flex items-center gap-2"><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full" style={{ width: `${agent.conversion}%` }}></div></div><span className="text-[10px] font-bold text-gray-500 w-8 text-right">{agent.conversion}%</span></div></td>
                             </tr>
                         ))}
+                         {agentPerformance.length === 0 && <tr><td colSpan="4" className="text-center py-8 text-gray-400 text-xs">No hay datos para mostrar.</td></tr>}
                     </tbody>
                 </table>
             </div>
@@ -253,7 +284,7 @@ const ReportsDashboard = ({ leads, agents }) => {
     );
 };
 
-// 7. MODALES
+// --- MODAL DETALLE LEAD (Diseño Restaurado) ---
 const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus, isArchive }) => {
     if (!lead) return null;
     const assignedAgent = agents.find(a => a.id === lead.assignedAgentId);
@@ -264,15 +295,25 @@ const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus,
                 <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-10">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-[#F5F5F7] rounded-full flex items-center justify-center text-gray-400"><User size={24} strokeWidth={1.5} /></div>
-                        <div><h3 className="font-semibold text-[#1d1d1f] text-xl tracking-tight">{String(lead.nombre || 'Anónimo')}</h3><p className="text-xs text-[#86868b] mt-0.5 font-medium">{formatFirestoreDate(lead.createdAt)}</p></div>
+                        <div>
+                            <h3 className="font-semibold text-[#1d1d1f] text-xl tracking-tight">{String(lead.nombre || 'Anónimo')}</h3>
+                            <p className="text-xs text-[#86868b] mt-0.5 font-medium">{formatFirestoreDate(lead.createdAt)}</p>
+                        </div>
                     </div>
                     <button onClick={onClose} className="p-2 bg-[#F5F5F7] hover:bg-[#E8E8ED] rounded-full transition-colors text-[#86868b]"><X size={18}/></button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-white">
                     {assignedAgent && (
                         <div className="bg-blue-50 p-4 rounded-xl flex items-center justify-between border border-blue-100">
-                            <div className="flex items-center gap-3"><img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-10 h-10 rounded-full object-cover border-2 border-white" /><div><p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Agente Responsable</p><p className="font-bold text-blue-900 text-sm">{assignedAgent.nombre}</p></div></div>
-                            {onAssignClick && (<button onClick={() => onAssignClick([lead.id], 'unassign')} className="p-2 bg-white text-red-500 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-100 transition-all" title="Desvincular"><LinkIcon size={16} className="rotate-45"/></button>)}
+                            <div className="flex items-center gap-3">
+                                <img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-10 h-10 rounded-full object-cover border-2 border-white" />
+                                <div><p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Agente Responsable</p><p className="font-bold text-blue-900 text-sm">{assignedAgent.nombre}</p></div>
+                            </div>
+                            {onAssignClick && (
+                                <button onClick={() => onAssignClick([lead.id], 'unassign')} className="p-2 bg-white text-red-500 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-100 transition-all" title="Desvincular">
+                                    <LinkIcon size={16} className="rotate-45"/>
+                                </button>
+                            )}
                         </div>
                     )}
                     <div className="grid grid-cols-2 gap-4">
@@ -321,7 +362,9 @@ const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
     );
 };
 
+// -----------------------------------------------------------------------------
 // 8. APP PRINCIPAL
+// -----------------------------------------------------------------------------
 function App() {
     const [user, setUser] = useState(null);
     const [view, setView] = useState('landing');
@@ -382,7 +425,6 @@ function App() {
 
     const handleLogin = async (e) => { e.preventDefault(); setIsLoggingIn(true); setLoginError(null); if (OFFLINE_MODE) { setTimeout(() => { setIsAdmin(true); navigateTo('admin'); setShowLogin(false); setIsLoggingIn(false); }, 1000); return; } try { await signInWithEmailAndPassword(auth, email, password); setShowLogin(false); setEmail(''); setPassword(''); } catch (error) { setLoginError("Credenciales no válidas."); } setIsLoggingIn(false); };
     const handleLogout = async () => { if (!OFFLINE_MODE) await signOut(auth); setIsAdmin(false); navigateTo('landing'); };
-    const notifyNewLead = (lead) => { if (Notification.permission === "granted") new Notification("¡Nuevo Lead!", { body: lead.nombre, icon: IMAGES.lucy }); if (aiConfig.webhookUrl && lead.status === 'active') fetch(aiConfig.webhookUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead) }).catch(e => console.error(e)); };
     const saveLeadToDb = async (leadData) => { if (OFFLINE_MODE) { alert("Modo Offline"); return; } await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'leads'), { ...leadData, createdAt: serverTimestamp(), status: 'active' }); };
     const saveAiConfig = async (newConfig) => { if (OFFLINE_MODE) { setAiConfig(newConfig); return; } if (!user || !isAdmin) return; await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config'), newConfig); setAiConfig(newConfig); };
 
@@ -493,7 +535,7 @@ function App() {
                 )}
             </main>
 
-            <LeadDetailModal lead={selectedLead} agents={agents} onClose={() => setSelectedLead(null)} onAssignClick={openAssignModal} onUpdateStatus={updateLeadStatus} isArchive={adminTab === 'archived'} />
+            <LeadDetailModal lead={selectedLead} agents={agents} onClose={() => setSelectedLead(null)} onAssignClick={handleAssignAgent} onUpdateStatus={updateLeadStatus} isArchive={adminTab === 'archived'} />
             <AgentAssignmentModal isOpen={assignModalData.isOpen} agents={agents} onClose={() => setAssignModalData({ ...assignModalData, isOpen: false })} onAssign={handleAssignAgent} />
 
             {showLogin && (
@@ -514,7 +556,9 @@ function App() {
     );
 }
 
+// -----------------------------------------------------------------------------
 // 9. LANDING VIEW
+// -----------------------------------------------------------------------------
 function LandingView({ onStartChat, onOpenLogin }) {
     const testimonials = [{ text: "Gracias a Lucy encontré un plan perfecto para mi mamá sin gastar de más. Fue muy fácil.", author: "María G. - Florida" }, { text: "Excelente atención, muy paciente y clara. Me sentí muy segura con la información.", author: "Carmen R. - Texas" }, { text: "Rápido y sencillo. Encontré justo lo que necesitaba para mi tranquilidad.", author: "José L. - California" }];
     const [idx, setIdx] = useState(0);
@@ -542,7 +586,9 @@ function LandingView({ onStartChat, onOpenLogin }) {
     );
 }
 
-// 10. AGENTS MANAGER
+// -----------------------------------------------------------------------------
+// 10. AGENTS MANAGER (CRUD AGENTES)
+// -----------------------------------------------------------------------------
 function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, searchTerm }) {
     const [selectedAgent, setSelectedAgent] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -723,7 +769,9 @@ function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, 
     );
 }
 
-// 11. ADMIN BRAIN (CONFIGURACIÓN)
+// -----------------------------------------------------------------------------
+// 11. ADMIN BRAIN (CONFIGURACIÓN FLEXIBLE)
+// -----------------------------------------------------------------------------
 function AdminBrain({ aiConfig, onSaveConfig }) {
     const [c, setC] = useState(aiConfig);
     const [isSaving, setIsSaving] = useState(false);
@@ -847,7 +895,9 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
     );
 }
 
-// 12. LEADS LIST
+// -----------------------------------------------------------------------------
+// 12. LEADS LIST (MODIFICADO: Botón Venta)
+// -----------------------------------------------------------------------------
 function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
     const [leadToDelete, setLeadToDelete] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
@@ -898,7 +948,6 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
                     <tbody className="divide-y divide-gray-50">
                         {filteredLeads.map(l => {
                             const assignedAgent = agents.find(a => a.id === l.assignedAgentId);
-                            // Verificamos si está vendido
                             const isSold = l.status === 'sold';
                             
                             return (
@@ -931,6 +980,164 @@ function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUp
                     </tbody>
                 </table>
             </div>
+        </div>
+    );
+}
+
+// -----------------------------------------------------------------------------
+// 13. CLIENT CHAT (ROBUSTO Y SEGURO)
+// -----------------------------------------------------------------------------
+function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
+    const [activeUsers, setActiveUsers] = useState(Math.floor(Math.random() * (28 - 18 + 1)) + 18);
+    const [msgs, setMsgs] = useState([
+        { role: 'assistant', content: 'Hola, soy Lucy, su asistente personal experta en **Gastos Finales**. Mi misión es brindarle la información que necesita para su tranquilidad y la de su familia.\n\nTenga la plena seguridad de que **todo lo que hablemos es confidencial**; nada será divulgado sin su expresa autorización. Mi único objetivo es ayudarle, y si al final de nuestra charla usted lo desea, podré conectarle directamente con un **agente acreditado por su estado**.\n\n¿Cómo le podemos servir el día de hoy?' }
+    ]);
+    const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [showOptions, setShowOptions] = useState(false);
+    const [pendingLeadData, setPendingLeadData] = useState(null);
+
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [urlCopied, setUrlCopied] = useState(false);
+
+    const scrollRef = useRef(null);
+    
+    // Protección contra fallos en getAgentStatus si aiConfig es undefined
+    const agentStatus = useMemo(() => getAgentStatus(aiConfig), [aiConfig]);
+    const { isAgentAvailable } = agentStatus;
+
+    useEffect(() => {
+        const i = setInterval(() => setActiveUsers(p => p + (Math.random() > 0.5 ? 1 : -1)), 5000);
+        return () => clearInterval(i);
+    }, []);
+
+    useEffect(() => { 
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; 
+    }, [msgs, loading, showOptions]);
+
+    const handleCopyLink = () => {
+        const url = window.location.href;
+        navigator.clipboard.writeText(url).then(() => {
+            setUrlCopied(true);
+            setTimeout(() => setUrlCopied(false), 2500);
+        });
+    };
+
+    const handleOptionClick = (type) => {
+        if (pendingLeadData) {
+            const finalLead = {
+                ...pendingLeadData,
+                metodo_contacto: type,
+                horario_preferido: type === 'ahora' ? 'Inmediata' : 'Pendiente'
+            };
+            onSaveLead(finalLead);
+            setPendingLeadData(null);
+            setShowOptions(false);
+            const responseMsg = type === 'ahora' ? "¡Perfecto! Un agente se comunicará con usted en breve al número proporcionado." : "Excelente. Un agente le llamará para programar la cita en el horario que mejor le convenga.";
+            setMsgs(prev => [...prev, { role: 'assistant', content: responseMsg }]);
+        }
+    };
+
+    const send = async (e) => {
+        e.preventDefault(); if (!input.trim() || loading) return;
+        const newM = [...msgs, { role: 'user', content: input }]; setMsgs(newM); setInput(''); setLoading(true);
+        try {
+            const { isVacation, resumeDate } = agentStatus;
+            let availabilityInstruction = "";
+            if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA DEL SISTEMA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}. Sé muy amable y profesional, NO digas "vacaciones".`;
+            
+            // --- INYECCIÓN DE HORARIOS DINÁMICOS AL PROMPT ---
+            const scheduleText = getScheduleText(aiConfig?.schedule);
+            
+            const prompt = `
+          ${aiConfig?.systemPrompt || ""}
+          ${availabilityInstruction}
+          
+          IMPORTANTE - HORARIOS DE TRABAJO ACTUALES:
+          ${scheduleText}
+          (Usa esta información para confirmar citas o explicar disponibilidad)
+
+          HISTORIAL:
+          ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
+          
+          INSTRUCCIÓN TÉCNICA CRÍTICA:
+          Si el usuario YA ha proporcionado Nombre, Edad, Email y algún dato de contacto, y consideras que la etapa de recolección de datos ha terminado, TU RESPUESTA DEBE INCLUIR UN BLOQUE JSON AL FINAL con este formato:
+          \`\`\`json
+          { "action": "data_ready", "nombre": "...", "edad": "...", "email": "...", "telefono": "...", "resumen_ai": "..." }
+          \`\`\`
+          IMPORTANTE: NO te despidas definitivamente todavía. Solo di que tienes opciones disponibles.
+          Si no, responde normalmente como Lucy.
+        `;
+
+            const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
+            const rawText = res.candidates[0].content.parts[0].text;
+            let reply = rawText;
+            const jsonMatch = rawText.match(/```json([\s\S]*?)```/);
+            if (jsonMatch) {
+                try {
+                    const jsonStr = jsonMatch[1];
+                    const data = JSON.parse(jsonStr);
+                    if (data.action === 'data_ready') {
+                        setPendingLeadData({ nombre: data.nombre || 'Anonimo', edad: data.edad || '', email: data.email || '', telefono: data.telefono || '', resumen_ai: data.resumen_ai || 'Lead capturado por Lucy', fullChat: newM });
+                        setShowOptions(true);
+                        reply = rawText.replace(jsonMatch[0], '').trim();
+                    }
+                } catch (jsonErr) { console.error("Error parsing JSON", jsonErr); }
+            }
+            reply = cleanAiMessage(reply);
+            setMsgs([...newM, { role: 'assistant', content: reply }]);
+        } catch (e) {
+            console.error(e);
+            setMsgs([...newM, { role: 'assistant', content: `⚠️ ${e.message}` }]);
+        }
+        setLoading(false);
+    };
+
+    return (
+        <div className="max-w-[480px] mx-auto flex flex-col h-full bg-white rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden relative font-sans">
+            <div className="bg-white/90 backdrop-blur-xl p-5 border-b border-gray-100 flex items-center justify-between z-10 sticky top-0">
+                <div className="flex items-center gap-4">
+                    <div className="relative"><LucyAvatar className="w-12 h-12" /></div>
+                    <div>
+                        <h2 className="font-bold text-[#1d1d1f] text-lg tracking-tight">Lucy</h2>
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full bg-green-500 animate-pulse`}></span><p className="text-xs text-[#86868b] font-medium">En Línea</p></div>
+                            <span className="text-[#86868b] text-[10px]">•</span>
+                            <p className="text-xs text-blue-600 font-medium">{activeUsers} personas</p>
+                        </div>
+                    </div>
+                </div>
+                <button onClick={() => setShowShareModal(true)} className="p-2 bg-slate-50 text-slate-400 rounded-full hover:bg-slate-100 hover:text-blue-600 transition-colors" title="Guardar enlace"><Share2 size={20} /></button>
+            </div>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-6 bg-white no-scrollbar">
+                {msgs.map((m, i) => (
+                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                        {m.role === 'assistant' && <LucyAvatar className="w-8 h-8 mr-2 mt-auto shrink-0" />}
+                        <div className={`w-fit max-w-[75%] px-5 py-3 rounded-2xl text-[16px] leading-relaxed shadow-sm text-left ${m.role === 'user' ? 'bg-[#007AFF] text-white rounded-br-none' : 'bg-[#F2F2F7] text-[#1d1d1f] rounded-bl-none'}`}><RichText content={m.content} /></div>
+                    </div>
+                ))}
+                {loading && <div className="flex justify-start pl-10"><div className="bg-[#F2F2F7] px-4 py-3 rounded-2xl rounded-bl-none flex gap-1.5 items-center w-fit"><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span><span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span></div></div>}
+                {showOptions && (
+                    <div className="flex flex-col gap-2 pt-2 animate-in zoom-in px-8">
+                        <button onClick={() => handleOptionClick('ahora')} disabled={!isAgentAvailable} className={`w-full font-medium py-3.5 rounded-xl transition-all text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 ${isAgentAvailable ? 'bg-[#007AFF] text-white hover:bg-[#0062cc]' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}>{isAgentAvailable ? <Zap size={16} fill="currentColor" /> : <Moon size={16} />} {isAgentAvailable ? 'Hablar con un Agente Ahora' : 'Agentes no disponibles'}</button>
+                        <button onClick={() => handleOptionClick('programada')} className="w-full bg-[#F2F2F7] text-[#007AFF] font-medium py-3.5 rounded-xl hover:bg-[#E5E5EA] transition-all text-sm flex items-center justify-center gap-2 active:scale-95"><Calendar size={16} /> Programar Llamada</button>
+                    </div>
+                )}
+            </div>
+            <form onSubmit={send} className="p-4 bg-white/90 backdrop-blur-xl border-t border-gray-100 flex gap-3">
+                <input value={input} onChange={e => setInput(e.target.value)} placeholder="Escribe un mensaje..." className="flex-1 bg-[#F2F2F7] border-0 rounded-full px-5 py-3 text-[16px] focus:ring-2 focus:ring-[#007AFF]/20 text-[#1d1d1f] placeholder:text-[#86868b] outline-none transition-all" />
+                <button disabled={loading} className="w-12 h-12 bg-[#007AFF] text-white rounded-full hover:bg-[#0062cc] transition-all active:scale-90 disabled:opacity-50 disabled:scale-100 flex items-center justify-center shrink-0 shadow-md"><Send size={20} fill="currentColor" className="ml-0.5" /></button>
+            </form>
+            <div className="text-center py-2 bg-white border-t border-gray-50">{onOpenLogin && <button onClick={onOpenLogin} className="text-[9px] text-slate-300 hover:text-slate-400 transition-colors">Acceso Corporativo</button>}</div>
+            {showShareModal && (
+                <div className="absolute inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
+                    <div className="bg-white rounded-[24px] shadow-2xl p-6 w-full max-w-sm animate-in zoom-in-95">
+                        <div className="flex justify-between items-start mb-4"><div><h3 className="text-lg font-bold text-slate-800">Guardar conversación</h3><p className="text-xs text-slate-500 mt-1">Copie este enlace para volver a hablar con Lucy más tarde sin perder el contacto.</p></div><button onClick={() => setShowShareModal(false)} className="p-1 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full"><X size={16} /></button></div>
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center gap-2 mb-4"><input type="text" readOnly value={window.location.href} className="bg-transparent border-0 text-xs text-slate-600 w-full outline-none font-mono truncate" /></div>
+                        <button onClick={handleCopyLink} className={`w-full py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 shadow-lg ${urlCopied ? 'bg-green-500 text-white' : 'bg-black text-white hover:bg-slate-800'}`}>{urlCopied ? <CheckCircle size={16} /> : <Copy size={16} />}{urlCopied ? '¡Enlace Copiado!' : 'Copiar Enlace'}</button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
