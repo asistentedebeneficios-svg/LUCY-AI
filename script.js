@@ -111,20 +111,7 @@ if (!OFFLINE_MODE) {
 }
 
 // ===============================
-// FIREBASE HELPERS (COMPAT)
-// ===============================
-const collection = (db, path) => db.collection(path);
-const doc = (db, path) => db.doc(path);
-
-const onSnapshot = (ref, cb, err) => ref.onSnapshot(cb, err);
-const addDoc = (colRef, data) => colRef.add(data);
-const setDoc = (docRef, data) => docRef.set(data);
-const getDoc = (docRef) => docRef.get();
-const updateDoc = (docRef, data) => docRef.update(data);
-const deleteDoc = (docRef) => docRef.delete();
-
-// ===============================
-// FIREBASE HELPERS (COMPAT) — FIX: acepta segmentos
+// FIREBASE HELPERS (COMPAT) — ÚNICO BLOQUE VÁLIDO
 // ===============================
 const joinPath = (...segs) => segs.filter(Boolean).join('/');
 
@@ -141,6 +128,7 @@ const deleteDoc = (docRef) => docRef.delete();
 
 const serverTimestamp = () => firebase.firestore.FieldValue.serverTimestamp();
 const writeBatch = (db) => db.batch();
+
 
 // -----------------------------------------------------------------------------
 // Limpia el mensaje de IA de etiquetas internas, JSON y prefijos de rol
