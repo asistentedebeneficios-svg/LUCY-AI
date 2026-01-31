@@ -4,10 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Asistente de Beneficios | Lucy</title>
+
   <link rel="icon" type="image/jpeg" href="https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg">
 
+  <!-- Estilos propios -->
   <link rel="stylesheet" href="style.css">
 
+  <!-- Tailwind (OK para ahora) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -21,18 +24,24 @@
     }
   </script>
 
-  <!-- React (modo global) -->
+  <!-- React global (NO module) -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 
-  <!-- Babel (para que tu JSX <div> funcione) -->
+  <!-- Babel (permite JSX <div>) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Firebase COMPAT (para que funcione sin imports) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
 
-<body>
+<body class="bg-gray-100">
   <div id="root"></div>
 
-  <!-- IMPORTANTE: sin module -->
+  <!-- Tu app -->
+  <!-- MUY IMPORTANTE: NO module -->
   <script type="text/babel" src="script.js"></script>
 </body>
 </html>
