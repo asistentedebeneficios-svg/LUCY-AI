@@ -122,6 +122,15 @@ const getDoc = (docRef) => docRef.get();
 const updateDoc = (docRef, data) => docRef.update(data);
 const deleteDoc = (docRef) => docRef.delete();
 
+// ===============================
+// AUTH HELPERS (COMPAT)
+// ===============================
+const onAuthStateChanged = (auth, callback) => auth.onAuthStateChanged(callback);
+const signInAnonymously = (auth) => auth.signInAnonymously();
+const signInWithEmailAndPassword = (auth, email, pass) => auth.signInWithEmailAndPassword(email, pass);
+const signOut = (auth) => auth.signOut();
+
+
 // -----------------------------------------------------------------------------
 // Limpia el mensaje de IA de etiquetas internas, JSON y prefijos de rol
 function cleanAiMessage(text) {
