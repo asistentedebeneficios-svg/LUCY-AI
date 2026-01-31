@@ -110,14 +110,17 @@ if (!OFFLINE_MODE) {
 }
 
 // ===============================
-// FIREBASE HELPERS (OBLIGATORIO)
+// FIREBASE HELPERS (COMPAT)
 // ===============================
-const onAuthStateChanged = (auth, callback) => {
-  return auth.onAuthStateChanged(callback);
-};
+const collection = (db, path) => db.collection(path);
+const doc = (db, path) => db.doc(path);
 
-
-
+const onSnapshot = (ref, cb, err) => ref.onSnapshot(cb, err);
+const addDoc = (colRef, data) => colRef.add(data);
+const setDoc = (docRef, data) => docRef.set(data);
+const getDoc = (docRef) => docRef.get();
+const updateDoc = (docRef, data) => docRef.update(data);
+const deleteDoc = (docRef) => docRef.delete();
 
 // -----------------------------------------------------------------------------
 // Limpia el mensaje de IA de etiquetas internas, JSON y prefijos de rol
