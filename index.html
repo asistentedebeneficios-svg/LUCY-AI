@@ -6,6 +6,7 @@
     <title>Asistente de Beneficios | Lucy</title>
     <link rel="icon" type="image/jpeg" href="https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg">
     
+    <!-- 1. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -13,12 +14,29 @@
         }
     </script>
 
+    <!-- 2. React y Babel -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
+    <!-- FIX: Usamos una versión específica de Babel y configuramos manualmente para evitar el error 'targets' -->
+    <script src="https://unpkg.com/@babel/standalone@7.23.8/babel.min.js"></script>
+    <script>
+        // Configuración manual de Babel para corregir el error de "esmodules must be a boolean"
+        window.Babel = {
+            presets: [
+                ['env', {
+                    targets: { esmodules: true }, // Aquí forzamos el valor booleano correcto
+                    modules: false // Evita que Babel transforme los imports, dejándolos al navegador
+                }],
+                'react'
+            ]
+        };
+    </script>
+    
+    <!-- 3. Iconos Lucide -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
+    <!-- 4. Estilos CSS -->
     <style>
         body { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background-color: #F5F5F7; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -47,15 +65,18 @@
 <body>
     <div id="root"></div>
 
-    <script type="text/babel" data-type="module" data-presets="react">
+    <!-- 5. Lógica de la Aplicación -->
+    <!-- data-type="module" es necesario para los imports, pero la config ya está en window.Babel arriba -->
+    <script type="text/babel" data-type="module">
+        
         /*******************************************************
-         * 1. CONFIGURACIÓN E IMPORTACIONES
+         * CONFIGURACIÓN E IMPORTACIONES
          *******************************************************/
         
-        // React desde CDN Global (Más estable para archivos únicos)
+        // React desde el objeto global
         const { useState, useEffect, useRef, useMemo, useCallback } = React;
         
-        // Lucide Iconos desde CDN Global
+        // Lucide desde el objeto global
         const { 
           MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, 
           Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, 
@@ -63,16 +84,16 @@
           Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, 
           Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, 
           CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, 
-          Mail, UserMinus, UserPlus, Link as LinkIcon, Plus, MinusCircle, 
+          Mail, UserMinus, UserPlus, Link: LinkIcon, Plus, MinusCircle, 
           BarChart3, TrendingUp, PieChart, Wallet, AlertCircle
         } = lucide;
 
-        // Firebase (Módulos modernos)
+        // Firebase (Imports directos - Funcionarán gracias a la config window.Babel)
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
         import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
-        // --- CONSTANTES ---
+        // --- CONSTANTES DEL SISTEMA ---
         const OFFLINE_MODE = false; 
         const AI_KEY_PART_A = "AIzaSyAIOAO4-h7lRRK8";
         const AI_KEY_PART_B = "SKAC2hgomoE-MaCZ58M";
@@ -90,6 +111,7 @@
 
         const APP_ID = 'gastos-finales-v1';
 
+        // Inicialización segura de Firebase
         let app, auth, db;
         if (!OFFLINE_MODE) {
             try {
@@ -101,7 +123,8 @@
             }
         }
 
-        // --- UTILIDADES ---
+        // --- FUNCIONES DE UTILIDAD ---
+        
         const generateId = () => Math.random().toString(36).substr(2, 9);
 
         function cleanAiMessage(text) {
@@ -168,6 +191,7 @@
             try {
                 if (!config) return { isAgentAvailable: true, message: "Disponible" };
                 const now = new Date();
+                
                 if (config.vacationMode && config.vacationStart && config.vacationEnd) {
                     const vStart = new Date(config.vacationStart + 'T00:00:00');
                     const vEnd = new Date(config.vacationEnd + 'T23:59:59');
@@ -180,10 +204,15 @@
                 const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
                 const dayName = days[now.getDay()];
                 const dayConfig = config.schedule?.[dayName];
+                
                 if (!dayConfig || !dayConfig.enabled) return { isAgentAvailable: false, message: "Cerrado hoy" };
+
                 let slots = dayConfig.slots || [];
-                if (slots.length === 0 && dayConfig.start && dayConfig.end) slots = [{ start: dayConfig.start, end: dayConfig.end }];
+                if (slots.length === 0 && dayConfig.start && dayConfig.end) {
+                    slots = [{ start: dayConfig.start, end: dayConfig.end }];
+                }
                 if (slots.length === 0) return { isAgentAvailable: false, message: "Sin turnos" };
+
                 const currentMins = now.getHours() * 60 + now.getMinutes();
                 const isOpenNow = slots.some(slot => {
                     if (!slot || !slot.start || !slot.end) return false;
@@ -386,8 +415,8 @@
             const getAgentLeads = (agentId) => {
                 let agentLeads = leads.filter(l => l.assignedAgentId === agentId);
                 const now = new Date();
-                if (dateFilter === 'thisMonth') { agentLeads = agentLeads.filter(l => { const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }); } 
-                else if (dateFilter === 'lastMonth') { const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1); const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0); agentLeads = agentLeads.filter(l => { const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000); return d >= lastMonth && d <= endLastMonth; }); } 
+                if (dateFilter === 'thisMonth') { agentLeads = agentLeads.filter(l => { const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }); } 
+                else if (dateFilter === 'lastMonth') { const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1); const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0); agentLeads = agentLeads.filter(l => { const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000); return d >= lastMonth && d <= endLastMonth; }); } 
                 else if (dateFilter === 'custom' && customStart && customEnd) { const start = new Date(customStart); const end = new Date(customEnd); end.setHours(23, 59, 59); agentLeads = agentLeads.filter(l => { const d = l.assignedAt?.toDate ? l.assignedAt.toDate() : new Date(l.assignedAt?.seconds * 1000); return d >= start && d <= end; }); }
                 return agentLeads;
             };
@@ -534,7 +563,7 @@
             const [loading, setLoading] = useState(false);
             const [showShareModal, setShowShareModal] = useState(false);
             const [urlCopied, setUrlCopied] = useState(false);
-            const [uiState, setUiState] = useState(null); 
+            const [uiState, setUiState] = useState(null); 
             const scrollRef = useRef(null);
             const agentStatus = useMemo(() => getAgentStatus(aiConfig), [aiConfig]);
             const { isAgentAvailable } = agentStatus;
@@ -556,8 +585,8 @@
                     const { isAgentAvailable, message, isVacation, resumeDate } = agentStatus;
                     
                     let statusInstruction = "";
-                    if (isVacation && resumeDate) { statusInstruction = `🚨 ALERTA CRÍTICA: Estamos de VACACIONES hasta el ${resumeDate.toLocaleDateString()}. NO agendes nada para antes de esa fecha.`; } 
-                    else if (!isAgentAvailable) { statusInstruction = `🚨 ALERTA CRÍTICA: EN ESTE MOMENTO LA OFICINA ESTÁ CERRADA (${message}). - FECHA/HORA ACTUAL: ${currentDateTimeStr}. - NO PUEDES programar una llamada para "ahora", "ya" o "hoy". - Si el usuario insiste, dile amablemente que la oficina está cerrada en este momento y ofrece el primer horario disponible del Lunes (u otro día abierto según el horario).`; } 
+                    if (isVacation && resumeDate) { statusInstruction = `🚨 ALERTA CRÍTICA: Estamos de VACACIONES hasta el ${resumeDate.toLocaleDateString()}. NO agendes nada para antes de esa fecha.`; } 
+                    else if (!isAgentAvailable) { statusInstruction = `🚨 ALERTA CRÍTICA: EN ESTE MOMENTO LA OFICINA ESTÁ CERRADA (${message}). - FECHA/HORA ACTUAL: ${currentDateTimeStr}. - NO PUEDES programar una llamada para "ahora", "ya" o "hoy". - Si el usuario insiste, dile amablemente que la oficina está cerrada en este momento y ofrece el primer horario disponible del Lunes (u otro día abierto según el horario).`; } 
                     else { statusInstruction = `✅ La oficina está ABIERTA. Puedes agendar llamadas inmediatas si hay disponibilidad.`; }
                     
                     const scheduleText = getScheduleText(aiConfig?.schedule);
