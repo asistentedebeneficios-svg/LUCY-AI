@@ -22,7 +22,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassw
 // -----------------------------------------------------------------------------
 // 2. CONFIGURACIÓN DEL SISTEMA
 // -----------------------------------------------------------------------------
-const OFFLINE_MODE = false;
+const OFFLINE_MODE = false; // Cambia a true si quieres probar sin internet/firebase
 const AI_KEY_PART_A = "AIzaSyAIOAO4-h7lRRK8";
 const AI_KEY_PART_B = "SKAC2hgomoE-MaCZ58M";
 const GEMINI_API_KEY = `${AI_KEY_PART_A}${AI_KEY_PART_B}`;
@@ -51,27 +51,20 @@ if (!OFFLINE_MODE) {
 }
 
 // -----------------------------------------------------------------------------
-// Limpia el mensaje de IA de etiquetas internas, JSON y prefijos de rol
+// HELPER FUNCTIONS
+// -----------------------------------------------------------------------------
+
+// FIX: Función generateId agregada para evitar pantalla blanca al crear agentes
+const generateId = () => Math.random().toString(36).substr(2, 9);
+
 function cleanAiMessage(text) {
     if (!text) return '';
     let cleaned = text;
-
-    // 1. Quitar prefijos molestos como "assistant:", "model:", "lucy:"
     cleaned = cleaned.replace(/^(assistant|model|lucy):\s*/i, '');
-
-    // 2. Quitar bloques JSON
     cleaned = cleaned.replace(/```json[\s\S]*?```/g, '');
-
-    // 3. Quitar etiquetas antiguas
     cleaned = cleaned.replace(/\[MODE:[A-Z_]+\]/g, '');
-
-    // 4. Quitar etiquetas de BOTONES (agresivo para que no queden corchetes sueltos)
-    // Borra desde [BUTTONS: hasta el último ] que encuentre
     cleaned = cleaned.replace(/\[BUTTONS:[\s\S]*?\]+/g, '');
-
-    // 5. Limpieza final de seguridad (por si queda un "]" suelto al final)
     cleaned = cleaned.replace(/[\]]+\s*$/, '');
-
     return cleaned.trim();
 }
 
@@ -169,7 +162,8 @@ const getAgentStatus = (config) => {
 
         const currentMins = now.getHours() * 60 + now.getMinutes();
         const isOpenNow = slots.some(slot => {
-            if (!slot.start || !slot.end) return false;
+            // FIX: Check if slot properties exist
+            if (!slot || !slot.start || !slot.end) return false;
             const [sH, sM] = slot.start.split(':').map(Number);
             const [eH, eM] = slot.end.split(':').map(Number);
             if (isNaN(sH) || isNaN(eH)) return false;
@@ -231,7 +225,6 @@ function useInactivityTimer(action, timeout = 600000) {
 // 6. COMPONENTES VISUALES
 const LucyAvatar = ({ className = "w-10 h-10" }) => (<img src="https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" alt="Lucy" className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"; }} />);
 const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
-const BrainAvatar = ({ className = "w-10 h-10" }) => (<div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}><Sparkles size={20} strokeWidth={2} /></div>);
 
 // --- DASHBOARD REPORTES ---
 const ReportsDashboard = ({ leads, agents }) => {
@@ -810,7 +803,8 @@ function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, 
 
 // --- ADMIN BRAIN (NUEVO: HORARIOS FLEXIBLES) ---
 function AdminBrain({ aiConfig, onSaveConfig }) {
-    const [c, setC] = useState(aiConfig);
+    // FIX: Fallback to empty object if aiConfig is missing
+    const [c, setC] = useState(aiConfig || { schedule: {} });
     const [isSaving, setIsSaving] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
     const [isEditingWebhook, setIsEditingWebhook] = useState(false);
@@ -820,10 +814,31 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
     const [authPassword, setAuthPassword] = useState('');
     const [authError, setAuthError] = useState(null);
 
-    const handleAddSlot = (day) => { const slots = c.schedule?.[day]?.slots || []; setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule[day] || {}), enabled: true, slots: [...slots, {start: "09:00", end: "18:00"}] } } })); };
-    const handleRemoveSlot = (day, idx) => { const slots = (c.schedule?.[day]?.slots || []).filter((_, i) => i !== idx); setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule[day] || {}), slots, enabled: slots.length > 0 } } })); };
-    const handleSlotChange = (day, idx, field, val) => { const slots = [...(c.schedule?.[day]?.slots || [])]; if (slots[idx]) { slots[idx] = { ...slots[idx], [field]: val }; setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule[day] || {}), slots } } })); } };
-    const handleDayToggle = (day) => { const enabled = !c.schedule?.[day]?.enabled; let slots = c.schedule?.[day]?.slots || []; if (enabled && slots.length === 0) slots = [{start: "09:00", end: "18:00"}]; setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule[day] || {}), enabled, slots } } })); };
+    // FIX: Safe navigation for schedule updates
+    const handleAddSlot = (day) => { 
+        const currentSlots = c.schedule?.[day]?.slots || []; 
+        setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule?.[day] || {}), enabled: true, slots: [...currentSlots, {start: "09:00", end: "18:00"}] } } })); 
+    };
+    
+    const handleRemoveSlot = (day, idx) => { 
+        const currentSlots = (c.schedule?.[day]?.slots || []).filter((_, i) => i !== idx); 
+        setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule?.[day] || {}), slots: currentSlots, enabled: currentSlots.length > 0 } } })); 
+    };
+    
+    const handleSlotChange = (day, idx, field, val) => { 
+        const slots = [...(c.schedule?.[day]?.slots || [])]; 
+        if (slots[idx]) { 
+            slots[idx] = { ...slots[idx], [field]: val }; 
+            setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule?.[day] || {}), slots } } })); 
+        } 
+    };
+    
+    const handleDayToggle = (day) => { 
+        const enabled = !c.schedule?.[day]?.enabled; 
+        let slots = c.schedule?.[day]?.slots || []; 
+        if (enabled && slots.length === 0) slots = [{start: "09:00", end: "18:00"}]; 
+        setC(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...(p.schedule?.[day] || {}), enabled, slots } } })); 
+    };
 
     const handleSave = async () => { setIsSaving(true); await onSaveConfig(c); setIsSaving(false); setIsEditingWebhook(false); setIsEditingAssignmentWebhook(false); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000); };
     const daysList = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
@@ -844,7 +859,7 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
                                 <div key={day} className="border-b border-slate-200/50 pb-3 last:border-0 last:pb-0">
                                     <div className="flex items-center justify-between group mb-2">
                                         <div className="flex items-center gap-3">
-                                            <input type="checkbox" checked={c.schedule?.[day]?.enabled} onChange={() => handleDayToggle(day)} className="accent-black w-4 h-4 rounded cursor-pointer" />
+                                            <input type="checkbox" checked={c.schedule?.[day]?.enabled || false} onChange={() => handleDayToggle(day)} className="accent-black w-4 h-4 rounded cursor-pointer" />
                                             <span className={`text-xs font-bold uppercase tracking-wide w-20 ${c.schedule?.[day]?.enabled ? 'text-slate-700' : 'text-slate-400'}`}>{day}</span>
                                         </div>
                                         {c.schedule?.[day]?.enabled && (
@@ -854,7 +869,8 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
                                     
                                     {c.schedule?.[day]?.enabled ? (
                                         <div className="space-y-2 pl-8">
-                                            {(c.schedule[day].slots || []).map((slot, idx) => (
+                                            {/* FIX: Ensure slots exist before mapping */}
+                                            {(c.schedule?.[day]?.slots || []).map((slot, idx) => (
                                                 <div key={idx} className="flex gap-2 items-center animate-in fade-in">
                                                     <input type="time" value={slot.start} onChange={(e) => handleSlotChange(day, idx, 'start', e.target.value)} className="bg-white border border-slate-200 p-1 rounded text-xs w-20 text-center font-medium" />
                                                     <span className="text-slate-400 text-[10px]">a</span>
@@ -862,10 +878,6 @@ function AdminBrain({ aiConfig, onSaveConfig }) {
                                                     <button onClick={() => handleRemoveSlot(day, idx)} className="text-red-400 hover:text-red-600 ml-1"><MinusCircle size={14} /></button>
                                                 </div>
                                             ))}
-                                            {/* Retrocompatibilidad visual si no hay slots array */}
-                                            {(!c.schedule[day].slots && c.schedule[day].start) && (
-                                                <div className="text-[10px] text-orange-400 italic">Formato antiguo detectado. Agrega un turno para actualizar.</div>
-                                            )}
                                         </div>
                                     ) : (<span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest px-8">Cerrado</span>)}
                                 </div>
@@ -1051,7 +1063,7 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
         const newM = [...msgs, { role: 'user', content: textToSend }];
         setMsgs(newM);
 
-   try {
+        try {
             // 1. OBTENER FECHA Y HORA ACTUAL EXACTA
             const now = new Date();
             const currentDateTimeStr = now.toLocaleString('es-US', { timeZone: 'America/New_York', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
