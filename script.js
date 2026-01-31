@@ -18,6 +18,13 @@ const {
 } = lucide;
 
 // ===============================
+// COMPONENTES FALTANTES (STUBS OBLIGATORIOS)
+// ===============================
+const LucyAvatar = () => null;
+const ProtectionLogo = () => null;
+
+
+// ===============================
 // CONFIGURACIÓN DEL SISTEMA
 // ===============================
 const OFFLINE_MODE = false;
