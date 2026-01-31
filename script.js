@@ -116,16 +116,23 @@ const FIREBASE_CONFIG = {
 
 const APP_ID = 'gastos-finales-v1';
 
-let app, auth, db;
+// -----------------------------------------------------------------------------
+// FIREBASE INIT (COMPAT MODE – OBLIGATORIO)
+// -----------------------------------------------------------------------------
+let auth = null;
+let db = null;
+
 if (!OFFLINE_MODE) {
     try {
-        app = initializeApp(FIREBASE_CONFIG);
-        auth = getAuth(app);
-        db = getFirestore(app);
+        firebase.initializeApp(FIREBASE_CONFIG);
+        auth = firebase.auth();
+        db = firebase.firestore();
+        console.log("🔥 Firebase compat listo");
     } catch (e) {
-        console.error("Error crítico inicializando Firebase:", e);
+        console.error("❌ Error inicializando Firebase compat:", e);
     }
 }
+
 
 // -----------------------------------------------------------------------------
 // Limpia el mensaje de IA de etiquetas internas, JSON y prefijos de rol
