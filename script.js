@@ -90,9 +90,23 @@ function formatFirestoreDate(ts) {
 }
 
 const RichText = ({ content }) => {
-    if (!content || typeof content !== 'string') return null;
-    return <span className="text-sm leading-relaxed">{content.split(/(\*\*.*?\*\*)/g).map((part, i) => part.startsWith('**') ? <strong key={i} className="text-slate-900 font-bold">{part.slice(2, -2)}</strong> : part)}</span>;
+  if (!content || typeof content !== "string") return null;
+
+  return React.createElement(
+    "span",
+    { className: "text-sm leading-relaxed" },
+    ...content.split(/(\*\*.*?\*\*)/g).map((part, i) =>
+      part.startsWith("**")
+        ? React.createElement(
+            "strong",
+            { key: i, className: "text-slate-900 font-bold" },
+            part.slice(2, -2)
+          )
+        : part
+    )
+  );
 };
+
 
 const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
 
