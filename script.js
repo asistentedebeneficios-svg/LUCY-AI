@@ -100,10 +100,11 @@ let db = null;
 
 if (!OFFLINE_MODE) {
   try {
-    firebase.initializeApp(FIREBASE_CONFIG);
+    // Evita inicializar 2 veces
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     auth = firebase.auth();
     db = firebase.firestore();
-    console.log("🔥 Firebase listo");
+    console.log("🔥 Firebase listo (compat)");
   } catch (e) {
     console.error("❌ Firebase error:", e);
   }
@@ -123,13 +124,23 @@ const updateDoc = (docRef, data) => docRef.update(data);
 const deleteDoc = (docRef) => docRef.delete();
 
 // ===============================
-// AUTH HELPERS (COMPAT)
+// FIREBASE HELPERS (COMPAT) — FIX: acepta segmentos
 // ===============================
-const onAuthStateChanged = (auth, callback) => auth.onAuthStateChanged(callback);
-const signInAnonymously = (auth) => auth.signInAnonymously();
-const signInWithEmailAndPassword = (auth, email, pass) => auth.signInWithEmailAndPassword(email, pass);
-const signOut = (auth) => auth.signOut();
+const joinPath = (...segs) => segs.filter(Boolean).join('/');
 
+const collection = (db, ...segs) => db.collection(joinPath(...segs));
+const doc = (db, ...segs) => db.doc(joinPath(...segs));
+
+const onSnapshot = (ref, cb, err) => ref.onSnapshot(cb, err);
+const addDoc = (colRef, data) => colRef.add(data);
+
+const setDoc = (docRef, data) => docRef.set(data);
+const getDoc = (docRef) => docRef.get();
+const updateDoc = (docRef, data) => docRef.update(data);
+const deleteDoc = (docRef) => docRef.delete();
+
+const serverTimestamp = () => firebase.firestore.FieldValue.serverTimestamp();
+const writeBatch = (db) => db.batch();
 
 // -----------------------------------------------------------------------------
 // Limpia el mensaje de IA de etiquetas internas, JSON y prefijos de rol
@@ -543,7 +554,7 @@ function App() {
 
     useEffect(() => {
         if (OFFLINE_MODE) { setLeads([]); return; }
-        if (!user || !db) return;
+        if (!user || !db || !firebase.apps.length) return;
         const leadsRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'leads');
         const unsub = onSnapshot(leadsRef, (snapshot) => {
             setPermissionError(false);
@@ -552,7 +563,7 @@ function App() {
         }, (error) => { if (error.code === 'permission-denied' && isAdmin) setPermissionError(true); });
         
         getDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config')).then(s => {
-            if (s.exists()) {
+            if (s.exists) {
                 // Merge con default para asegurar que no falten campos
                 setAiConfig(prev => ({ ...prev, ...s.data() }));
             }
@@ -564,7 +575,7 @@ function App() {
     useEffect(() => {
         if (OFFLINE_MODE || !user || !isAdmin || !db) return;
         const agentsDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
-        const unsub = onSnapshot(agentsDocRef, (docSnap) => { if (docSnap.exists()) { setAgents(docSnap.data().list || []); } else { setAgents([]); } });
+        const unsub = onSnapshot(agentsDocRef, (docSnap) => { if (docSnap.exists) { setAgents(docSnap.data().list || []); } else { setAgents([]); } });
         return () => unsub();
     }, [user, isAdmin]);
 
@@ -633,13 +644,13 @@ function App() {
     };
 
     const saveAgent = async (agentData) => {
-        if (!isAdmin) return; const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list'); const docSnap = await getDoc(agentsRef); let currentList = docSnap.exists() ? (docSnap.data().list || []) : [];
+        if (!isAdmin) return; const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list'); const docSnap = await getDoc(agentsRef); let currentList = docSnap.exists ? (docSnap.data().list || []) : [];
         if (agentData.id) { currentList = currentList.map(a => a.id === agentData.id ? { ...agentData, updatedAt: Date.now() } : a); }
         else { const newAgent = { ...agentData, id: generateId(), createdAt: Date.now() }; currentList.push(newAgent); }
         await setDoc(agentsRef, { list: currentList });
     };
     const deleteAgent = async (ids) => {
-        const idArray = Array.isArray(ids) ? ids : [ids]; if (!isAdmin) return; const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list'); const docSnap = await getDoc(agentsRef); if (!docSnap.exists()) return;
+        const idArray = Array.isArray(ids) ? ids : [ids]; if (!isAdmin) return; const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list'); const docSnap = await getDoc(agentsRef); if (!docSnap.exists) return;
         let currentList = docSnap.data().list || []; currentList = currentList.filter(a => !idArray.includes(a.id)); await setDoc(agentsRef, { list: currentList });
     };
 
