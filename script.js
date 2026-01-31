@@ -342,8 +342,8 @@ const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus,
                         </div>
                     )}
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span><a href={`https://wa.me/${String(lead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(lead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
-                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Programado</span><p className="font-medium text-[#1d1d1f]">{formatScheduledDate(String(lead.horario_preferido || 'Inmediata'))}</p></div>
+                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Teléfono</span><a href={`https://wa.me/${String(lead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(lead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
+                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Preferencia</span><p className="font-medium text-[#1d1d1f]">{formatScheduledDate(String(lead.horario_preferido || 'Inmediata'))}</p></div>
                         <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Perfil</span><p className="font-medium text-[#1d1d1f] text-sm">{String(lead.edad || '?')} años • {String(lead.estado || '?')} • {String(lead.fuma || '?')}</p></div>
                         <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Salud</span><p className="font-medium text-[#1d1d1f] text-sm truncate">{String(lead.salud || '-')}</p></div>
                     </div>
@@ -1051,32 +1051,55 @@ function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
         const newM = [...msgs, { role: 'user', content: textToSend }];
         setMsgs(newM);
 
-        try {
-            // 1. Obtener status de horario y vacaciones
-            const { isVacation, resumeDate } = agentStatus;
-            let availabilityInstruction = "";
-            if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA DEL SISTEMA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}. Sé muy amable y profesional, NO digas "vacaciones".`;
+   try {
+            // 1. OBTENER FECHA Y HORA ACTUAL EXACTA
+            const now = new Date();
+            const currentDateTimeStr = now.toLocaleString('es-US', { timeZone: 'America/New_York', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+            // 2. VERIFICAR ESTADO (ABIERTO/CERRADO)
+            // Usamos la lógica matemática estricta, no dejamos que la IA adivine.
+            const { isAgentAvailable, message, isVacation, resumeDate } = agentStatus;
             
-            // 2. Obtener texto del horario
+            let statusInstruction = "";
+
+            if (isVacation && resumeDate) {
+                // CASO VACACIONES
+                statusInstruction = `🚨 ALERTA CRÍTICA: Estamos de VACACIONES hasta el ${resumeDate.toLocaleDateString()}. NO agendes nada para antes de esa fecha.`;
+            } else if (!isAgentAvailable) {
+                // CASO CERRADO (NOCHE O FIN DE SEMANA)
+                statusInstruction = `🚨 ALERTA CRÍTICA: EN ESTE MOMENTO LA OFICINA ESTÁ CERRADA (${message}).
+                - FECHA/HORA ACTUAL: ${currentDateTimeStr}.
+                - NO PUEDES programar una llamada para "ahora", "ya" o "hoy".
+                - Si el usuario insiste, dile amablemente que la oficina está cerrada en este momento y ofrece el primer horario disponible del Lunes (u otro día abierto según el horario).`;
+            } else {
+                // CASO ABIERTO
+                statusInstruction = `✅ La oficina está ABIERTA. Puedes agendar llamadas inmediatas si hay disponibilidad.`;
+            }
+            
+            // 3. Obtener texto del horario general
             const scheduleText = getScheduleText(aiConfig?.schedule);
             
-            // 3. Preparar prompt
+            // 4. Preparar prompt
             const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
             const prompt = `
           ${systemBase}
-          ${availabilityInstruction}
           
-          IMPORTANTE - HORARIOS DE TRABAJO ACTUALES (EST / FLORIDA):
+          DATOS DE TIEMPO REAL (No alucines la fecha):
+          - Hoy es: ${currentDateTimeStr}
+          
+          ESTADO ACTUAL DE LA OFICINA:
+          ${statusInstruction}
+
+          HORARIOS DE TRABAJO SEMANALES:
           ${scheduleText}
           
-          REGLA DE AGENDAMIENTO ESTRICTA: 
-          1. Verifica SIEMPRE el horario arriba mencionado antes de confirmar o sugerir una cita.
-          2. NUNCA sugieras ni aceptes agendar una llamada fuera de esos rangos de tiempo. 
-          3. Si el usuario propone una hora fuera del horario laboral, dile amablemente que en ese momento nuestros agentes no están disponibles y ofrece el espacio abierto más cercano dentro del horario.
-          4. Asume que la hora que dice el usuario es SU HORA LOCAL, pero confírmale diciendo "Perfecto, agendado para sus [HORA]".
+          REGLAS DE AGENDAMIENTO BLINDADAS:
+          1. Si la "ALERTA CRÍTICA" dice que está cerrado, PROHIBIDO agendar para este momento.
+          2. Asume que la hora que dice el usuario es SU hora local, pero tú gestionas la agenda en hora del Este (New York/Miami).
+          3. Si agendas, confirma explícitamente el día y la hora.
 
-          HISTORIAL:
+          HISTORIAL DEL CHAT:
           ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
         `;
 
