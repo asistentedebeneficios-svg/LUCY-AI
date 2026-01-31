@@ -1,23 +1,100 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'https://esm.sh/react@18.2.0';
-import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
+// ===============================
+// NO IMPORTS (para que Babel entienda el JSX <div>)
+// React y ReactDOM vienen del index.html
+// ===============================
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-// -----------------------------------------------------------------------------
-// 1. IMPORTACIÓN DE ICONOS (LUCIDE REACT)
-// -----------------------------------------------------------------------------
-import { 
-  MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard, 
-  Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock, 
-  FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink, 
-  Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart, 
-  Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck, 
-  CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin, 
-  Mail, UserMinus, UserPlus, Link as LinkIcon, Plus, MinusCircle, 
-  BarChart3, TrendingUp, PieChart, Wallet, AlertCircle
-} from 'https://esm.sh/lucide-react@0.344.0';
+// ===============================
+// ICONOS: versión simple temporal (no rompen la app)
+// ===============================
+const IconStub = () => null;
 
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+const MessageSquare = IconStub;
+const Settings = IconStub;
+const Users = IconStub;
+const Send = IconStub;
+const Phone = IconStub;
+const ShieldCheck = IconStub;
+const LayoutDashboard = IconStub;
+const Sparkles = IconStub;
+const User = IconStub;
+const Activity = IconStub;
+const DollarSign = IconStub;
+const Calendar = IconStub;
+const Copy = IconStub;
+const Clock = IconStub;
+const CalendarClock = IconStub;
+const FileText = IconStub;
+const ShieldAlert = IconStub;
+const Lock = IconStub;
+const Archive = IconStub;
+const Inbox = IconStub;
+const RotateCcw = IconStub;
+const Search = IconStub;
+const ExternalLink = IconStub;
+const Command = IconStub;
+const Zap = IconStub;
+const Moon = IconStub;
+const Sun = IconStub;
+const Check = IconStub;
+const CheckCircle = IconStub;
+const Bell = IconStub;
+const X = IconStub;
+const Trash2 = IconStub;
+const LogIn = IconStub;
+const Heart = IconStub;
+const Star = IconStub;
+const Award = IconStub;
+const Shield = IconStub;
+const Pencil = IconStub;
+const Eye = IconStub;
+const EyeOff = IconStub;
+const WifiOff = IconStub;
+const PhoneOff = IconStub;
+const UserCheck = IconStub;
+const CheckSquare = IconStub;
+const Square = IconStub;
+const Share2 = IconStub;
+const Briefcase = IconStub;
+const UserCog = IconStub;
+const Filter = IconStub;
+const ChevronDown = IconStub;
+const MapPin = IconStub;
+const Mail = IconStub;
+const UserMinus = IconStub;
+const UserPlus = IconStub;
+const LinkIcon = IconStub;
+const Plus = IconStub;
+const MinusCircle = IconStub;
+const BarChart3 = IconStub;
+const TrendingUp = IconStub;
+const PieChart = IconStub;
+const Wallet = IconStub;
+const AlertCircle = IconStub;
+
+// ===============================
+// FIREBASE: viene del index.html (compat)
+// ===============================
+const initializeApp = (config) => firebase.initializeApp(config);
+const getAuth = () => firebase.auth();
+const signInAnonymously = (auth) => auth.signInAnonymously();
+const onAuthStateChanged = (auth, cb) => auth.onAuthStateChanged(cb);
+const signInWithEmailAndPassword = (auth, email, pass) => auth.signInWithEmailAndPassword(email, pass);
+const signOut = (auth) => auth.signOut();
+
+const getFirestore = () => firebase.firestore();
+const collection = (db, ...path) => db.collection(path.join('/'));
+const addDoc = (colRef, data) => colRef.add(data);
+const onSnapshot = (ref, onNext, onErr) => ref.onSnapshot(onNext, onErr);
+
+const doc = (db, ...path) => db.doc(path.join('/'));
+const setDoc = (docRef, data) => docRef.set(data);
+const getDoc = (docRef) => docRef.get();
+const deleteDoc = (docRef) => docRef.delete();
+const updateDoc = (docRef, data) => docRef.update(data);
+
+const serverTimestamp = () => firebase.firestore.FieldValue.serverTimestamp();
+const writeBatch = (db) => db.batch();
 
 // -----------------------------------------------------------------------------
 // 2. CONFIGURACIÓN DEL SISTEMA
@@ -90,23 +167,9 @@ function formatFirestoreDate(ts) {
 }
 
 const RichText = ({ content }) => {
-  if (!content || typeof content !== "string") return null;
-
-  return React.createElement(
-    "span",
-    { className: "text-sm leading-relaxed" },
-    ...content.split(/(\*\*.*?\*\*)/g).map((part, i) =>
-      part.startsWith("**")
-        ? React.createElement(
-            "strong",
-            { key: i, className: "text-slate-900 font-bold" },
-            part.slice(2, -2)
-          )
-        : part
-    )
-  );
+    if (!content || typeof content !== 'string') return null;
+    return <span className="text-sm leading-relaxed">{content.split(/(\*\*.*?\*\*)/g).map((part, i) => part.startsWith('**') ? <strong key={i} className="text-slate-900 font-bold">{part.slice(2, -2)}</strong> : part)}</span>;
 };
-
 
 const rateLimit = { lastCall: 0, count: 0, check: function() { const now = Date.now(); if (now - this.lastCall < 2000) return false; this.lastCall = now; this.count++; if (this.count > 50) return false; return true; } };
 
@@ -243,73 +306,181 @@ function useInactivityTimer(action, timeout = 600000) {
 }
 
 // 6. COMPONENTES VISUALES
-const LucyAvatar = ({ className = "w-10 h-10" }) =>
-  React.createElement("img", {
-    src: "https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg",
-    alt: "Lucy",
-    className: `${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`,
-    onError: (e) => {
-      e.target.onerror = null;
-      e.target.src =
-        "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400";
-    },
-  });
-
-const ProtectionLogo = ({ size = 24, className = "" }) =>
-  React.createElement(
-    "svg",
-    {
-      xmlns: "http://www.w3.org/2000/svg",
-      width: size,
-      height: size,
-      viewBox: "0 0 24 24",
-      fill: "none",
-      stroke: "currentColor",
-      strokeWidth: "2",
-      strokeLinecap: "round",
-      strokeLinejoin: "round",
-      className,
-    },
-    React.createElement("path", {
-      d: "M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z",
-    }),
-    React.createElement("path", {
-      d: "M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z",
-    })
-  );
-
-const BrainAvatar = ({ className = "w-10 h-10" }) =>
-  React.createElement(
-    "div",
-    {
-      className: `${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`,
-    },
-    React.createElement(Sparkles, { size: 20, strokeWidth: 2 })
-  );
+const LucyAvatar = ({ className = "w-10 h-10" }) => (<img src="https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" alt="Lucy" className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"; }} />);
+const ProtectionLogo = ({ size = 24, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 9.5L12 3l9 6.5v11.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" /><path d="M12 18.5c2.5-1.5 5.5-4 5.5-6.5 0-1.7-1.3-3-3-3-1 0-1.9.5-2.5 1.5-.6-1-1.5-1.5-2.5-1.5-1.7 0-3 1.3-3 3 0 2.5 3 5 5.5 6.5z" /></svg>);
+const BrainAvatar = ({ className = "w-10 h-10" }) => (<div className={`${className} rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm`}><Sparkles size={20} strokeWidth={2} /></div>);
 
 // --- DASHBOARD REPORTES ---
-const ReportsDashboard = () => {
-  return React.createElement(
-    "div",
-    {
-      className:
-        "p-6 rounded-xl bg-yellow-50 border border-yellow-200 text-sm text-yellow-800",
-    },
-    "Dashboard de reportes temporalmente desactivado"
-  );
+const ReportsDashboard = ({ leads, agents }) => {
+    const [filterAgent, setFilterAgent] = useState('all');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+
+    const filteredLeads = useMemo(() => {
+        return (leads || []).filter(l => {
+            const matchesAgent = filterAgent === 'all' || l.assignedAgentId === filterAgent;
+            let matchesDate = true;
+            if (startDate && endDate) {
+                const d = l.createdAt?.toDate ? l.createdAt.toDate() : new Date(l.createdAt?.seconds * 1000);
+                const start = new Date(startDate); start.setHours(0,0,0,0);
+                const end = new Date(endDate); end.setHours(23,59,59,999);
+                matchesDate = d >= start && d <= end;
+            }
+            return matchesAgent && matchesDate;
+        });
+    }, [leads, filterAgent, startDate, endDate]);
+
+    const assignedLeads = filteredLeads.filter(l => l.assignedAgentId).length;
+    const closedSales = filteredLeads.filter(l => l.status === 'sold').length;
+    const conversionRate = assignedLeads > 0 ? ((closedSales / assignedLeads) * 100).toFixed(1) : 0;
+    const activeLeads = filteredLeads.filter(l => !l.assignedAgentId && l.status !== 'archived').length;
+
+    const agentPerformance = useMemo(() => {
+        return (agents || []).map(agent => {
+            const myLeads = filteredLeads.filter(l => l.assignedAgentId === agent.id);
+            const mySales = myLeads.filter(l => l.status === 'sold').length;
+            const myConversion = myLeads.length > 0 ? ((mySales / myLeads.length) * 100).toFixed(0) : 0;
+            return { ...agent, assigned: myLeads.length, closed: mySales, conversion: myConversion };
+        }).sort((a, b) => b.closed - a.closed);
+    }, [agents, filteredLeads]);
+
+    return (
+        <div className="animate-in fade-in space-y-8">
+            <div className="flex flex-col md:flex-row justify-between items-end gap-4 bg-white p-5 rounded-[24px] shadow-sm border border-gray-100">
+                <div><h2 className="text-xl font-bold text-gray-900">Reportes de Rendimiento</h2><p className="text-xs text-gray-500 mt-1">Métricas de Cierre y Asignación</p></div>
+                <div className="flex gap-2 items-center">
+                    <select className="bg-gray-50 border border-gray-200 text-xs rounded-xl px-3 py-2 outline-none" value={filterAgent} onChange={e => setFilterAgent(e.target.value)}>
+                        <option value="all">Todos los Agentes</option>
+                        {(agents || []).map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                    </select>
+                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1"><input type="date" className="bg-transparent text-xs outline-none" value={startDate} onChange={e => setStartDate(e.target.value)} /><span className="text-gray-300">-</span><input type="date" className="bg-transparent text-xs outline-none" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><UserCheck size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{assignedLeads}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Leads Asignados</p></div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-green-50 text-green-600 rounded-lg"><DollarSign size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{closedSales}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Ventas Cerradas</p></div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><TrendingUp size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{conversionRate}%</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Tasa Cierre</p></div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><Inbox size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{activeLeads}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Sin Asignar</p></div>
+            </div>
+
+            <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-100 bg-[#FBFBFD]"><h3 className="font-bold text-gray-800 text-sm">Ranking de Cierre por Agente</h3></div>
+                <table className="w-full text-left">
+                    <thead className="border-b border-gray-100"><tr><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Agente</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Asignados</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Cierres</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase w-1/3">Efectividad</th></tr></thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {agentPerformance.map(agent => (
+                            <tr key={agent.id} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-6 py-4"><div className="flex items-center gap-3"><img src={agent.foto || "https://ui-avatars.com/api/?name="+agent.nombre} className="w-8 h-8 rounded-full object-cover bg-gray-200 border border-white shadow-sm"/><span className="text-sm font-semibold text-gray-700">{agent.nombre}</span></div></td>
+                                <td className="px-6 py-4 text-xs font-medium text-gray-600">{agent.assigned}</td>
+                                <td className="px-6 py-4 text-xs font-bold text-green-600">{agent.closed}</td>
+                                <td className="px-6 py-4"><div className="flex items-center gap-2"><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full" style={{ width: `${agent.conversion}%` }}></div></div><span className="text-[10px] font-bold text-gray-500 w-8 text-right">{agent.conversion}%</span></div></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
 };
 
 // -----------------------------------------------------------------------------
 // 7. MODALES DE GESTIÓN (LEADS Y ASIGNACIÓN)
 // -----------------------------------------------------------------------------
-const LeadDetailModal = () => {
-  return null; // Modal desactivado temporalmente (sin JSX)
+const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus, isArchive }) => {
+    if (!lead) return null;
+    const assignedAgent = (agents || []).find(a => a.id === lead.assignedAgentId);
+
+    return (
+        <div className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in-95 duration-300">
+            <div className="bg-white w-full max-w-2xl rounded-[24px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-10">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-[#F5F5F7] rounded-full flex items-center justify-center text-gray-400"><User size={24} strokeWidth={1.5} /></div>
+                        <div>
+                            <h3 className="font-semibold text-[#1d1d1f] text-xl tracking-tight">{String(lead.nombre || 'Anónimo')}</h3>
+                            <p className="text-xs text-[#86868b] mt-0.5 font-medium">{formatFirestoreDate(lead.createdAt)}</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 bg-[#F5F5F7] hover:bg-[#E8E8ED] rounded-full transition-colors text-[#86868b]"><X size={18}/></button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-white">
+                    {assignedAgent && (
+                        <div className="bg-blue-50 p-4 rounded-xl flex items-center justify-between border border-blue-100">
+                            <div className="flex items-center gap-3">
+                                <img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-10 h-10 rounded-full object-cover border-2 border-white" />
+                                <div><p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Agente Responsable</p><p className="font-bold text-blue-900 text-sm">{assignedAgent.nombre}</p></div>
+                            </div>
+                            {onAssignClick && (
+                                <button onClick={() => onAssignClick([lead.id], 'unassign')} className="p-2 bg-white text-red-500 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-100 transition-all" title="Desvincular">
+                                    <LinkIcon size={16} className="rotate-45"/>
+                                </button>
+                            )}
+                        </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span><a href={`https://wa.me/${String(lead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(lead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
+                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Programado</span><p className="font-medium text-[#1d1d1f]">{formatScheduledDate(String(lead.horario_preferido || 'Inmediata'))}</p></div>
+                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Perfil</span><p className="font-medium text-[#1d1d1f] text-sm">{String(lead.edad || '?')} años • {String(lead.estado || '?')} • {String(lead.fuma || '?')}</p></div>
+                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Salud</span><p className="font-medium text-[#1d1d1f] text-sm truncate">{String(lead.salud || '-')}</p></div>
+                    </div>
+                    <div className="relative"><div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-full"></div><div className="pl-5 py-1"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2 flex items-center gap-1"><Sparkles size={12} className="text-blue-500"/> Análisis Lucy</span><p className="text-sm text-[#1d1d1f] leading-relaxed">"{String(lead.resumen_ai || '')}"</p></div></div>
+                    
+                    {/* HISTORIAL DE CONVERSACIÓN CORREGIDO */}
+                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                        <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-4 flex items-center gap-2"><MessageSquare size={12}/> Historial Completo</span>
+                        <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                            {lead.fullChat && Array.isArray(lead.fullChat) ? (
+                                lead.fullChat.map((m, i) => (
+                                    <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+                                        <div className={`px-4 py-2.5 rounded-2xl text-xs max-w-[90%] leading-relaxed shadow-sm ${m.role === 'user' ? 'bg-[#0071e3] text-white rounded-br-none' : 'bg-white border border-gray-200 text-[#1d1d1f] rounded-bl-none'}`}>
+                                            <RichText content={String(m.content || '')} />
+                                        </div>
+                                        <span className="text-[9px] text-gray-400 mt-1 px-1">{m.role === 'user' ? 'Usuario' : 'Lucy'}</span>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center text-gray-400 text-xs py-4 flex flex-col items-center gap-2"><MessageSquare size={20} className="opacity-20"/> No hay historial disponible.</div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                <div className="p-6 border-t border-gray-100 flex gap-3 bg-white">
+                    <button onClick={() => { const text = `Lead: ${lead.nombre}\nTel: ${lead.telefono}\nEmail: ${lead.email}`; navigator.clipboard.writeText(text); }} className="flex-1 py-3 bg-black text-white rounded-xl font-medium text-xs hover:bg-gray-800 transition-all">Copiar Ficha</button>
+                    <button onClick={() => { onUpdateStatus(lead.id, isArchive ? 'active' : 'archived'); onClose(); }} className="flex-1 py-3 bg-[#F5F5F7] text-[#1d1d1f] rounded-xl font-medium text-xs hover:bg-[#E8E8ED] transition-all">{isArchive ? 'Restaurar' : 'Archivar'}</button>
+                </div>
+            </div>
+        </div>
+    );
 };
 
-const AgentAssignmentModal = () => {
-  return null; // Modal desactivado temporalmente (sin JSX)
-};
+const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
+    const [search, setSearch] = useState('');
+    if (!isOpen) return null;
+    const filtered = (agents || []).filter(a => a.nombre.toLowerCase().includes(search.toLowerCase()));
 
+    return (
+        <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden flex flex-col max-h-[80vh]">
+                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white"><h3 className="font-bold text-gray-800">Seleccionar Agente</h3><button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X size={18}/></button></div>
+                <div className="p-4 bg-gray-50 border-b border-gray-100">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                        <input autoFocus type="text" placeholder="Buscar agente..." className="w-full pl-9 pr-8 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-100" value={search} onChange={(e) => setSearch(e.target.value)} />
+                        {search && (<button onClick={() => setSearch('')} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"><X size={14} /></button>)}
+                    </div>
+                </div>
+                <div className="overflow-y-auto flex-1 p-2 space-y-1">
+                    <button onClick={() => onAssign('unassign')} className="w-full flex items-center gap-3 p-3 hover:bg-red-50 rounded-xl transition-colors text-left group"><div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 group-hover:bg-red-200"><UserMinus size={18}/></div><div><p className="font-bold text-red-600 text-sm">Desasignar / Liberar</p><p className="text-[10px] text-red-400">Dejar sin agente</p></div></button>
+                    <div className="h-px bg-gray-100 my-1 mx-4"></div>
+                    {filtered.length > 0 ? filtered.map(agent => (
+                        <button key={agent.id} onClick={() => onAssign(agent.id)} className="w-full flex items-center gap-3 p-3 hover:bg-blue-50 rounded-xl transition-colors text-left"><img src={agent.foto || "https://ui-avatars.com/api/?name=" + agent.nombre} className="w-10 h-10 rounded-full object-cover border border-gray-200" /><div className="flex-1 min-w-0"><p className="font-bold text-gray-800 text-sm truncate">{agent.nombre}</p><div className="flex items-center gap-2 text-[10px] text-gray-500"><span className="flex items-center gap-1"><MapPin size={10}/> {agent.estados || 'N/A'}</span></div></div><div className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold">Asignar</div></button>
+                    )) : (<p className="text-center text-gray-400 text-sm py-4">No se encontraron agentes.</p>)}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // -----------------------------------------------------------------------------
 // 8. APP PRINCIPAL
