@@ -1,137 +1,60 @@
 // ===============================
-// NO IMPORTS (para que Babel entienda el JSX <div>)
-// React y ReactDOM vienen del index.html
+// REACT HOOKS (SIN IMPORTS)
 // ===============================
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
 // ===============================
-// ICONOS: versión simple temporal (no rompen la app)
+// LUCIDE ICONS (GLOBAL)
 // ===============================
-const IconStub = () => null;
-
-const MessageSquare = IconStub;
-const Settings = IconStub;
-const Users = IconStub;
-const Send = IconStub;
-const Phone = IconStub;
-const ShieldCheck = IconStub;
-const LayoutDashboard = IconStub;
-const Sparkles = IconStub;
-const User = IconStub;
-const Activity = IconStub;
-const DollarSign = IconStub;
-const Calendar = IconStub;
-const Copy = IconStub;
-const Clock = IconStub;
-const CalendarClock = IconStub;
-const FileText = IconStub;
-const ShieldAlert = IconStub;
-const Lock = IconStub;
-const Archive = IconStub;
-const Inbox = IconStub;
-const RotateCcw = IconStub;
-const Search = IconStub;
-const ExternalLink = IconStub;
-const Command = IconStub;
-const Zap = IconStub;
-const Moon = IconStub;
-const Sun = IconStub;
-const Check = IconStub;
-const CheckCircle = IconStub;
-const Bell = IconStub;
-const X = IconStub;
-const Trash2 = IconStub;
-const LogIn = IconStub;
-const Heart = IconStub;
-const Star = IconStub;
-const Award = IconStub;
-const Shield = IconStub;
-const Pencil = IconStub;
-const Eye = IconStub;
-const EyeOff = IconStub;
-const WifiOff = IconStub;
-const PhoneOff = IconStub;
-const UserCheck = IconStub;
-const CheckSquare = IconStub;
-const Square = IconStub;
-const Share2 = IconStub;
-const Briefcase = IconStub;
-const UserCog = IconStub;
-const Filter = IconStub;
-const ChevronDown = IconStub;
-const MapPin = IconStub;
-const Mail = IconStub;
-const UserMinus = IconStub;
-const UserPlus = IconStub;
-const LinkIcon = IconStub;
-const Plus = IconStub;
-const MinusCircle = IconStub;
-const BarChart3 = IconStub;
-const TrendingUp = IconStub;
-const PieChart = IconStub;
-const Wallet = IconStub;
-const AlertCircle = IconStub;
+const {
+  MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard,
+  Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock,
+  FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink,
+  Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart,
+  Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck,
+  CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin,
+  Mail, UserMinus, UserPlus, Link: LinkIcon, Plus, MinusCircle,
+  BarChart3, TrendingUp, PieChart, Wallet, AlertCircle
+} = lucide;
 
 // ===============================
-// FIREBASE: viene del index.html (compat)
+// CONFIGURACIÓN DEL SISTEMA
 // ===============================
-const initializeApp = (config) => firebase.initializeApp(config);
-const getAuth = () => firebase.auth();
-const signInAnonymously = (auth) => auth.signInAnonymously();
-const onAuthStateChanged = (auth, cb) => auth.onAuthStateChanged(cb);
-const signInWithEmailAndPassword = (auth, email, pass) => auth.signInWithEmailAndPassword(email, pass);
-const signOut = (auth) => auth.signOut();
-
-const getFirestore = () => firebase.firestore();
-const collection = (db, ...path) => db.collection(path.join('/'));
-const addDoc = (colRef, data) => colRef.add(data);
-const onSnapshot = (ref, onNext, onErr) => ref.onSnapshot(onNext, onErr);
-
-const doc = (db, ...path) => db.doc(path.join('/'));
-const setDoc = (docRef, data) => docRef.set(data);
-const getDoc = (docRef) => docRef.get();
-const deleteDoc = (docRef) => docRef.delete();
-const updateDoc = (docRef, data) => docRef.update(data);
-
-const serverTimestamp = () => firebase.firestore.FieldValue.serverTimestamp();
-const writeBatch = (db) => db.batch();
-
-// -----------------------------------------------------------------------------
-// 2. CONFIGURACIÓN DEL SISTEMA
-// -----------------------------------------------------------------------------
 const OFFLINE_MODE = false;
+
 const AI_KEY_PART_A = "AIzaSyAIOAO4-h7lRRK8";
 const AI_KEY_PART_B = "SKAC2hgomoE-MaCZ58M";
 const GEMINI_API_KEY = `${AI_KEY_PART_A}${AI_KEY_PART_B}`;
 
 const FIREBASE_CONFIG = {
-    apiKey: "AIzaSyCh_eweHfWdALF3VtFHh1UM0AkiH-8I9Uo",
-    authDomain: "lucy-ai-11572.firebaseapp.com",
-    projectId: "lucy-ai-11572",
-    storageBucket: "lucy-ai-11572.firebasestorage.app",
-    messagingSenderId: "979126041068",
-    appId: "1:979126041068:web:e605f2bf9528424e26e8c9",
-    measurementId: "G-4L08BMRY61"
+  apiKey: "AIzaSyCh_eweHfWdALF3VtFHh1UM0AkiH-8I9Uo",
+  authDomain: "lucy-ai-11572.firebaseapp.com",
+  projectId: "lucy-ai-11572",
+  storageBucket: "lucy-ai-11572.firebasestorage.app",
+  messagingSenderId: "979126041068",
+  appId: "1:979126041068:web:e605f2bf9528424e26e8c9",
+  measurementId: "G-4L08BMRY61"
 };
 
 const APP_ID = 'gastos-finales-v1';
 
-// -----------------------------------------------------------------------------
-// FIREBASE INIT (COMPAT MODE – OBLIGATORIO)
-// -----------------------------------------------------------------------------
+// ===============================
+// FIREBASE INIT (COMPAT)
+// ===============================
 let auth = null;
 let db = null;
 
 if (!OFFLINE_MODE) {
-    try {
-        firebase.initializeApp(FIREBASE_CONFIG);
-        auth = firebase.auth();
-        db = firebase.firestore();
-        console.log("🔥 Firebase compat listo");
-    } catch (e) {
-        console.error("❌ Error inicializando Firebase compat:", e);
-    }
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    auth = firebase.auth();
+    db = firebase.firestore();
+    console.log("🔥 Firebase listo");
+  } catch (e) {
+    console.error("❌ Firebase error:", e);
+  }
 }
+
 
 
 // -----------------------------------------------------------------------------
