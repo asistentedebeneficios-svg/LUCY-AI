@@ -55,6 +55,14 @@ if (!OFFLINE_MODE) {
   }
 }
 
+// ===============================
+// FIREBASE HELPERS (OBLIGATORIO)
+// ===============================
+const onAuthStateChanged = (auth, callback) => {
+  return auth.onAuthStateChanged(callback);
+};
+
+
 
 
 // -----------------------------------------------------------------------------
