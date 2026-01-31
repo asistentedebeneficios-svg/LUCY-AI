@@ -1,38 +1,38 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Asistente de Beneficios | Lucy</title>
-
   <link rel="icon" type="image/jpeg" href="https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg">
+
   <link rel="stylesheet" href="style.css">
 
-  <!-- Tailwind (OK por ahora) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           fontFamily: {
-            sans: [
-              '-apple-system',
-              'BlinkMacSystemFont',
-              'Segoe UI',
-              'Roboto',
-              'sans-serif'
-            ]
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif']
           }
         }
       }
     }
   </script>
+
+  <!-- React (modo global) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <!-- Babel (para que tu JSX <div> funcione) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 
 <body>
   <div id="root"></div>
 
-  <!-- TU SCRIPT GRANDE, SIN TOCAR -->
-  <script type="module" src="script.js"></script>
+  <!-- IMPORTANTE: sin module -->
+  <script type="text/babel" src="script.js"></script>
 </body>
 </html>
