@@ -302,71 +302,8 @@ const ReportsDashboard = () => {
 // -----------------------------------------------------------------------------
 // 7. MODALES DE GESTIÓN (LEADS Y ASIGNACIÓN)
 // -----------------------------------------------------------------------------
-const LeadDetailModal = ({ lead, agents, onClose, onAssignClick, onUpdateStatus, isArchive }) => {
-    if (!lead) return null;
-    const assignedAgent = (agents || []).find(a => a.id === lead.assignedAgentId);
-
-    return (
-        <div className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in-95 duration-300">
-            <div className="bg-white w-full max-w-2xl rounded-[24px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-10">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-[#F5F5F7] rounded-full flex items-center justify-center text-gray-400"><User size={24} strokeWidth={1.5} /></div>
-                        <div>
-                            <h3 className="font-semibold text-[#1d1d1f] text-xl tracking-tight">{String(lead.nombre || 'Anónimo')}</h3>
-                            <p className="text-xs text-[#86868b] mt-0.5 font-medium">{formatFirestoreDate(lead.createdAt)}</p>
-                        </div>
-                    </div>
-                    <button onClick={onClose} className="p-2 bg-[#F5F5F7] hover:bg-[#E8E8ED] rounded-full transition-colors text-[#86868b]"><X size={18}/></button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar bg-white">
-                    {assignedAgent && (
-                        <div className="bg-blue-50 p-4 rounded-xl flex items-center justify-between border border-blue-100">
-                            <div className="flex items-center gap-3">
-                                <img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-10 h-10 rounded-full object-cover border-2 border-white" />
-                                <div><p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Agente Responsable</p><p className="font-bold text-blue-900 text-sm">{assignedAgent.nombre}</p></div>
-                            </div>
-                            {onAssignClick && (
-                                <button onClick={() => onAssignClick([lead.id], 'unassign')} className="p-2 bg-white text-red-500 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-100 transition-all" title="Desvincular">
-                                    <LinkIcon size={16} className="rotate-45"/>
-                                </button>
-                            )}
-                        </div>
-                    )}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span><a href={`https://wa.me/${String(lead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(lead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
-                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Programado</span><p className="font-medium text-[#1d1d1f]">{formatScheduledDate(String(lead.horario_preferido || 'Inmediata'))}</p></div>
-                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Perfil</span><p className="font-medium text-[#1d1d1f] text-sm">{String(lead.edad || '?')} años • {String(lead.estado || '?')} • {String(lead.fuma || '?')}</p></div>
-                        <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Salud</span><p className="font-medium text-[#1d1d1f] text-sm truncate">{String(lead.salud || '-')}</p></div>
-                    </div>
-                    <div className="relative"><div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-full"></div><div className="pl-5 py-1"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2 flex items-center gap-1"><Sparkles size={12} className="text-blue-500"/> Análisis Lucy</span><p className="text-sm text-[#1d1d1f] leading-relaxed">"{String(lead.resumen_ai || '')}"</p></div></div>
-                    
-                    {/* HISTORIAL DE CONVERSACIÓN CORREGIDO */}
-                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                        <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-4 flex items-center gap-2"><MessageSquare size={12}/> Historial Completo</span>
-                        <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                            {lead.fullChat && Array.isArray(lead.fullChat) ? (
-                                lead.fullChat.map((m, i) => (
-                                    <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-                                        <div className={`px-4 py-2.5 rounded-2xl text-xs max-w-[90%] leading-relaxed shadow-sm ${m.role === 'user' ? 'bg-[#0071e3] text-white rounded-br-none' : 'bg-white border border-gray-200 text-[#1d1d1f] rounded-bl-none'}`}>
-                                            <RichText content={String(m.content || '')} />
-                                        </div>
-                                        <span className="text-[9px] text-gray-400 mt-1 px-1">{m.role === 'user' ? 'Usuario' : 'Lucy'}</span>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="text-center text-gray-400 text-xs py-4 flex flex-col items-center gap-2"><MessageSquare size={20} className="opacity-20"/> No hay historial disponible.</div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-                <div className="p-6 border-t border-gray-100 flex gap-3 bg-white">
-                    <button onClick={() => { const text = `Lead: ${lead.nombre}\nTel: ${lead.telefono}\nEmail: ${lead.email}`; navigator.clipboard.writeText(text); }} className="flex-1 py-3 bg-black text-white rounded-xl font-medium text-xs hover:bg-gray-800 transition-all">Copiar Ficha</button>
-                    <button onClick={() => { onUpdateStatus(lead.id, isArchive ? 'active' : 'archived'); onClose(); }} className="flex-1 py-3 bg-[#F5F5F7] text-[#1d1d1f] rounded-xl font-medium text-xs hover:bg-[#E8E8ED] transition-all">{isArchive ? 'Restaurar' : 'Archivar'}</button>
-                </div>
-            </div>
-        </div>
-    );
+const LeadDetailModal = () => {
+  return null; // Modal desactivado temporalmente (sin JSX)
 };
 
 const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
