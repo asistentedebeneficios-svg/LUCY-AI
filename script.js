@@ -306,33 +306,10 @@ const LeadDetailModal = () => {
   return null; // Modal desactivado temporalmente (sin JSX)
 };
 
-const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
-    const [search, setSearch] = useState('');
-    if (!isOpen) return null;
-    const filtered = (agents || []).filter(a => a.nombre.toLowerCase().includes(search.toLowerCase()));
-
-    return (
-        <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden flex flex-col max-h-[80vh]">
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white"><h3 className="font-bold text-gray-800">Seleccionar Agente</h3><button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X size={18}/></button></div>
-                <div className="p-4 bg-gray-50 border-b border-gray-100">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                        <input autoFocus type="text" placeholder="Buscar agente..." className="w-full pl-9 pr-8 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-100" value={search} onChange={(e) => setSearch(e.target.value)} />
-                        {search && (<button onClick={() => setSearch('')} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"><X size={14} /></button>)}
-                    </div>
-                </div>
-                <div className="overflow-y-auto flex-1 p-2 space-y-1">
-                    <button onClick={() => onAssign('unassign')} className="w-full flex items-center gap-3 p-3 hover:bg-red-50 rounded-xl transition-colors text-left group"><div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 group-hover:bg-red-200"><UserMinus size={18}/></div><div><p className="font-bold text-red-600 text-sm">Desasignar / Liberar</p><p className="text-[10px] text-red-400">Dejar sin agente</p></div></button>
-                    <div className="h-px bg-gray-100 my-1 mx-4"></div>
-                    {filtered.length > 0 ? filtered.map(agent => (
-                        <button key={agent.id} onClick={() => onAssign(agent.id)} className="w-full flex items-center gap-3 p-3 hover:bg-blue-50 rounded-xl transition-colors text-left"><img src={agent.foto || "https://ui-avatars.com/api/?name=" + agent.nombre} className="w-10 h-10 rounded-full object-cover border border-gray-200" /><div className="flex-1 min-w-0"><p className="font-bold text-gray-800 text-sm truncate">{agent.nombre}</p><div className="flex items-center gap-2 text-[10px] text-gray-500"><span className="flex items-center gap-1"><MapPin size={10}/> {agent.estados || 'N/A'}</span></div></div><div className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold">Asignar</div></button>
-                    )) : (<p className="text-center text-gray-400 text-sm py-4">No se encontraron agentes.</p>)}
-                </div>
-            </div>
-        </div>
-    );
+const AgentAssignmentModal = () => {
+  return null; // Modal desactivado temporalmente (sin JSX)
 };
+
 
 // -----------------------------------------------------------------------------
 // 8. APP PRINCIPAL
