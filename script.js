@@ -4,18 +4,72 @@
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
 // ===============================
-// LUCIDE ICONS (GLOBAL)
+// ICONOS — STUBS DEFINITIVOS (NO ROMPEN REACT)
 // ===============================
-const {
-  MessageSquare, Settings, Users, Send, Phone, ShieldCheck, LayoutDashboard,
-  Sparkles, User, Activity, DollarSign, Calendar, Copy, Clock, CalendarClock,
-  FileText, ShieldAlert, Lock, Archive, Inbox, RotateCcw, Search, ExternalLink,
-  Command, Zap, Moon, Sun, Check, CheckCircle, Bell, X, Trash2, LogIn, Heart,
-  Star, Award, Shield, Pencil, Eye, EyeOff, WifiOff, PhoneOff, UserCheck,
-  CheckSquare, Square, Share2, Briefcase, UserCog, Filter, ChevronDown, MapPin,
-  Mail, UserMinus, UserPlus, Link: LinkIcon, Plus, MinusCircle,
-  BarChart3, TrendingUp, PieChart, Wallet, AlertCircle
-} = lucide;
+const Icon = () => null;
+
+const MessageSquare = Icon;
+const Settings = Icon;
+const Users = Icon;
+const Send = Icon;
+const Phone = Icon;
+const ShieldCheck = Icon;
+const LayoutDashboard = Icon;
+const Sparkles = Icon;
+const User = Icon;
+const Activity = Icon;
+const DollarSign = Icon;
+const Calendar = Icon;
+const Copy = Icon;
+const Clock = Icon;
+const CalendarClock = Icon;
+const FileText = Icon;
+const ShieldAlert = Icon;
+const Lock = Icon;
+const Archive = Icon;
+const Inbox = Icon;
+const RotateCcw = Icon;
+const Search = Icon;
+const ExternalLink = Icon;
+const Command = Icon;
+const Zap = Icon;
+const Moon = Icon;
+const Sun = Icon;
+const Check = Icon;
+const CheckCircle = Icon;
+const Bell = Icon;
+const X = Icon;
+const Trash2 = Icon;
+const LogIn = Icon;
+const Heart = Icon;
+const Star = Icon;
+const Award = Icon;
+const Shield = Icon;
+const Pencil = Icon;
+const Eye = Icon;
+const EyeOff = Icon;
+const WifiOff = Icon;
+const PhoneOff = Icon;
+const UserCheck = Icon;
+const CheckSquare = Icon;
+const Square = Icon;
+const Share2 = Icon;
+const Briefcase = Icon;
+const UserCog = Icon;
+const Filter = Icon;
+const ChevronDown = Icon;
+const MapPin = Icon;
+const Mail = Icon;
+const UserMinus = Icon;
+const UserPlus = Icon;
+const LinkIcon = Icon;
+const Plus = Icon;
+const MinusCircle = Icon;
+const BarChart3 = Icon;
+const TrendingUp = Icon;
+const PieChart = Icon;
+const Wallet = Icon;
+const AlertCircle = Icon;
 
 // ===============================
 // COMPONENTES FALTANTES (STUBS OBLIGATORIOS)
