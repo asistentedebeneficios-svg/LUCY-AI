@@ -288,77 +288,15 @@ const BrainAvatar = ({ className = "w-10 h-10" }) =>
   );
 
 // --- DASHBOARD REPORTES ---
-const ReportsDashboard = ({ leads, agents }) => {
-    const [filterAgent, setFilterAgent] = useState('all');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
-
-    const filteredLeads = useMemo(() => {
-        return (leads || []).filter(l => {
-            const matchesAgent = filterAgent === 'all' || l.assignedAgentId === filterAgent;
-            let matchesDate = true;
-            if (startDate && endDate) {
-                const d = l.createdAt?.toDate ? l.createdAt.toDate() : new Date(l.createdAt?.seconds * 1000);
-                const start = new Date(startDate); start.setHours(0,0,0,0);
-                const end = new Date(endDate); end.setHours(23,59,59,999);
-                matchesDate = d >= start && d <= end;
-            }
-            return matchesAgent && matchesDate;
-        });
-    }, [leads, filterAgent, startDate, endDate]);
-
-    const assignedLeads = filteredLeads.filter(l => l.assignedAgentId).length;
-    const closedSales = filteredLeads.filter(l => l.status === 'sold').length;
-    const conversionRate = assignedLeads > 0 ? ((closedSales / assignedLeads) * 100).toFixed(1) : 0;
-    const activeLeads = filteredLeads.filter(l => !l.assignedAgentId && l.status !== 'archived').length;
-
-    const agentPerformance = useMemo(() => {
-        return (agents || []).map(agent => {
-            const myLeads = filteredLeads.filter(l => l.assignedAgentId === agent.id);
-            const mySales = myLeads.filter(l => l.status === 'sold').length;
-            const myConversion = myLeads.length > 0 ? ((mySales / myLeads.length) * 100).toFixed(0) : 0;
-            return { ...agent, assigned: myLeads.length, closed: mySales, conversion: myConversion };
-        }).sort((a, b) => b.closed - a.closed);
-    }, [agents, filteredLeads]);
-
-    return (
-        <div className="animate-in fade-in space-y-8">
-            <div className="flex flex-col md:flex-row justify-between items-end gap-4 bg-white p-5 rounded-[24px] shadow-sm border border-gray-100">
-                <div><h2 className="text-xl font-bold text-gray-900">Reportes de Rendimiento</h2><p className="text-xs text-gray-500 mt-1">Métricas de Cierre y Asignación</p></div>
-                <div className="flex gap-2 items-center">
-                    <select className="bg-gray-50 border border-gray-200 text-xs rounded-xl px-3 py-2 outline-none" value={filterAgent} onChange={e => setFilterAgent(e.target.value)}>
-                        <option value="all">Todos los Agentes</option>
-                        {(agents || []).map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-                    </select>
-                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1"><input type="date" className="bg-transparent text-xs outline-none" value={startDate} onChange={e => setStartDate(e.target.value)} /><span className="text-gray-300">-</span><input type="date" className="bg-transparent text-xs outline-none" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><UserCheck size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{assignedLeads}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Leads Asignados</p></div>
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-green-50 text-green-600 rounded-lg"><DollarSign size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{closedSales}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Ventas Cerradas</p></div>
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><TrendingUp size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{conversionRate}%</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Tasa Cierre</p></div>
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><div className="flex justify-between items-start mb-2"><div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><Inbox size={18}/></div></div><p className="text-2xl font-bold text-gray-900">{activeLeads}</p><p className="text-[10px] uppercase font-bold text-gray-400 tracking-wide">Sin Asignar</p></div>
-            </div>
-
-            <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 bg-[#FBFBFD]"><h3 className="font-bold text-gray-800 text-sm">Ranking de Cierre por Agente</h3></div>
-                <table className="w-full text-left">
-                    <thead className="border-b border-gray-100"><tr><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Agente</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Asignados</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase">Cierres</th><th className="px-6 py-3 text-[10px] font-bold text-gray-500 uppercase w-1/3">Efectividad</th></tr></thead>
-                    <tbody className="divide-y divide-gray-50">
-                        {agentPerformance.map(agent => (
-                            <tr key={agent.id} className="hover:bg-gray-50 transition-colors">
-                                <td className="px-6 py-4"><div className="flex items-center gap-3"><img src={agent.foto || "https://ui-avatars.com/api/?name="+agent.nombre} className="w-8 h-8 rounded-full object-cover bg-gray-200 border border-white shadow-sm"/><span className="text-sm font-semibold text-gray-700">{agent.nombre}</span></div></td>
-                                <td className="px-6 py-4 text-xs font-medium text-gray-600">{agent.assigned}</td>
-                                <td className="px-6 py-4 text-xs font-bold text-green-600">{agent.closed}</td>
-                                <td className="px-6 py-4"><div className="flex items-center gap-2"><div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full" style={{ width: `${agent.conversion}%` }}></div></div><span className="text-[10px] font-bold text-gray-500 w-8 text-right">{agent.conversion}%</span></div></td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
+const ReportsDashboard = () => {
+  return React.createElement(
+    "div",
+    {
+      className:
+        "p-6 rounded-xl bg-yellow-50 border border-yellow-200 text-sm text-yellow-800",
+    },
+    "Dashboard de reportes temporalmente desactivado"
+  );
 };
 
 // -----------------------------------------------------------------------------
