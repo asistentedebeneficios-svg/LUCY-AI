@@ -810,41 +810,55 @@
                 });
             };
 
-            const send = async (textOverride = null) => {
-                const textToSend = textOverride || input;
-                if (!textToSend.trim() || loading) return;
+          // FUNCIÓN CENTRAL: ENVIAR MENSAJE A LUCY
+    const send = async (textOverride = null) => {
+        const textToSend = textOverride || input;
+        if (!textToSend.trim() || loading) return;
 
-                setUiState(null);
-                setInput('');
-                setLoading(true);
+        setUiState(null);
+        setInput('');
+        setLoading(true);
 
-                const newM = [...msgs, { role: 'user', content: textToSend }];
-                setMsgs(newM);
+        const newM = [...msgs, { role: 'user', content: textToSend }];
+        setMsgs(newM);
 
-                try {
-                    const { isVacation, resumeDate } = agentStatus;
-                    let availabilityInstruction = "";
-                    if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA DEL SISTEMA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}. Sé muy amable y profesional, NO digas "vacaciones".`;
-                    
-                    const scheduleText = getScheduleText(aiConfig?.schedule);
-                    const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+        try {
+            // 1. OBTENER FECHA Y HORA ACTUAL (CORRECCIÓN)
+            const now = new Date();
+            // Formato: "lunes, 16 de julio de 2024"
+            const fechaHoy = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            // Formato: "4:30 PM"
+            const horaActual = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-                    const prompt = `
-                  ${systemBase}
-                  ${availabilityInstruction}
-                  
-                  IMPORTANTE - HORARIOS DE TRABAJO ACTUALES (EST / FLORIDA):
-                  ${scheduleText}
-                  
-                  REGLA DE AGENDAMIENTO ESTRICTA: 
-                  1. Verifica SIEMPRE el horario arriba mencionado antes de confirmar o sugerir una cita.
-                  2. NUNCA sugieras ni aceptes agendar una llamada fuera de esos rangos de tiempo. 
-                  3. Si el usuario propone una hora fuera del horario laboral, dile amablemente que en ese momento nuestros agentes no están disponibles y ofrece el espacio abierto más cercano dentro del horario.
-                  4. Asume que la hora que dice el usuario es SU HORA LOCAL, pero confírmale diciendo "Perfecto, agendado para sus [HORA]".
+            const { isVacation, resumeDate } = agentStatus;
+            let availabilityInstruction = "";
+            if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA DEL SISTEMA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}. Sé muy amable y profesional, NO digas "vacaciones".`;
+            
+            const scheduleText = getScheduleText(aiConfig?.schedule);
+            const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
-                  HISTORIAL:
-                  ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
-                `;
+            // 2. INYECTAR CONTEXTO TEMPORAL EN EL PROMPT
+            const prompt = `
+          ${systemBase}
+
+          CONTEXTO TEMPORAL (CRÍTICO - NO ALUCINAR):
+          - Hoy es: ${fechaHoy}
+          - Hora actual del sistema: ${horaActual}
+          - Tu Zona Horaria: EST (Florida, USA). Úsala para calcular si estamos abiertos.
+
+          ${availabilityInstruction}
+          
+          HORARIOS DE TRABAJO DEFINIDOS (EST):
+          ${scheduleText}
+          
+          REGLA DE AGENDAMIENTO ESTRICTA: 
+          1. Compara la "Hora actual del sistema" con los "Horarios de trabajo". 
+          2. Si el usuario pide hablar YA, verifica si estamos dentro del horario. Si no, ofrece agendar para mañana.
+          3. Asume que la hora que dice el usuario es SU HORA LOCAL, pero confírmale diciendo "Perfecto, agendado para sus [HORA]".
+
+          HISTORIAL:
+          ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
+        `;
 
                     const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
                     const rawText = res.candidates[0].content.parts[0].text;
