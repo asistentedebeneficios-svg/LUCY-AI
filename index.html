@@ -844,23 +844,23 @@
                   - HORA ACTUAL: ${horaActual}
                   
                   [REGLAS DE COMPORTAMIENTO - CRÍTICO]:
-                  1. **ANTI-REPETICIÓN (MANDATORIO)**: ¡NO empieces tus mensajes diciendo "Hola [Nombre], soy Lucy...". Ya te presentaste al inicio. NO repitas tu introducción.
-                  2. **NATURALIDAD**: Habla fluido, no repitas el nombre del usuario en cada frase. Sé directa.
-                  3. **CERO ZONAS HORARIAS**: Nunca menciones "hora del este" o "EST". Solo di la hora numérica (ej: "4pm").
-                  4. **AGENDAMIENTO**: Solo acepta citas dentro del horario numérico listado abajo. Si piden "YA", valida si estamos abiertos.
+                  1. **ESCUCHA ACTIVA (PRIORIDAD 1)**: Antes de responder, LEE el último mensaje del usuario. Si el usuario te acaba de dar un dato (ej: "Estoy saludable"), ¡RECONÓCELO y PASA A LA SIGUIENTE PREGUNTA! No te quedes pegada preguntando lo mismo.
+                  2. **ANTI-REPETICIÓN**: No repitas frases como "Gracias por compartir su edad" si el usuario acaba de hablar de su salud. Responde al contexto ACTUAL.
+                  3. **NATURALIDAD**: No digas "Hola [Nombre]" en cada turno. Sé fluida.
+                  4. **CERO ZONAS HORARIAS**: Solo di la hora numérica (ej: "4pm").
+                  5. **AGENDAMIENTO**: Respeta estrictamente los horarios abajo listados.
 
                   ${availabilityInstruction}
                   
                   HORARIOS DE TRABAJO (RANGOS VÁLIDOS):
                   ${scheduleText}
 
-                  HISTORIAL DE CONVERSACIÓN:
+                  HISTORIAL DE CONVERSACIÓN (Léelo con atención):
                   ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
                 `;
                     
-                    // DEBUG: Ver en consola lo que enviamos
+                    // DEBUG: Ver en consola
                     console.log("--- ENVÍO A GEMINI ---");
-                    // console.log("Prompt completo:", prompt); // Descomentar para ver todo el prompt
 
                     const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
                     const rawText = res.candidates[0].content.parts[0].text;
@@ -897,7 +897,6 @@
                 }
                 setLoading(false);
             };
-
             return (
                 <div className="max-w-[480px] mx-auto flex flex-col h-full bg-white rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden relative font-sans">
                     <div className="bg-white/90 backdrop-blur-xl p-5 border-b border-gray-100 flex items-center justify-between z-10 sticky top-0">
