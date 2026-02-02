@@ -858,9 +858,12 @@ const getScheduleText = (schedule) => {
                   - HORA ACTUAL: ${horaActual}
                   
                   [REGLAS DE COMPORTAMIENTO - CRÍTICO]:
-                  1. **FORMATO DE HORA (MANDATORIO)**: Usa SIEMPRE formato 12 horas (ej: "2:00 PM", "9:00 AM"). NUNCA uses formato militar (14:00).
-                  2. **ESCUCHA ACTIVA**: Antes de responder, verifica si el usuario ya contestó tu última pregunta.
-                  3. **ANTI-REPETICIÓN**: No repitas tu introducción ni saludos innecesarios.
+                  1. **ANTI-REPETICIÓN (ESTRICTO)**: 
+                     - ¡PROHIBIDO volver a presentarte! Ya saben quién eres.
+                     - **NO** empieces cada respuesta diciendo "Hola [Nombre]". Eso es robótico. Ve directo a la respuesta o pregunta.
+                     - Varía tu vocabulario. No uses siempre las mismas muletillas.
+                  2. **ESCUCHA ACTIVA**: Si el usuario ya respondió una pregunta (como su salud o edad), NO la vuelvas a preguntar. ¡Avanza!
+                  3. **FORMATO DE HORA**: Usa SIEMPRE formato 12 horas (ej: "2:00 PM"). NUNCA formato militar.
                   4. **CERO ZONAS HORARIAS**: No digas "hora del este". Solo di la hora.
                   5. **AGENDAMIENTO**: Respeta estrictamente los horarios abajo listados.
 
