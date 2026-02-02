@@ -810,7 +810,7 @@
                 });
             };
 
-      // FUNCIÓN CENTRAL: ENVIAR MENSAJE A LUCY
+     // FUNCIÓN CENTRAL: ENVIAR MENSAJE A LUCY
             const send = async (textOverride = null) => {
                 const textToSend = textOverride || input;
                 if (!textToSend.trim() || loading) return;
@@ -835,19 +835,19 @@
                     const scheduleText = getScheduleText(aiConfig?.schedule);
                     const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
-                    // 2. INYECTAR CONTEXTO TEMPORAL EN EL PROMPT (MODIFICADO)
+                    // 2. INYECTAR CONTEXTO Y REGLAS DE ESTILO (MODIFICADO)
                     const prompt = `
                   ${systemBase}
 
-                  [DATOS INTERNOS DEL SISTEMA]
+                  [DATOS INTERNOS]
                   - HOY ES: ${fechaHoy}
                   - HORA ACTUAL: ${horaActual}
                   
-                  REGLAS DE AGENDAMIENTO ESTRICTAS:
-                  1. **PROHIBIDO MENCIONAR ZONAS HORARIAS**: Nunca digas "hora del este", "EST", "mi hora" o "su hora". Solo di la hora a secas (ej: "Queda agendado a las 3pm").
-                  2. **VALIDACIÓN**: Solo acepta citas dentro de los "HORARIOS DE TRABAJO" listados abajo.
-                  3. Si el usuario pide una hora que está numéricamente dentro del rango (ej: pide 11am y el rango es 9am-5pm), ACÉPTALA DIRECTAMENTE. No calcules diferencias horarias.
-                  4. Si el usuario pide hablar "YA" y estamos dentro del horario numérico, acepta. Si no, ofrece la próxima hora de apertura.
+                  [REGLAS DE COMPORTAMIENTO - CRÍTICO]:
+                  1. **ANTI-REPETICIÓN (MANDATORIO)**: ¡NO empieces tus mensajes diciendo "Hola [Nombre], soy Lucy...". Ya te presentaste al inicio. NO repitas tu introducción.
+                  2. **NATURALIDAD**: Habla fluido, no repitas el nombre del usuario en cada frase. Sé directa.
+                  3. **CERO ZONAS HORARIAS**: Nunca menciones "hora del este" o "EST". Solo di la hora numérica (ej: "4pm").
+                  4. **AGENDAMIENTO**: Solo acepta citas dentro del horario numérico listado abajo. Si piden "YA", valida si estamos abiertos.
 
                   ${availabilityInstruction}
                   
@@ -858,41 +858,33 @@
                   ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
                 `;
                     
-                    // DEBUG: Ver en consola del navegador (F12) qué se le envía a la IA
+                    // DEBUG: Ver en consola lo que enviamos
                     console.log("--- ENVÍO A GEMINI ---");
-                    console.log("Prompt completo:", prompt);
+                    // console.log("Prompt completo:", prompt); // Descomentar para ver todo el prompt
 
                     const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
                     const rawText = res.candidates[0].content.parts[0].text;
                     
-                    // DETECTAR BOTONES DINÁMICOS (SINTAXIS JSON)
+                    // DETECTAR BOTONES
                     let nextButtons = null;
                     const buttonMatch = rawText.match(/\[BUTTONS:(\[\s*\{[\s\S]*?\}\s*\])\]/);
-                    
                     if (buttonMatch && buttonMatch[1]) {
-                        try {
-                            nextButtons = JSON.parse(buttonMatch[1]);
-                        } catch (e) {
-                            console.error("Error parseando botones dinámicos:", e);
-                        }
+                        try { nextButtons = JSON.parse(buttonMatch[1]); } catch (e) { console.error("Error botones:", e); }
                     }
 
-                    // PROCESAR JSON DE CIERRE (DATA READY)
+                    // PROCESAR JSON DATA_READY
                     const jsonMatch = rawText.match(/```json([\s\S]*?)```/);
                     if (jsonMatch) {
                         try {
                             const jsonStr = jsonMatch[1];
                             const data = JSON.parse(jsonStr);
                             if (data.action === 'data_ready') {
-                                onSaveLead({
-                                    ...data,
-                                    fullChat: newM
-                                });
+                                onSaveLead({ ...data, fullChat: newM });
                             }
-                        } catch (jsonErr) { console.error("Error parsing JSON", jsonErr); }
+                        } catch (jsonErr) { console.error("Error JSON:", jsonErr); }
                     }
 
-                    // LIMPIAR RESPUESTA PARA EL USUARIO
+                    // LIMPIAR RESPUESTA
                     let finalReply = cleanAiMessage(rawText);
                     finalReply = finalReply.replace(/\[BUTTONS:[\s\S]*?\]/g, '').trim();
 
