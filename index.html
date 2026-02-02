@@ -211,18 +211,31 @@
             }
         };
 
-        const getScheduleText = (schedule) => {
-            if (!schedule) return "No especificado";
-            const days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
-            return days.map(d => {
-                const c = schedule[d];
-                if (!c?.enabled) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: Cerrado`;
-                const slots = c.slots || (c.start ? [{start: c.start, end: c.end}] : []);
-                if (slots.length === 0) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: Sin horario`;
-                const times = slots.map(s => `${s.start} a ${s.end}`).join(' y de ');
-                return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: ${times}`;
-            }).join('\n');
-        };
+        // Función auxiliar para convertir hora militar a AM/PM
+const to12h = (time24) => {
+    if (!time24) return '';
+    const [h, m] = time24.split(':');
+    const hour = parseInt(h, 10);
+    const suffix = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${m} ${suffix}`;
+};
+
+const getScheduleText = (schedule) => {
+    if (!schedule) return "No especificado";
+    const days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+    return days.map(d => {
+        const c = schedule[d];
+        if (!c?.enabled) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: Cerrado`;
+        const slots = c.slots || (c.start ? [{start: c.start, end: c.end}] : []);
+        if (slots.length === 0) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: Sin horario`;
+        
+        // AQUI ESTA LA MAGIA: Convertimos a 12h antes de enviar el texto
+        const times = slots.map(s => `${to12h(s.start)} a ${to12h(s.end)}`).join(' y de ');
+        
+        return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: ${times}`;
+    }).join('\n');
+};
 
         async function fetchGeminiWithRetry(payload) {
             if (!rateLimit.check()) throw new Error("Espera unos segundos.");
@@ -810,7 +823,7 @@
                 });
             };
 
-     // FUNCIÓN CENTRAL: ENVIAR MENSAJE A LUCY
+             // FUNCIÓN CENTRAL: ENVIAR MENSAJE A LUCY
             const send = async (textOverride = null) => {
                 const textToSend = textOverride || input;
                 if (!textToSend.trim() || loading) return;
@@ -823,10 +836,11 @@
                 setMsgs(newM);
 
                 try {
-                    // 1. OBTENER FECHA Y HORA ACTUAL
+                    // 1. OBTENER FECHA Y HORA ACTUAL (Formato AM/PM)
                     const now = new Date();
                     const fechaHoy = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                    const horaActual = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                    // Forzamos formato 12h aquí también
+                    const horaActual = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
                     const { isVacation, resumeDate } = agentStatus;
                     let availabilityInstruction = "";
@@ -835,7 +849,7 @@
                     const scheduleText = getScheduleText(aiConfig?.schedule);
                     const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
-                    // 2. INYECTAR CONTEXTO Y REGLAS DE ESTILO (MODIFICADO)
+                    // 2. INYECTAR CONTEXTO Y REGLAS DE ESTILO
                     const prompt = `
                   ${systemBase}
 
@@ -844,10 +858,10 @@
                   - HORA ACTUAL: ${horaActual}
                   
                   [REGLAS DE COMPORTAMIENTO - CRÍTICO]:
-                  1. **ESCUCHA ACTIVA (PRIORIDAD 1)**: Antes de responder, LEE el último mensaje del usuario. Si el usuario te acaba de dar un dato (ej: "Estoy saludable"), ¡RECONÓCELO y PASA A LA SIGUIENTE PREGUNTA! No te quedes pegada preguntando lo mismo.
-                  2. **ANTI-REPETICIÓN**: No repitas frases como "Gracias por compartir su edad" si el usuario acaba de hablar de su salud. Responde al contexto ACTUAL.
-                  3. **NATURALIDAD**: No digas "Hola [Nombre]" en cada turno. Sé fluida.
-                  4. **CERO ZONAS HORARIAS**: Solo di la hora numérica (ej: "4pm").
+                  1. **FORMATO DE HORA (MANDATORIO)**: Usa SIEMPRE formato 12 horas (ej: "2:00 PM", "9:00 AM"). NUNCA uses formato militar (14:00).
+                  2. **ESCUCHA ACTIVA**: Antes de responder, verifica si el usuario ya contestó tu última pregunta.
+                  3. **ANTI-REPETICIÓN**: No repitas tu introducción ni saludos innecesarios.
+                  4. **CERO ZONAS HORARIAS**: No digas "hora del este". Solo di la hora.
                   5. **AGENDAMIENTO**: Respeta estrictamente los horarios abajo listados.
 
                   ${availabilityInstruction}
@@ -855,11 +869,11 @@
                   HORARIOS DE TRABAJO (RANGOS VÁLIDOS):
                   ${scheduleText}
 
-                  HISTORIAL DE CONVERSACIÓN (Léelo con atención):
+                  HISTORIAL DE CONVERSACIÓN:
                   ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
                 `;
                     
-                    // DEBUG: Ver en consola
+                    // DEBUG
                     console.log("--- ENVÍO A GEMINI ---");
 
                     const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
@@ -897,6 +911,7 @@
                 }
                 setLoading(false);
             };
+            
             return (
                 <div className="max-w-[480px] mx-auto flex flex-col h-full bg-white rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden relative font-sans">
                     <div className="bg-white/90 backdrop-blur-xl p-5 border-b border-gray-100 flex items-center justify-between z-10 sticky top-0">
