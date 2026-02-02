@@ -810,59 +810,62 @@
                 });
             };
 
-          // FUNCIÓN CENTRAL: ENVIAR MENSAJE A LUCY
-    const send = async (textOverride = null) => {
-        const textToSend = textOverride || input;
-        if (!textToSend.trim() || loading) return;
+      // FUNCIÓN CENTRAL: ENVIAR MENSAJE A LUCY
+            const send = async (textOverride = null) => {
+                const textToSend = textOverride || input;
+                if (!textToSend.trim() || loading) return;
 
-        setUiState(null);
-        setInput('');
-        setLoading(true);
+                setUiState(null);
+                setInput('');
+                setLoading(true);
 
-        const newM = [...msgs, { role: 'user', content: textToSend }];
-        setMsgs(newM);
+                const newM = [...msgs, { role: 'user', content: textToSend }];
+                setMsgs(newM);
 
-        try {
-            // 1. OBTENER FECHA Y HORA ACTUAL (CORRECCIÓN)
-            const now = new Date();
-            // Formato: "lunes, 16 de julio de 2024"
-            const fechaHoy = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            // Formato: "4:30 PM"
-            const horaActual = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                try {
+                    // 1. OBTENER FECHA Y HORA ACTUAL
+                    const now = new Date();
+                    const fechaHoy = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    const horaActual = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-            const { isVacation, resumeDate } = agentStatus;
-            let availabilityInstruction = "";
-            if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA DEL SISTEMA: Estamos en un periodo especial de no disponibilidad hasta el ${resumeDate.toLocaleDateString()}. SI EL USUARIO PIDE LLAMADA INMEDIATA O "AHORA", responde que en este momento no es posible conectar en vivo, pero que podemos agendar una llamada prioritaria a partir del ${resumeDate.toLocaleDateString()}. Sé muy amable y profesional, NO digas "vacaciones".`;
-            
-            const scheduleText = getScheduleText(aiConfig?.schedule);
-            const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+                    const { isVacation, resumeDate } = agentStatus;
+                    let availabilityInstruction = "";
+                    if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA: Estamos fuera hasta el ${resumeDate.toLocaleDateString()}.`;
+                    
+                    const scheduleText = getScheduleText(aiConfig?.schedule);
+                    const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
-            // 2. INYECTAR CONTEXTO TEMPORAL EN EL PROMPT
-            const prompt = `
-          ${systemBase}
+                    // 2. INYECTAR CONTEXTO TEMPORAL EN EL PROMPT (MODIFICADO)
+                    const prompt = `
+                  ${systemBase}
 
-          CONTEXTO TEMPORAL (CRÍTICO - NO ALUCINAR):
-          - Hoy es: ${fechaHoy}
-          - Hora actual del sistema: ${horaActual}
-          - Tu Zona Horaria: EST (Florida, USA). Úsala para calcular si estamos abiertos.
+                  [DATOS INTERNOS DEL SISTEMA]
+                  - HOY ES: ${fechaHoy}
+                  - HORA ACTUAL: ${horaActual}
+                  
+                  REGLAS DE AGENDAMIENTO ESTRICTAS:
+                  1. **PROHIBIDO MENCIONAR ZONAS HORARIAS**: Nunca digas "hora del este", "EST", "mi hora" o "su hora". Solo di la hora a secas (ej: "Queda agendado a las 3pm").
+                  2. **VALIDACIÓN**: Solo acepta citas dentro de los "HORARIOS DE TRABAJO" listados abajo.
+                  3. Si el usuario pide una hora que está numéricamente dentro del rango (ej: pide 11am y el rango es 9am-5pm), ACÉPTALA DIRECTAMENTE. No calcules diferencias horarias.
+                  4. Si el usuario pide hablar "YA" y estamos dentro del horario numérico, acepta. Si no, ofrece la próxima hora de apertura.
 
-          ${availabilityInstruction}
-          
-          HORARIOS DE TRABAJO DEFINIDOS (EST):
-          ${scheduleText}
-          
-          REGLA DE AGENDAMIENTO ESTRICTA: 
-          1. Compara la "Hora actual del sistema" con los "Horarios de trabajo". 
-          2. Si el usuario pide hablar YA, verifica si estamos dentro del horario. Si no, ofrece agendar para mañana.
-          3. Asume que la hora que dice el usuario es SU HORA LOCAL, pero confírmale diciendo "Perfecto, agendado para sus [HORA]".
+                  ${availabilityInstruction}
+                  
+                  HORARIOS DE TRABAJO (RANGOS VÁLIDOS):
+                  ${scheduleText}
 
-          HISTORIAL:
-          ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
-        `;
+                  HISTORIAL DE CONVERSACIÓN:
+                  ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
+                `;
+                    
+                    // DEBUG: Ver en consola del navegador (F12) qué se le envía a la IA
+                    console.log("--- ENVÍO A GEMINI ---");
+                    console.log("Prompt completo:", prompt);
 
                     const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
                     const rawText = res.candidates[0].content.parts[0].text;
                     
+                    // DETECTAR BOTONES DINÁMICOS (SINTAXIS JSON)
                     let nextButtons = null;
                     const buttonMatch = rawText.match(/\[BUTTONS:(\[\s*\{[\s\S]*?\}\s*\])\]/);
                     
@@ -874,6 +877,7 @@
                         }
                     }
 
+                    // PROCESAR JSON DE CIERRE (DATA READY)
                     const jsonMatch = rawText.match(/```json([\s\S]*?)```/);
                     if (jsonMatch) {
                         try {
@@ -888,6 +892,7 @@
                         } catch (jsonErr) { console.error("Error parsing JSON", jsonErr); }
                     }
 
+                    // LIMPIAR RESPUESTA PARA EL USUARIO
                     let finalReply = cleanAiMessage(rawText);
                     finalReply = finalReply.replace(/\[BUTTONS:[\s\S]*?\]/g, '').trim();
 
