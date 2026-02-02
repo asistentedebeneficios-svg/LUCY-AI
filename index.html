@@ -85,14 +85,14 @@
         import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
-        // -----------------------------------------------------------------------------
+       // -----------------------------------------------------------------------------
         // CONFIGURACIÓN DEL SISTEMA
         // -----------------------------------------------------------------------------
-        const OFFLINE_MODE = false; // DESACTIVADO: Ahora conecta a servicios reales
+        const OFFLINE_MODE = false; 
         
         // API KEY INTEGRADAS (Dividida para evitar detección simple)
-        const _K_PART_1 = "AIzaSyAIOAO4-h7lRRK8";
-        const _K_PART_2 = "SKAC2hgomoE-MaCZ58M";
+        const _K_PART_1 = "AIzaSyAVpdr0-pjFioj";
+        const _K_PART_2 = "amUmYJ1BPOLdUFB0f_y8";
         const GEMINI_API_KEY = `${_K_PART_1}${_K_PART_2}`; 
 
         const FIREBASE_CONFIG = {
