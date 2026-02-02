@@ -221,28 +221,18 @@ const to12h = (time24) => {
     return `${hour12}:${m} ${suffix}`;
 };
 
-        // Función auxiliar para convertir hora militar a AM/PM
-const to12h = (time24) => {
-    if (!time24) return '';
-    const [h, m] = time24.split(':');
-    const hour = parseInt(h, 10);
-    const suffix = hour >= 12 ? 'PM' : 'AM';
-    const hour12 = hour % 12 || 12;
-    return `${hour12}:${m} ${suffix}`;
-};
-
 const getScheduleText = (schedule) => {
     if (!schedule) return "No especificado";
     const days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
     return days.map(d => {
         const c = schedule[d];
-        // CAMBIO CLAVE: Si está deshabilitado, lo marcamos explícitamente como NO DISPONIBLE
-        if (!c?.enabled) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: CERRADO (NO DISPONIBLE)`;
-        
+        if (!c?.enabled) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: Cerrado`;
         const slots = c.slots || (c.start ? [{start: c.start, end: c.end}] : []);
-        if (slots.length === 0) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: Sin horario configurado`;
+        if (slots.length === 0) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: Sin horario`;
         
+        // AQUI ESTA LA MAGIA: Convertimos a 12h antes de enviar el texto
         const times = slots.map(s => `${to12h(s.start)} a ${to12h(s.end)}`).join(' y de ');
+        
         return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: ${times}`;
     }).join('\n');
 };
@@ -846,9 +836,10 @@ const getScheduleText = (schedule) => {
                 setMsgs(newM);
 
                 try {
-                    // 1. OBTENER FECHA Y HORA ACTUAL
+                    // 1. OBTENER FECHA Y HORA ACTUAL (Formato AM/PM)
                     const now = new Date();
                     const fechaHoy = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    // Forzamos formato 12h aquí también
                     const horaActual = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
                     const { isVacation, resumeDate } = agentStatus;
@@ -867,19 +858,18 @@ const getScheduleText = (schedule) => {
                   - HORA ACTUAL: ${horaActual}
                   
                   [REGLAS DE COMPORTAMIENTO - CRÍTICO]:
-                  1. **ANTI-REPETICIÓN**: No vuelvas a presentarte. No digas "Hola [Nombre]" al inicio de cada frase.
-                  2. **ESCUCHA ACTIVA**: No preguntes datos que el usuario ya dio.
-                  3. **FORMATO DE HORA**: Usa SIEMPRE formato 12 horas (ej: "2:00 PM").
+                  1. **ANTI-REPETICIÓN (ESTRICTO)**: 
+                     - ¡PROHIBIDO volver a presentarte! Ya saben quién eres.
+                     - **NO** empieces cada respuesta diciendo "Hola [Nombre]". Eso es robótico. Ve directo a la respuesta o pregunta.
+                     - Varía tu vocabulario. No uses siempre las mismas muletillas.
+                  2. **ESCUCHA ACTIVA**: Si el usuario ya respondió una pregunta (como su salud o edad), NO la vuelvas a preguntar. ¡Avanza!
+                  3. **FORMATO DE HORA**: Usa SIEMPRE formato 12 horas (ej: "2:00 PM"). NUNCA formato militar.
                   4. **CERO ZONAS HORARIAS**: No digas "hora del este". Solo di la hora.
-                  5. **AGENDAMIENTO ESTRICTO**: 
-                     - Consulta la lista de "HORARIOS DE TRABAJO" abajo.
-                     - Si el usuario pide un día que dice "CERRADO", **DILE QUE NO** amablemente e indica que ese día no laboramos. Ofrece el siguiente día disponible.
-                     - **NO** hagas excepciones ni preguntes "¿te va bien?" para un día cerrado.
-                     - Si el día está abierto, respeta los rangos de horas indicados.
+                  5. **AGENDAMIENTO**: Respeta estrictamente los horarios abajo listados.
 
                   ${availabilityInstruction}
                   
-                  HORARIOS DE TRABAJO (ESTADO ACTUAL):
+                  HORARIOS DE TRABAJO (RANGOS VÁLIDOS):
                   ${scheduleText}
 
                   HISTORIAL DE CONVERSACIÓN:
