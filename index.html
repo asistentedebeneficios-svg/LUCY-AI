@@ -369,7 +369,23 @@ const getScheduleText = (schedule) => {
                             )}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span><a href={`https://wa.me/${String(lead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(lead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
-                                <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Programado</span><p className="font-medium text-[#1d1d1f]">{formatScheduledDate(String(lead.horario_preferido || 'Inmediata'))}</p></div>
+                                <div className="bg-[#F5F5F7] p-5 rounded-2xl">
+                                    <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Horario de Llamada</span>
+                                    <p className="font-medium text-[#1d1d1f] text-sm capitalize">
+                                        {(() => {
+                                            const h = lead.horario_preferido;
+                                            // Si no hay dato o dice explícitamente inmediata
+                                            if (!h || String(h).toLowerCase().includes('inmediata')) return "Inmediata";
+                                            
+                                            // Intentamos convertir a fecha bonita en Español
+                                            try {
+                                                const d = new Date(h);
+                                                if (isNaN(d.getTime())) return h; // Si no es fecha válida, muestra el texto original
+                                                return d.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+                                            } catch (e) { return h; }
+                                        })()}
+                                    </p>
+                                </div>
                                 <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Perfil</span><p className="font-medium text-[#1d1d1f] text-sm">{String(lead.edad || '?')} años • {String(lead.estado || '?')} • {String(lead.fuma || '?')}</p></div>
                                 <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Salud</span><p className="font-medium text-[#1d1d1f] text-sm truncate">{String(lead.salud || '-')}</p></div>
                             </div>
