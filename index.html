@@ -14,7 +14,7 @@
         }
     </script>
 
-    <!-- React & Babel (Versión fija) -->
+    <!-- React & Babel (Versión fija para estabilidad) -->
     <script src="https://unpkg.com/@babel/standalone@7.23.8/babel.min.js"></script>
 
     <!-- ESTILOS -->
@@ -85,7 +85,7 @@
         import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
-       // -----------------------------------------------------------------------------
+        // -----------------------------------------------------------------------------
         // CONFIGURACIÓN DEL SISTEMA
         // -----------------------------------------------------------------------------
         const OFFLINE_MODE = false; 
@@ -110,19 +110,50 @@
         let app, auth, db;
         if (!OFFLINE_MODE) {
             try {
-                app = initializeApp(FIREBASE_CONFIG);
-                auth = getAuth(app);
-                db = getFirestore(app);
-                console.log("Firebase inicializado correctamente");
+                if (FIREBASE_CONFIG.apiKey !== "TU_API_KEY_FIREBASE") {
+                    app = initializeApp(FIREBASE_CONFIG);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+                } else {
+                    console.warn("Firebase no está configurado. La app cargará pero no guardará datos.");
+                }
             } catch (e) {
                 console.error("Error crítico inicializando Firebase:", e);
-                alert("Error de conexión con la base de datos. Revise la consola.");
             }
         }
 
         // -----------------------------------------------------------------------------
-        // UTILERÍAS
+        // UTILERÍAS & FORMATO DE HORA (NUEVO)
         // -----------------------------------------------------------------------------
+        
+        // Función auxiliar para convertir hora militar a AM/PM
+        const to12h = (time24) => {
+            if (!time24) return '';
+            const [h, m] = time24.split(':');
+            const hour = parseInt(h, 10);
+            const suffix = hour >= 12 ? 'PM' : 'AM';
+            const hour12 = hour % 12 || 12;
+            return `${hour12}:${m} ${suffix}`;
+        };
+
+        const getScheduleText = (schedule) => {
+            if (!schedule) return "No especificado";
+            const days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+            return days.map(d => {
+                const c = schedule[d];
+                // LÓGICA ESTRICTA: Si está deshabilitado, lo marcamos como CERRADO
+                if (!c?.enabled) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: CERRADO (NO DISPONIBLE)`;
+                
+                const slots = c.slots || (c.start ? [{start: c.start, end: c.end}] : []);
+                if (slots.length === 0) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: Sin horario configurado`;
+                
+                // Convertimos a 12h para que Lucy lo lea natural
+                const times = slots.map(s => `${to12h(s.start)} a ${to12h(s.end)}`).join(' y de ');
+                
+                return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: ${times}`;
+            }).join('\n');
+        };
+
         function cleanAiMessage(text) {
             if (!text) return '';
             let cleaned = text;
@@ -211,32 +242,6 @@
             }
         };
 
-        // Función auxiliar para convertir hora militar a AM/PM
-const to12h = (time24) => {
-    if (!time24) return '';
-    const [h, m] = time24.split(':');
-    const hour = parseInt(h, 10);
-    const suffix = hour >= 12 ? 'PM' : 'AM';
-    const hour12 = hour % 12 || 12;
-    return `${hour12}:${m} ${suffix}`;
-};
-
-const getScheduleText = (schedule) => {
-    if (!schedule) return "No especificado";
-    const days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
-    return days.map(d => {
-        const c = schedule[d];
-        if (!c?.enabled) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: Cerrado`;
-        const slots = c.slots || (c.start ? [{start: c.start, end: c.end}] : []);
-        if (slots.length === 0) return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: Sin horario`;
-        
-        // AQUI ESTA LA MAGIA: Convertimos a 12h antes de enviar el texto
-        const times = slots.map(s => `${to12h(s.start)} a ${to12h(s.end)}`).join(' y de ');
-        
-        return `- ${d.charAt(0).toUpperCase() + d.slice(1)}: ${times}`;
-    }).join('\n');
-};
-
         async function fetchGeminiWithRetry(payload) {
             if (!rateLimit.check()) throw new Error("Espera unos segundos.");
             if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; }
@@ -253,7 +258,7 @@ const getScheduleText = (schedule) => {
                     lastError = `Modelo ${model} falló: ${res.status}`;
                 } catch (e) { lastError = e.message; }
             }
-            throw new Error(`Error de conexión AI: ${lastError || "Verifica tu conexión"}`);
+            throw new Error(`Error de conexión AI: ${lastError || "Verifica tu API Key"}`);
         }
 
         // 6. COMPONENTES VISUALES
@@ -431,7 +436,7 @@ const getScheduleText = (schedule) => {
             );
         };
 
-        // --- LANDING VIEW (DEFINIDO ANTES DE APP) ---
+        // --- LANDING VIEW ---
         function LandingView({ onStartChat, onOpenLogin }) {
             const testimonials = [{ text: "Gracias a Lucy encontré un plan perfecto para mi mamá sin gastar de más. Fue muy fácil.", author: "María G. - Florida" }, { text: "Excelente atención, muy paciente y clara. Me sentí muy segura con la información.", author: "Carmen R. - Texas" }, { text: "Rápido y sencillo. Encontré justo lo que necesitaba para mi tranquilidad.", author: "José L. - California" }];
             const [idx, setIdx] = useState(0);
@@ -459,7 +464,7 @@ const getScheduleText = (schedule) => {
             );
         }
 
-        // --- AGENTS MANAGER (DEFINIDO ANTES DE APP) ---
+        // --- AGENTS MANAGER ---
         function AgentsManager({ agents, leads, onOpenLead, onSaveAgent, onDeleteAgent, searchTerm }) {
             const [selectedAgent, setSelectedAgent] = useState(null);
             const [isEditing, setIsEditing] = useState(false);
@@ -603,7 +608,7 @@ const getScheduleText = (schedule) => {
             );
         }
 
-        // --- ADMIN BRAIN (DEFINIDO ANTES DE APP) ---
+        // --- ADMIN BRAIN ---
         function AdminBrain({ aiConfig, onSaveConfig }) {
             const [c, setC] = useState(aiConfig);
             const [isSaving, setIsSaving] = useState(false);
@@ -705,91 +710,6 @@ const getScheduleText = (schedule) => {
             );
         }
 
-        // --- LEADS LIST (DEFINIDO ANTES DE APP) ---
-        function LeadsList({ leads, agents, onOpenLead, onOpenAssign, onDeleteLead, onUpdateStatus, isArchive, searchTerm }) {
-            const [leadToDelete, setLeadToDelete] = useState(null);
-            const [selectedIds, setSelectedIds] = useState([]);
-
-            const filteredLeads = (leads || []).filter(l => String(l.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()));
-            const handleSelectAll = (e) => e.target.checked ? setSelectedIds(filteredLeads.map(l => l.id)) : setSelectedIds([]);
-            const handleSelectOne = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-            const handleBulkArchive = () => { if (selectedIds.length > 0) { onUpdateStatus(selectedIds, isArchive ? 'active' : 'archived'); setSelectedIds([]); } };
-            const confirmDelete = async () => { if (leadToDelete) { await onDeleteLead(leadToDelete); setLeadToDelete(null); setSelectedIds([]); } };
-            const handleBulkAssignAction = (agentId) => { onOpenAssign(selectedIds); setSelectedIds([]); };
-
-            return (
-                <div className="animate-in fade-in duration-500">
-                    {leadToDelete && (
-                        <div className="fixed inset-0 z-[120] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-                            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm border border-gray-100 text-center">
-                                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500"><Trash2 size={24} /></div>
-                                <h3 className="font-bold text-lg text-slate-800 mb-2">{Array.isArray(leadToDelete) && leadToDelete.length > 1 ? `¿Eliminar ${leadToDelete.length} Leads?` : "¿Eliminar este Lead?"}</h3>
-                                <p className="text-sm text-slate-500 mb-6">Esta acción es irreversible.</p>
-                                <div className="flex gap-3"><button onClick={() => setLeadToDelete(null)} className="flex-1 py-2.5 bg-white border border-gray-200 text-slate-600 rounded-xl font-medium text-sm hover:bg-gray-50 transition-colors">Cancelar</button><button onClick={confirmDelete} className="flex-1 py-2.5 bg-red-500 text-white rounded-xl font-medium text-sm hover:bg-red-600 transition-colors shadow-lg shadow-red-200">Eliminar</button></div>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="bg-white rounded-[24px] shadow-sm overflow-hidden border border-gray-100/50">
-                        {selectedIds.length > 0 && (
-                            <div className="bg-blue-50 border-b border-blue-100 px-6 py-2 flex justify-between items-center animate-in fade-in sticky top-0 z-20">
-                                <span className="text-xs font-bold text-blue-700">{selectedIds.length} seleccionados</span>
-                                <div className="flex gap-2 items-center">
-                                    <button onClick={handleBulkAssignAction} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors shadow-sm"><UserPlus size={14} /> Acciones Agente</button>
-                                    <button onClick={handleBulkArchive} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors">{isArchive ? <RotateCcw size={14} /> : <Archive size={14} />}{isArchive ? 'Restaurar' : 'Archivar'}</button>
-                                    <button onClick={() => setLeadToDelete(selectedIds)} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"><Trash2 size={14} /> Eliminar</button>
-                                </div>
-                            </div>
-                        )}
-
-                        <table className="w-full text-left table-fixed">
-                            <thead className="bg-[#FBFBFD] border-b border-gray-100">
-                                <tr>
-                                    <th className="px-4 py-4 w-12 text-center"><input type="checkbox" className="custom-checkbox" checked={filteredLeads.length > 0 && selectedIds.length === filteredLeads.length} onChange={handleSelectAll} /></th>
-                                    <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/4">Nombre</th>
-                                    <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/4">Agente</th>
-                                    <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase w-1/3">Resumen</th>
-                                    <th className="px-4 py-4 text-[11px] font-bold text-[#86868b] uppercase text-center w-32">Acción</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {filteredLeads.map(l => {
-                                    const assignedAgent = (agents || []).find(a => a.id === l.assignedAgentId);
-                                    const isSold = l.status === 'sold';
-                                    
-                                    return (
-                                        <tr key={l.id} onClick={() => onOpenLead(l)} className={`hover:bg-[#F5F5F7] transition-colors cursor-pointer group ${selectedIds.includes(l.id) ? 'bg-blue-50/30' : ''} ${isSold ? 'bg-green-50/40' : ''}`}>
-                                            <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
-                                                <input type="checkbox" className="custom-checkbox" checked={selectedIds.includes(l.id)} onChange={() => handleSelectOne(l.id)} />
-                                            </td>
-                                            <td className="px-4 py-5 truncate"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-gradient-to-b from-gray-100 to-gray-200 flex items-center justify-center font-semibold text-xs text-gray-500 shrink-0 border border-white shadow-sm">{l.nombre ? l.nombre.charAt(0).toUpperCase() : '?'}</div><div className="min-w-0"><div className="text-sm font-semibold text-[#1d1d1f] truncate">{String(l.nombre || 'Anónimo')}</div><div className="text-[11px] text-[#86868b] mt-0.5">{String(l.edad || '')} años • {String(l.estado || '')}</div></div></div></td>
-                                            <td className="px-4 py-5">{assignedAgent ? (<div className="flex items-center gap-2"><img src={assignedAgent.foto || "https://ui-avatars.com/api/?name=" + assignedAgent.nombre} className="w-5 h-5 rounded-full object-cover" /><span className="text-xs font-medium text-gray-700 truncate">{assignedAgent.nombre}</span></div>) : (<span className="text-[10px] text-gray-400 italic">-- Sin Asignar --</span>)}</td>
-                                            <td className="px-4 py-5"><p className="text-xs text-[#1d1d1f] truncate opacity-80">"{String(l.resumen_ai || '')}"</p></td>
-                                            <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
-                                                <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                                    {!isArchive && assignedAgent && (
-                                                        <button 
-                                                            onClick={() => onUpdateStatus([l.id], isSold ? 'active' : 'sold')} 
-                                                            className={`p-2 rounded-lg transition-all ${isSold ? 'bg-green-100 text-green-700 shadow-sm ring-1 ring-green-200' : 'text-gray-400 hover:text-green-600 hover:bg-green-50'}`} 
-                                                            title={isSold ? "Desmarcar Venta" : "Marcar Vendido"}
-                                                        >
-                                                            <DollarSign size={16} strokeWidth={isSold ? 2.5 : 2} />
-                                                        </button>
-                                                    )}
-                                                    <button onClick={() => onUpdateStatus(l.id, isArchive ? 'active' : 'archived')} className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-white rounded-lg transition-all">{isArchive ? <RotateCcw size={16} strokeWidth={1.5} /> : <Archive size={16} strokeWidth={1.5} />}</button>
-                                                    <button onClick={() => setLeadToDelete(l.id)} className="p-2 text-[#86868b] hover:text-red-500 hover:bg-white rounded-lg transition-all"><Trash2 size={16} strokeWidth={1.5} /></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            );
-        }
-
         // --- CLIENT CHAT (DEFINIDO ANTES DE APP) ---
         function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
             const [activeUsers, setActiveUsers] = useState(Math.floor(Math.random() * (28 - 18 + 1)) + 18);
@@ -823,7 +743,7 @@ const getScheduleText = (schedule) => {
                 });
             };
 
-             // FUNCIÓN CENTRAL: ENVIAR MENSAJE A LUCY
+            // FUNCIÓN CENTRAL: ENVIAR MENSAJE A LUCY
             const send = async (textOverride = null) => {
                 const textToSend = textOverride || input;
                 if (!textToSend.trim() || loading) return;
@@ -865,11 +785,15 @@ const getScheduleText = (schedule) => {
                   2. **ESCUCHA ACTIVA**: Si el usuario ya respondió una pregunta (como su salud o edad), NO la vuelvas a preguntar. ¡Avanza!
                   3. **FORMATO DE HORA**: Usa SIEMPRE formato 12 horas (ej: "2:00 PM"). NUNCA formato militar.
                   4. **CERO ZONAS HORARIAS**: No digas "hora del este". Solo di la hora.
-                  5. **AGENDAMIENTO**: Respeta estrictamente los horarios abajo listados.
+                  5. **AGENDAMIENTO ESTRICTO**: 
+                     - Consulta la lista de "HORARIOS DE TRABAJO" abajo.
+                     - Si el usuario pide un día que dice "CERRADO", **DILE QUE NO** amablemente e indica que ese día no laboramos. Ofrece el siguiente día disponible.
+                     - **NO** hagas excepciones ni preguntes "¿te va bien?" para un día cerrado.
+                     - Si el día está abierto, respeta los rangos de horas indicados.
 
                   ${availabilityInstruction}
                   
-                  HORARIOS DE TRABAJO (RANGOS VÁLIDOS):
+                  HORARIOS DE TRABAJO (ESTADO ACTUAL):
                   ${scheduleText}
 
                   HISTORIAL DE CONVERSACIÓN:
@@ -914,7 +838,7 @@ const getScheduleText = (schedule) => {
                 }
                 setLoading(false);
             };
-            
+
             return (
                 <div className="max-w-[480px] mx-auto flex flex-col h-full bg-white rounded-[32px] shadow-2xl border border-gray-100 overflow-hidden relative font-sans">
                     <div className="bg-white/90 backdrop-blur-xl p-5 border-b border-gray-100 flex items-center justify-between z-10 sticky top-0">
@@ -1062,14 +986,8 @@ const getScheduleText = (schedule) => {
 
             useEffect(() => {
                 if (OFFLINE_MODE) { 
-                    // DATOS DE PRUEBA SIMULADOS
-                    setLeads([
-                        { id: '1', nombre: 'Juan Pérez', telefono: '+13055550101', edad: '65', estado: 'FL', salud: 'Buena', fuma: 'No', resumen_ai: 'Interesado en cobertura básica.', createdAt: { seconds: Date.now()/1000 }, status: 'active' },
-                        { id: '2', nombre: 'Maria Rodriguez', telefono: '+14075550102', edad: '72', estado: 'TX', salud: 'Diabetes', fuma: 'No', resumen_ai: 'Busca seguro para gastos finales urgente.', createdAt: { seconds: Date.now()/1000 - 86400 }, status: 'active' }
-                    ]); 
-                    setAgents([
-                        { id: 'a1', nombre: 'Agente Demo', email: 'demo@ejemplo.com', telefono: '555-0199', estados: 'FL, TX', foto: '' }
-                    ]);
+                    setLeads([]); 
+                    setAgents([]);
                     return; 
                 }
                 if (!user || !db) return;
@@ -1082,7 +1000,6 @@ const getScheduleText = (schedule) => {
                 
                 getDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config')).then(s => {
                     if (s.exists()) {
-                        // Merge con default para asegurar que no falten campos
                         setAiConfig(prev => ({ ...prev, ...s.data() }));
                     }
                 }).catch(e => console.log("Usando Config Default"));
@@ -1100,13 +1017,12 @@ const getScheduleText = (schedule) => {
             const handleLogin = async (e) => { e.preventDefault(); setIsLoggingIn(true); setLoginError(null); if (OFFLINE_MODE) { setTimeout(() => { setIsAdmin(true); navigateTo('admin'); setShowLogin(false); setIsLoggingIn(false); }, 1000); return; } try { await signInWithEmailAndPassword(auth, email, password); setShowLogin(false); setEmail(''); setPassword(''); } catch (error) { setLoginError("Credenciales no válidas."); } setIsLoggingIn(false); };
             const handleLogout = async () => { if (!OFFLINE_MODE && auth) await signOut(auth); setIsAdmin(false); navigateTo('landing'); };
             
-            // GUARDAR LEAD Y DISPARAR WEBHOOK (CORREGIDO)
+            // GUARDAR LEAD
             const saveLeadToDb = async (leadData) => { 
                 if (OFFLINE_MODE) { alert("Modo Offline: Lead guardado localmente (Simulado)"); return; } 
                 if (!db) return;
                 await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'leads'), { ...leadData, createdAt: serverTimestamp(), status: 'active' }); 
                 
-                // Disparar Webhook Inmediatamente
                 if (aiConfig.webhookUrl) {
                     fetch(aiConfig.webhookUrl, { 
                         method: 'POST', 
