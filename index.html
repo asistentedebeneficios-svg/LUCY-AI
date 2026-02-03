@@ -800,7 +800,8 @@ const getScheduleText = (schedule) => {
             const [loading, setLoading] = useState(false);
             const [showShareModal, setShowShareModal] = useState(false);
             const [urlCopied, setUrlCopied] = useState(false);
-            const [uiState, setUiState] = useState(null); 
+            const [uiState, setUiState] = useState(null);
+            const [isSessionClosed, setIsSessionClosed] = useState(false); // <--- NUEVO INTERRUPTOR 
 
             const scrollRef = useRef(null);
             const agentStatus = useMemo(() => getAgentStatus(aiConfig), [aiConfig]);
@@ -900,8 +901,9 @@ const getScheduleText = (schedule) => {
                             const jsonStr = jsonMatch[1];
                             const data = JSON.parse(jsonStr);
                             if (data.action === 'data_ready') {
-                                onSaveLead({ ...data, fullChat: newM });
-                            }
+                        onSaveLead({ ...data, fullChat: newM });
+                        setIsSessionClosed(true); // <--- BLOQUEAMOS LA SESIÓN AQUÍ
+                    }
                         } catch (jsonErr) { console.error("Error JSON:", jsonErr); }
                     }
 
@@ -976,6 +978,15 @@ const getScheduleText = (schedule) => {
                         )}
                     </div>
 
+                    {isSessionClosed ? (
+                    <div className="p-6 bg-white/90 backdrop-blur-xl border-t border-gray-100 text-center animate-in fade-in slide-in-from-bottom-4">
+                        <div className="w-14 h-14 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-green-200">
+                            <CheckCircle size={28} strokeWidth={2.5} />
+                        </div>
+                        <h3 className="font-bold text-gray-900 text-lg">¡Solicitud Completada!</h3>
+                        <p className="text-sm text-gray-500 mt-1 max-w-xs mx-auto">Sus datos han sido enviados correctamente al agente asignado. Ya puede cerrar esta ventana.</p>
+                    </div>
+                ) : (
                     <form onSubmit={(e) => { e.preventDefault(); send(); }} className="p-4 bg-white/90 backdrop-blur-xl border-t border-gray-100 flex gap-3 items-center">
                         <input 
                             value={input} 
@@ -990,7 +1001,8 @@ const getScheduleText = (schedule) => {
                             <Send size={20} fill="currentColor" className="ml-0.5" />
                         </button>
                     </form>
-
+                )}
+ 
                     <div className="text-center py-2 bg-white border-t border-gray-50">{onOpenLogin && <button onClick={onOpenLogin} className="text-[9px] text-slate-300 hover:text-slate-400 transition-colors">Acceso Corporativo</button>}</div>
                     
                     {showShareModal && (
