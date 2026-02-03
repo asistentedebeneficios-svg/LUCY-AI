@@ -873,11 +873,11 @@ const getScheduleText = (schedule) => {
                 const scheduleText = getScheduleText(aiConfig?.schedule);
                 const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
-                // 2. INYECTAR CONTEXTO
+                // 2. INYECTAR CONTEXTO (CEREBRO REFORZADO)
                 const prompt = `
                   ${systemBase}
 
-                  [DATOS INTERNOS EN TIEMPO REAL]
+                  [DATOS INTERNOS]
                   - HOY ES: ${fechaHoy}
                   - HORA ACTUAL: ${horaActual}
                   - ${statusInstruction}
@@ -886,12 +886,11 @@ const getScheduleText = (schedule) => {
                   1. **ANTI-REPETICIÓN**: No te presentes de nuevo.
                   2. **VALIDACIÓN DE AGENDA**: Si el estado es CERRADO, rechaza amablemente llamadas inmediatas.
                   
-                  [INSTRUCCIONES CRÍTICAS PARA GUARDAR EL LEAD (JSON)]:
-                  Cuando recolectes todos los datos y generes el JSON final:
-                  - Campo **'horario_preferido'**:
-                    * Si el usuario quiere hablar YA: escribe "Inmediata".
-                    * Si el usuario programa una cita: **ESCRIBE LA FECHA Y HORA COMPLETA** (Ej: "Lunes 14 Agosto, 4:00 PM").
-                    * **PROHIBIDO** escribir "Inmediata" si hay una fecha futura acordada.
+                  [INSTRUCCIONES CRÍTICAS PARA EL CAMPO 'horario_preferido' DEL JSON]:
+                  Analiza la intención final del usuario con extremo cuidado:
+                  - CASO A (Cita Futura): Si el usuario acordó una hora específica (ej: "mañana", "lunes", "en una hora"), el valor DEBE SER LA FECHA TEXTUAL (Ej: "Lunes 14 Agosto, 4:00 PM").
+                  - CASO B (Inmediato): Solo si el usuario dijo explícitamente "llámame ya" o "estoy listo ahora", el valor es "Inmediata".
+                  - **PROHIBICIÓN**: Si existe cualquier mención de fecha u hora futura, ESTÁ PROHIBIDO ESCRIBIR "Inmediata".
 
                   HORARIOS DE TRABAJO (RANGOS VÁLIDOS):
                   ${scheduleText}
