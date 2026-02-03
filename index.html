@@ -842,33 +842,37 @@ const getScheduleText = (schedule) => {
                     // Forzamos formato 12h aquí también
                     const horaActual = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-                    const { isVacation, resumeDate } = agentStatus;
-                    let availabilityInstruction = "";
-                    if (isVacation && resumeDate) availabilityInstruction = `NOTA CRÍTICA: Estamos fuera hasta el ${resumeDate.toLocaleDateString()}.`;
-                    
-                    const scheduleText = getScheduleText(aiConfig?.schedule);
-                    const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+                   // --- LÓGICA MEJORADA DE DISPONIBILIDAD ---
+                const { isAgentAvailable, isVacation, resumeDate } = agentStatus;
+                
+                let statusInstruction = "";
+                if (isVacation && resumeDate) {
+                    statusInstruction = `ESTADO ACTUAL: VACACIONES (Estamos cerrados hasta el ${resumeDate.toLocaleDateString()}). PROHIBIDO ofrecer "Hablar con agente ahora".`;
+                } else if (isAgentAvailable) {
+                    statusInstruction = "ESTADO ACTUAL: ABIERTO. Puedes ofrecer botones para conectar con un agente ahora si el usuario está listo.";
+                } else {
+                    statusInstruction = "ESTADO ACTUAL: CERRADO. PROHIBIDO ofrecer botones o sugerir 'Hablar con un agente ahora'. Solo ofrece 'Agendar para después' o 'Dejar mensaje'.";
+                }
 
-                    // 2. INYECTAR CONTEXTO Y REGLAS DE ESTILO
-                    const prompt = `
+                const scheduleText = getScheduleText(aiConfig?.schedule);
+                const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+
+                const prompt = `
                   ${systemBase}
 
-                  [DATOS INTERNOS]
+                  [DATOS INTERNOS EN TIEMPO REAL]
                   - HOY ES: ${fechaHoy}
                   - HORA ACTUAL: ${horaActual}
-                  
-                  [REGLAS DE COMPORTAMIENTO - CRÍTICO]:
-                  1. **ANTI-REPETICIÓN (ESTRICTO)**: 
-                     - ¡PROHIBIDO volver a presentarte! Ya saben quién eres.
-                     - **NO** empieces cada respuesta diciendo "Hola [Nombre]". Eso es robótico. Ve directo a la respuesta o pregunta.
-                     - Varía tu vocabulario. No uses siempre las mismas muletillas.
-                  2. **ESCUCHA ACTIVA**: Si el usuario ya respondió una pregunta (como su salud o edad), NO la vuelvas a preguntar. ¡Avanza!
-                  3. **FORMATO DE HORA**: Usa SIEMPRE formato 12 horas (ej: "2:00 PM"). NUNCA formato militar.
-                  4. **CERO ZONAS HORARIAS**: No digas "hora del este". Solo di la hora.
-                  5. **AGENDAMIENTO**: Respeta estrictamente los horarios abajo listados.
+                  - ${statusInstruction} (Sigue esta instrucción al pie de la letra).
 
-                  ${availabilityInstruction}
-                  
+                  [REGLAS DE COMPORTAMIENTO - CRÍTICO]:
+                  1. **ANTI-REPETICIÓN**: No te presentes de nuevo. Ve al grano.
+                  2. **FORMATO DE HORA**: Usa SIEMPRE formato 12 horas (ej: "2:00 PM").
+                  3. **VALIDACIÓN DE AGENDA Y BOTONES**:
+                     - Revisa la lista "HORARIOS DE TRABAJO" de abajo.
+                     - Si el estado es "CERRADO", **JAMÁS** generes un botón con value "conectar_agente" o similar. Solo botones para agendar a futuro.
+                     - Si el usuario pide agendar en un horario fuera del rango o en un día cerrado, **DEBES rechazarlo amablemente** y proponer horarios válidos de la lista.
+
                   HORARIOS DE TRABAJO (RANGOS VÁLIDOS):
                   ${scheduleText}
 
