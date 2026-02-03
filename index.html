@@ -873,7 +873,7 @@ const getScheduleText = (schedule) => {
                 const scheduleText = getScheduleText(aiConfig?.schedule);
                 const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
-                // 2. INYECTAR CONTEXTO (CEREBRO REFORZADO)
+                // 2. INYECTAR CONTEXTO (CEREBRO CALENDARIO + CONFIRMACIÓN)
                 const prompt = `
                   ${systemBase}
 
@@ -882,20 +882,30 @@ const getScheduleText = (schedule) => {
                   - HORA ACTUAL: ${horaActual}
                   - ${statusInstruction}
 
-                  [REGLAS DE COMPORTAMIENTO]:
-                  1. **ANTI-REPETICIÓN**: No te presentes de nuevo.
-                  2. **VALIDACIÓN DE AGENDA**: Si el estado es CERRADO, rechaza amablemente llamadas inmediatas.
-                  
-                  [INSTRUCCIONES CRÍTICAS PARA EL CAMPO 'horario_preferido' DEL JSON]:
-                  Analiza la intención final del usuario con extremo cuidado:
-                  - CASO A (Cita Futura): Si el usuario acordó una hora específica (ej: "mañana", "lunes", "en una hora"), el valor DEBE SER LA FECHA TEXTUAL (Ej: "Lunes 14 Agosto, 4:00 PM").
-                  - CASO B (Inmediato): Solo si el usuario dijo explícitamente "llámame ya" o "estoy listo ahora", el valor es "Inmediata".
-                  - **PROHIBICIÓN**: Si existe cualquier mención de fecha u hora futura, ESTÁ PROHIBIDO ESCRIBIR "Inmediata".
+                  [REGLAS GENERALES]:
+                  1. No te presentes de nuevo.
+                  2. Si está cerrado, NO ofrezcas "hablar ya".
+
+                  [IMPORTANTE: CÁLCULO DE FECHAS]:
+                  Si el usuario dice "mañana", "el lunes", "en 3 días":
+                  - Tu tarea es CALCULAR la fecha exacta basándote en "HOY ES".
+                  - Ejemplo: Si hoy es Lunes 2 y piden "mañana", la fecha es "Martes 3".
+
+                  [INSTRUCCIONES PARA LA RESPUESTA AL USUARIO (CHAT)]:
+                  - Cuando confirmes la cita en tu mensaje de texto, USA SIEMPRE LA FECHA CALCULADA COMPLETA.
+                  - DI: "Entendido, le llamaremos el Martes 3 de Agosto a las 4pm".
+                  - NO DIGAS: "Le llamaremos mañana". (Sé específico para evitar confusiones).
+
+                  [INSTRUCCIONES PARA EL JSON (BASE DE DATOS)]:
+                  Cuando generes el JSON 'data_ready', en el campo 'horario_preferido':
+                  - CASO 1 (Inmediato): Escribe "Inmediata".
+                  - CASO 2 (Programado): Escribe la FECHA CALCULADA COMPLETA (Ej: "Martes, 3 de Febrero 2026 a las 5:00 pm").
+                  - PROHIBIDO poner fechas relativas ("mañana") en el JSON.
 
                   HORARIOS DE TRABAJO (RANGOS VÁLIDOS):
                   ${scheduleText}
 
-                  HISTORIAL DE CONVERSACIÓN:
+                  HISTORIAL:
                   ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
                 `;
                     
