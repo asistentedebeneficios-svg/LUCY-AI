@@ -854,41 +854,44 @@ const getScheduleText = (schedule) => {
 
                 try {
                     // 1. OBTENER FECHA Y HORA ACTUAL (Formato AM/PM)
-                    const now = new Date();
-                    const fechaHoy = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                    // Forzamos formato 12h aquí también
-                    const horaActual = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                const now = new Date();
+                const fechaHoy = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                const horaActual = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-                   // --- LÓGICA MEJORADA DE DISPONIBILIDAD ---
+                // --- LÓGICA DE DISPONIBILIDAD ---
                 const { isAgentAvailable, isVacation, resumeDate } = agentStatus;
-                
                 let statusInstruction = "";
+                
                 if (isVacation && resumeDate) {
                     statusInstruction = `ESTADO ACTUAL: VACACIONES (Estamos cerrados hasta el ${resumeDate.toLocaleDateString()}). PROHIBIDO ofrecer "Hablar con agente ahora".`;
                 } else if (isAgentAvailable) {
                     statusInstruction = "ESTADO ACTUAL: ABIERTO. Puedes ofrecer botones para conectar con un agente ahora si el usuario está listo.";
                 } else {
-                    statusInstruction = "ESTADO ACTUAL: CERRADO. PROHIBIDO ofrecer botones o sugerir 'Hablar con un agente ahora'. Solo ofrece 'Agendar para después' o 'Dejar mensaje'.";
+                    statusInstruction = "ESTADO ACTUAL: CERRADO. PROHIBIDO ofrecer botones de llamada inmediata. Solo ofrece agendar para después.";
                 }
 
                 const scheduleText = getScheduleText(aiConfig?.schedule);
                 const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
+                // 2. INYECTAR CONTEXTO
                 const prompt = `
                   ${systemBase}
 
                   [DATOS INTERNOS EN TIEMPO REAL]
                   - HOY ES: ${fechaHoy}
                   - HORA ACTUAL: ${horaActual}
-                  - ${statusInstruction} (Sigue esta instrucción al pie de la letra).
+                  - ${statusInstruction}
 
-                  [REGLAS DE COMPORTAMIENTO - CRÍTICO]:
-                  1. **ANTI-REPETICIÓN**: No te presentes de nuevo. Ve al grano.
-                  2. **FORMATO DE HORA**: Usa SIEMPRE formato 12 horas (ej: "2:00 PM").
-                  3. **VALIDACIÓN DE AGENDA Y BOTONES**:
-                     - Revisa la lista "HORARIOS DE TRABAJO" de abajo.
-                     - Si el estado es "CERRADO", **JAMÁS** generes un botón con value "conectar_agente" o similar. Solo botones para agendar a futuro.
-                     - Si el usuario pide agendar en un horario fuera del rango o en un día cerrado, **DEBES rechazarlo amablemente** y proponer horarios válidos de la lista.
+                  [REGLAS DE COMPORTAMIENTO]:
+                  1. **ANTI-REPETICIÓN**: No te presentes de nuevo.
+                  2. **VALIDACIÓN DE AGENDA**: Si el estado es CERRADO, rechaza amablemente llamadas inmediatas.
+                  
+                  [INSTRUCCIONES CRÍTICAS PARA GUARDAR EL LEAD (JSON)]:
+                  Cuando recolectes todos los datos y generes el JSON final:
+                  - Campo **'horario_preferido'**:
+                    * Si el usuario quiere hablar YA: escribe "Inmediata".
+                    * Si el usuario programa una cita: **ESCRIBE LA FECHA Y HORA COMPLETA** (Ej: "Lunes 14 Agosto, 4:00 PM").
+                    * **PROHIBIDO** escribir "Inmediata" si hay una fecha futura acordada.
 
                   HORARIOS DE TRABAJO (RANGOS VÁLIDOS):
                   ${scheduleText}
