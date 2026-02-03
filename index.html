@@ -880,43 +880,15 @@ const getScheduleText = (schedule) => {
                   [DATOS INTERNOS EN TIEMPO REAL]
                   - HOY ES: ${fechaHoy}
                   - HORA ACTUAL: ${horaActual}
-                  - ${statusInstruction}
+                  - ${statusInstruction} (Sigue esta instrucción al pie de la letra).
 
-                  [REGLAS DE COMPORTAMIENTO]:
-                  1. **ANTI-REPETICIÓN**: No te presentes de nuevo.
-                  2. **VALIDACIÓN DE AGENDA**: Si está cerrado, NO ofrezcas "hablar ya".
-                  
-                  [INSTRUCCIONES CRÍTICAS PARA GUARDAR EL LEAD (JSON)]:
-                  Cuando recolectes todos los datos y generes el JSON final:
-                  - Campo **'horario_preferido'**:
-                    * Si el usuario quiere hablar YA: escribe "Inmediata".
-                    * Si el usuario programa una cita: **ESCRIBE LA FECHA Y HORA COMPLETA** (Ej: "Lunes 14 Agosto, 4:00 PM").
-                    * **PROHIBIDO** escribir la palabra "Inmediata" si existe una fecha futura programada.
-
-                  HORARIOS DE TRABAJO (RANGOS VÁLIDOS):
-                  ${scheduleText}
-
-                  HISTORIAL DE CONVERSACIÓN:
-                  ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
-                  
-                `;const prompt = `
-                  ${systemBase}
-
-                  [DATOS INTERNOS EN TIEMPO REAL]
-                  - HOY ES: ${fechaHoy}
-                  - HORA ACTUAL: ${horaActual}
-                  - ${statusInstruction}
-
-                  [REGLAS DE COMPORTAMIENTO]:
-                  1. **ANTI-REPETICIÓN**: No te presentes de nuevo.
-                  2. **VALIDACIÓN DE AGENDA**: Si está cerrado, NO ofrezcas "hablar ya".
-                  
-                  [INSTRUCCIONES CRÍTICAS PARA GUARDAR EL LEAD (JSON)]:
-                  Cuando recolectes todos los datos y generes el JSON final:
-                  - Campo **'horario_preferido'**:
-                    * Si el usuario quiere hablar YA: escribe "Inmediata".
-                    * Si el usuario programa una cita: **ESCRIBE LA FECHA Y HORA COMPLETA** (Ej: "Lunes 14 Agosto, 4:00 PM").
-                    * **PROHIBIDO** escribir la palabra "Inmediata" si existe una fecha futura programada.
+                  [REGLAS DE COMPORTAMIENTO - CRÍTICO]:
+                  1. **ANTI-REPETICIÓN**: No te presentes de nuevo. Ve al grano.
+                  2. **FORMATO DE HORA**: Usa SIEMPRE formato 12 horas (ej: "2:00 PM").
+                  3. **VALIDACIÓN DE AGENDA Y BOTONES**:
+                     - Revisa la lista "HORARIOS DE TRABAJO" de abajo.
+                     - Si el estado es "CERRADO", **JAMÁS** generes un botón con value "conectar_agente" o similar. Solo botones para agendar a futuro.
+                     - Si el usuario pide agendar en un horario fuera del rango o en un día cerrado, **DEBES rechazarlo amablemente** y proponer horarios válidos de la lista.
 
                   HORARIOS DE TRABAJO (RANGOS VÁLIDOS):
                   ${scheduleText}
