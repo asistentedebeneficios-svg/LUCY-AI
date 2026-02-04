@@ -374,18 +374,20 @@ const getScheduleText = (schedule) => {
         <a href={`https://wa.me/${String(lead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(lead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a>
     </div>
     <div className="bg-[#F5F5F7] p-5 rounded-2xl">
-    <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Cita</span>
-    <p className="font-medium text-[#1d1d1f] text-sm capitalize leading-snug">
-        {(() => {
-            const dato = lead.horario_preferido;
-            // Si el dato no existe, está vacío O dice explícitamente "Pendiente", forzamos "Inmediata"
-            if (!dato || dato === 'Pendiente') return 'Inmediata';
-            
-            // Si es una fecha larga, la formateamos
-            return formatScheduledDate(dato);
-        })()}
-    </p>
+  <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Cita</span>
+  <p className="font-medium text-[#1d1d1f] text-sm capitalize leading-snug">
+    {(() => {
+      const datoRaw = lead.horario_preferido;
+      const dato = (datoRaw ?? '').toString().trim();
+
+      if (dato.toLowerCase() === 'inmediata') return 'Inmediata';
+      if (!dato || dato.toLowerCase() === 'pendiente') return 'Pendiente';
+
+      return formatScheduledDate(dato);
+    })()}
+  </p>
 </div>
+
 
     {/* Fila 2: Perfil y Presupuesto */}
     <div className="bg-[#F5F5F7] p-5 rounded-2xl">
