@@ -371,19 +371,8 @@ const getScheduleText = (schedule) => {
                                 <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span><a href={`https://wa.me/${String(lead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(lead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
                                 <div className="bg-[#F5F5F7] p-5 rounded-2xl">
                                     <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Horario de Llamada</span>
-                                    <p className="font-medium text-[#1d1d1f] text-sm capitalize">
-                                        {(() => {
-                                            const h = lead.horario_preferido;
-                                            // Si no hay dato o dice explícitamente inmediata
-                                            if (!h || String(h).toLowerCase().includes('inmediata')) return "Inmediata";
-                                            
-                                            // Intentamos convertir a fecha bonita en Español
-                                            try {
-                                                const d = new Date(h);
-                                                if (isNaN(d.getTime())) return h; // Si no es fecha válida, muestra el texto original
-                                                return d.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-                                            } catch (e) { return h; }
-                                        })()}
+                                     <p className="font-medium text-[#1d1d1f] text-sm capitalize">
+                                        {lead.horario_preferido || 'Por definir'}
                                     </p>
                                 </div>
                                 <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Perfil</span><p className="font-medium text-[#1d1d1f] text-sm">{String(lead.edad || '?')} años • {String(lead.estado || '?')} • {String(lead.fuma || '?')}</p></div>
@@ -882,30 +871,24 @@ const getScheduleText = (schedule) => {
                   - HORA ACTUAL: ${horaActual}
                   - ${statusInstruction}
 
-                  [REGLAS GENERALES]:
-                  1. No te presentes de nuevo.
-                  2. Si está cerrado, NO ofrezcas "hablar ya".
+                  [OBJETIVO]
+                  Tu meta es obtener: Nombre, Motivo y HORARIO PREFERIDO para agendar o conectar.
 
-                  [IMPORTANTE: CÁLCULO DE FECHAS]:
-                  Si el usuario dice "mañana", "el lunes", "en 3 días":
-                  - Tu tarea es CALCULAR la fecha exacta basándote en "HOY ES".
-                  - Ejemplo: Si hoy es Lunes 2 y piden "mañana", la fecha es "Martes 3".
+                  [INSTRUCCIONES CLAVE PARA EL GUARDADO DE DATOS (JSON)]
+                  Cuando detectes que ya tienes la información para cerrar, genera el JSON 'data_ready'.
+                  
+                  Para el campo 'horario_preferido', sigue estas reglas ESTRICTAS:
+                  1. Si el cliente quiere hablar YA: Escribe "Inmediata".
+                  2. Si es una CITA PROGRAMADA: Escribe la fecha en FORMATO DE TEXTO COMPLETO Y AMIGABLE.
+                     - Formato deseado: "Día # de Mes a las Hora AM/PM".
+                     - Ejemplo correcto: "Lunes 2 de Abril de 2026 a las 4:00 p.m."
+                     - Ejemplo incorrecto: "2026-04-02" o "Mañana a las 4".
+                     - IMPORTANTE: Calcula la fecha exacta basada en "HOY ES". No guardes "mañana" o "lunes próximo".
 
-                  [INSTRUCCIONES PARA LA RESPUESTA AL USUARIO (CHAT)]:
-                  - Cuando confirmes la cita en tu mensaje de texto, USA SIEMPRE LA FECHA CALCULADA COMPLETA.
-                  - DI: "Entendido, le llamaremos el Martes 3 de Agosto a las 4pm".
-                  - NO DIGAS: "Le llamaremos mañana". (Sé específico para evitar confusiones).
-
-                  [INSTRUCCIONES PARA EL JSON (BASE DE DATOS)]:
-                  Cuando generes el JSON 'data_ready', en el campo 'horario_preferido':
-                  - CASO 1 (Inmediato): Escribe "Inmediata".
-                  - CASO 2 (Programado): Escribe la FECHA CALCULADA COMPLETA (Ej: "Martes, 3 de Febrero 2026 a las 5:00 pm").
-                  - PROHIBIDO poner fechas relativas ("mañana") en el JSON.
-
-                  HORARIOS DE TRABAJO (RANGOS VÁLIDOS):
+                  HORARIOS DE TRABAJO VÁLIDOS:
                   ${scheduleText}
 
-                  HISTORIAL:
+                  HISTORIAL DE CONVERSACIÓN:
                   ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
                 `;
                     
