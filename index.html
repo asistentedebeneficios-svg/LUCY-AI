@@ -368,15 +368,24 @@ const getScheduleText = (schedule) => {
                                 </div>
                             )}
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span><a href={`https://wa.me/${String(lead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(lead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a></div>
                                 <div className="bg-[#F5F5F7] p-5 rounded-2xl">
-                                    <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Horario de Llamada</span>
-                                     <p className="font-medium text-[#1d1d1f] text-sm capitalize">
-                                        {lead.horario_preferido || 'Por definir'}
+                                <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span>
+                                <a href={`https://wa.me/${String(lead.telefono || '').replace(/\D/g, '')}`} target="_blank" className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline">{String(lead.telefono || 'No disponible')} <ExternalLink size={14} className="opacity-50" /></a>
+                            </div>
+                            <div className="bg-[#F5F5F7] p-5 rounded-2xl">
+                            <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Perfil</span>
+                                <p className="font-medium text-[#1d1d1f] text-sm">{String(lead.edad || '?')} años • {String(lead.estado || '?')} • {String(lead.fuma || '?')}</p>
+                            </div>
+                             <div className="bg-[#F5F5F7] p-5 rounded-2xl">
+                            <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Salud</span>
+                                <p className="font-medium text-[#1d1d1f] text-sm truncate">{String(lead.salud || '-')}</p>
+                            </div>
+                             <div className="bg-[#F5F5F7] p-5 rounded-2xl">
+                                <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Presupuesto</span>
+                                    <p className="font-medium text-green-700 text-sm font-bold bg-green-100/50 px-2 py-0.5 rounded-md w-fit">
+                                    {lead.presupuesto || 'No especificado'}
                                     </p>
                                 </div>
-                                <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Perfil</span><p className="font-medium text-[#1d1d1f] text-sm">{String(lead.edad || '?')} años • {String(lead.estado || '?')} • {String(lead.fuma || '?')}</p></div>
-                                <div className="bg-[#F5F5F7] p-5 rounded-2xl"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Salud</span><p className="font-medium text-[#1d1d1f] text-sm truncate">{String(lead.salud || '-')}</p></div>
                             </div>
                             <div className="relative"><div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-full"></div><div className="pl-5 py-1"><span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2 flex items-center gap-1"><Sparkles size={12} className="text-blue-500"/> Análisis Lucy</span><p className="text-sm text-[#1d1d1f] leading-relaxed">"{String(lead.resumen_ai || '')}"</p></div></div>
                             
