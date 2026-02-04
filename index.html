@@ -872,23 +872,31 @@ const getScheduleText = (schedule) => {
                   - ${statusInstruction}
 
                   [OBJETIVO]
-                  Tu meta es obtener: Nombre, Motivo y HORARIO PREFERIDO para agendar o conectar.
+                  Tu meta es obtener: Nombre, Motivo y HORARIO PREFERIDO.
 
-                  [INSTRUCCIONES CLAVE PARA EL GUARDADO DE DATOS (JSON)]
-                  Cuando detectes que ya tienes la información para cerrar, genera el JSON 'data_ready'.
-                  
-                  Para el campo 'horario_preferido', sigue estas reglas ESTRICTAS:
-                  1. Si el cliente quiere hablar YA: Escribe "Inmediata".
-                  2. Si es una CITA PROGRAMADA: Escribe la fecha en FORMATO DE TEXTO COMPLETO Y AMIGABLE.
-                     - Formato deseado: "Día # de Mes a las Hora AM/PM".
-                     - Ejemplo correcto: "Lunes 2 de Abril de 2026 a las 4:00 p.m."
-                     - Ejemplo incorrecto: "2026-04-02" o "Mañana a las 4".
-                     - IMPORTANTE: Calcula la fecha exacta basada en "HOY ES". No guardes "mañana" o "lunes próximo".
+                  [FORMATO DE GUARDADO OBLIGATORIO]
+                  Cuando tengas los datos, genera UNICAMENTE este bloque JSON:
+                  \`\`\`json
+                  {
+                    "action": "data_ready",
+                    "nombre": "Nombre del cliente",
+                    "telefono": "Teléfono",
+                    "email": "Email o null",
+                    "resumen_ai": "Resumen breve",
+                    "horario_preferido": "ESCRIBE AQUÍ LA FECHA"
+                  }
+                  \`\`\`
 
-                  HORARIOS DE TRABAJO VÁLIDOS:
+                  [REGLAS PARA EL CAMPO 'horario_preferido']:
+                  1. Si es AHORA: Escribe "Inmediata".
+                  2. Si es CITA: Escribe la FECHA COMPLETA Y AMIGABLE (Calculada según 'HOY ES').
+                     - Ejemplo: "Lunes 2 de Abril de 2026 a las 4:00 p.m."
+                     - NO USAR: "Mañana", "Luego", "Jueves". Sé específica.
+
+                  HORARIOS VÁLIDOS:
                   ${scheduleText}
 
-                  HISTORIAL DE CONVERSACIÓN:
+                  HISTORIAL:
                   ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
                 `;
                     
