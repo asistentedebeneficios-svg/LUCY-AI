@@ -893,7 +893,7 @@ const getScheduleText = (schedule) => {
                   - ${statusInstruction}
 
                   [OBJETIVO]
-                  Tu meta es obtener: Nombre, Motivo, Salud y PRESUPUESTO mensual aproximado.
+                  Tu meta es obtener: Nombre, Motivo, Salud, PRESUPUESTO y definir una CITA o contacto inmediato.
 
                   [FORMATO DE GUARDADO OBLIGATORIO]
                   Cuando tengas los datos, genera UNICAMENTE este bloque JSON:
@@ -908,13 +908,17 @@ const getScheduleText = (schedule) => {
                     "estado": "Estado (ej: FL)",
                     "salud": "Condición de salud",
                     "fuma": "Si/No",
-                    "presupuesto": "Monto que el cliente dijo (Ej: $50-$70/mes)"
+                    "presupuesto": "Monto o rango (Ej: $50-$70/mes)",
+                    "horario_preferido": "FECHA DE CITA o 'Inmediata'"
                   }
                   \`\`\`
 
-                  [REGLA SOBRE EL PRESUPUESTO]
-                  - Trata de obtener un rango de lo que pueden pagar.
-                  - Si no lo dicen exacto, infiérelo del plan que les gustó.
+                  [REGLAS DE GUARDADO]:
+                  1. PRESUPUESTO: Si no es exacto, pon el rango del plan que le interesó.
+                  2. HORARIO (CITA):
+                     - Si es YA: Escribe "Inmediata".
+                     - Si es CITA: Escribe la FECHA COMPLETA (Ej: "Lunes 14 de Agosto a las 4:00 PM").
+                     - Calcula la fecha exacta basada en "HOY ES". No uses "mañana".
 
                   HORARIOS VÁLIDOS:
                   ${scheduleText}
