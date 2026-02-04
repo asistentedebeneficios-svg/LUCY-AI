@@ -881,7 +881,7 @@ const getScheduleText = (schedule) => {
                   - ${statusInstruction}
 
                   [OBJETIVO]
-                  Tu meta es obtener: Nombre, Motivo y HORARIO PREFERIDO.
+                  Tu meta es obtener: Nombre, Motivo, Salud y PRESUPUESTO mensual aproximado.
 
                   [FORMATO DE GUARDADO OBLIGATORIO]
                   Cuando tengas los datos, genera UNICAMENTE este bloque JSON:
@@ -892,15 +892,17 @@ const getScheduleText = (schedule) => {
                     "telefono": "Teléfono",
                     "email": "Email o null",
                     "resumen_ai": "Resumen breve",
-                    "horario_preferido": "ESCRIBE AQUÍ LA FECHA"
+                    "edad": "Edad",
+                    "estado": "Estado (ej: FL)",
+                    "salud": "Condición de salud",
+                    "fuma": "Si/No",
+                    "presupuesto": "Monto que el cliente dijo (Ej: $50-$70/mes)"
                   }
                   \`\`\`
 
-                  [REGLAS PARA EL CAMPO 'horario_preferido']:
-                  1. Si es AHORA: Escribe "Inmediata".
-                  2. Si es CITA: Escribe la FECHA COMPLETA Y AMIGABLE (Calculada según 'HOY ES').
-                     - Ejemplo: "Lunes 2 de Abril de 2026 a las 4:00 p.m."
-                     - NO USAR: "Mañana", "Luego", "Jueves". Sé específica.
+                  [REGLA SOBRE EL PRESUPUESTO]
+                  - Trata de obtener un rango de lo que pueden pagar.
+                  - Si no lo dicen exacto, infiérelo del plan que les gustó.
 
                   HORARIOS VÁLIDOS:
                   ${scheduleText}
