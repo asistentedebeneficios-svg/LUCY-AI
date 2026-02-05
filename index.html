@@ -1126,8 +1126,8 @@ const getScheduleText = (schedule) => {
 
             const [aiConfig, setAiConfig] = useState({
                 systemPrompt: DEFAULT_SYSTEM_PROMPT, 
-                webhookUrl: "", 
-                assignmentWebhookUrl: "", 
+                webhookUrl: "https://hook.us2.make.com/m4iz0l3wywnm1y9ozb1zecrsvh8gcr1w", // <-- TU URL DE NUEVO LEAD
+                assignmentWebhookUrl: "https://hook.us2.make.com/yh7ylwex9ebpydp7ox2lfaqhltin3naw", // <-- TU URL DE ASIGNACIÓN
                 schedule: DEFAULT_SCHEDULE,
                 vacationMode: false, 
                 vacationStart: "", 
@@ -1228,6 +1228,8 @@ const getScheduleText = (schedule) => {
                 if (targetIds.length === 0) return;
 
                 const assignedAgent = agentId !== 'unassign' ? agents.find(a => a.id === agentId) : null;
+                
+                // 1. Guardar la asignación en la base de datos
                 const batch = writeBatch(db);
                 targetIds.forEach(id => {
                     const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id);
@@ -1238,13 +1240,39 @@ const getScheduleText = (schedule) => {
                 });
                 await batch.commit();
 
+                // 2. Disparar el Webhook de Make (Lead + Agente)
                 if (assignedAgent && aiConfig.assignmentWebhookUrl) {
                     const targetLeads = leads.filter(l => targetIds.includes(l.id));
+                    
                     targetLeads.forEach(lead => {
-                        if (lead.email) {
-                            const payload = { leadName: lead.nombre, leadEmail: lead.email, leadPhone: lead.telefono, agentName: assignedAgent.nombre, agentEmail: assignedAgent.email, agentPhone: assignedAgent.telefono, agentPhoto: assignedAgent.foto, assignedAt: new Date().toISOString() };
-                            fetch(aiConfig.assignmentWebhookUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(err => console.error("Error webhook asignación:", err));
-                        }
+                        // AQUÍ ESTÁ LA CLAVE: Preparamos un paquete mixto
+                        const payload = {
+                            // --- DATOS DEL LEAD ---
+                            leadName: lead.nombre || 'No especificado',
+                            leadEmail: lead.email || 'No especificado',
+                            leadPhone: lead.telefono || 'No especificado',
+                            leadBudget: lead.presupuesto || 'No definido',
+                            leadSummary: lead.resumen_ai || 'Sin resumen',
+                            leadLocation: lead.estado || 'No especificado',
+                            
+                            // --- DATOS DEL AGENTE ---
+                            agentName: assignedAgent.nombre,
+                            agentEmail: assignedAgent.email,
+                            agentPhone: assignedAgent.telefono,
+                            agentPhoto: assignedAgent.foto,
+                            
+                            // --- METADATOS ---
+                            action: "assignment",
+                            date: new Date().toLocaleDateString('es-ES')
+                        };
+
+                        // Enviamos a Make
+                        fetch(aiConfig.assignmentWebhookUrl, { 
+                            method: 'POST', 
+                            mode: 'no-cors', 
+                            headers: { 'Content-Type': 'application/json' }, 
+                            body: JSON.stringify(payload) 
+                        }).catch(err => console.error("Error webhook asignación:", err));
                     });
                 }
                 setAssignModalData({ isOpen: false, targetIds: [] });
