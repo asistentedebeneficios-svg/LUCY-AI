@@ -239,21 +239,47 @@ const getScheduleText = (schedule) => {
 
         async function fetchGeminiWithRetry(payload) {
             if (!rateLimit.check()) throw new Error("Espera unos segundos.");
-            if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; }
+            
+            if (OFFLINE_MODE) { 
+                await new Promise(r => setTimeout(r, 1000)); 
+                return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; 
+            }
 
-            const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'];
+            // CORRECCIÓN 1: Usamos 'gemini-1.5-flash' primero. Es más rápido y estable que el 2.0
+            const models = ['gemini-1.5-flash', 'gemini-1.5-pro'];
             let lastError = null;
+
+            // CORRECCIÓN 2: Agregamos 'safetySettings' para evitar que Google bloquee respuestas inofensivas
+            const securePayload = {
+                ...payload,
+                safetySettings: [
+                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
+                ]
+            };
 
             for (const model of models) {
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
                 try {
-                    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    const res = await fetch(url, { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' }, 
+                        body: JSON.stringify(securePayload) 
+                    });
+                    
                     if (res.ok) return await res.json();
-                    const errorText = await res.text();
-                    lastError = `Modelo ${model} falló: ${res.status}`;
-                } catch (e) { lastError = e.message; }
+                    
+                    // Si falla, guardamos el error en la consola para que tú (como desarrollador) lo veas, pero intentamos el siguiente modelo
+                    const errText = await res.text();
+                    console.warn(`Intento fallido con ${model}:`, errText);
+                    lastError = `Error ${res.status}`;
+                } catch (e) { 
+                    lastError = e.message; 
+                }
             }
-            throw new Error(`Error de conexión AI: ${lastError || "Verifica tu conexión"}`);
+            throw new Error(`Error AI: ${lastError || "No se pudo conectar."}`);
         }
 
         // 6. COMPONENTES VISUALES
