@@ -986,7 +986,13 @@ const getScheduleText = (schedule) => {
                             const data = JSON.parse(jsonStr);
                             if (data.action === 'data_ready') {
                         onSaveLead({ ...data, fullChat: newM });
-                        setIsSessionClosed(true); // <--- BLOQUEAMOS LA SESIÓN AQUÍ
+                        setIsSessionClosed(true); 
+                        
+                        // --- RECARGA AUTOMÁTICA (LOBOTOMÍA) ---
+                        // Espera 4 segundos para que lean el mensaje y luego reinicia todo
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 4000);
                     }
                         } catch (jsonErr) { console.error("Error JSON:", jsonErr); }
                     }
