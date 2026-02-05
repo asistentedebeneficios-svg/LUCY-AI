@@ -245,11 +245,18 @@ const getScheduleText = (schedule) => {
                 return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; 
             }
 
-            // CORRECCIÓN 1: Usamos 'gemini-1.5-flash' primero. Es más rápido y estable que el 2.0
-            const models = ['gemini-1.5-flash', 'gemini-1.5-pro'];
+            // CORRECCIÓN: Lista de modelos ampliada para evitar el error 404
+            // Intentará el más nuevo, si falla, baja al siguiente hasta encontrar uno que tu llave acepte.
+            const models = [
+                'gemini-1.5-flash-latest',  // Nombre explícito de la última versión
+                'gemini-1.5-flash-001',     // Nombre técnico específico
+                'gemini-1.5-flash',         // Alias estándar
+                'gemini-pro'                // Versión 1.0 (La vieja confiable, casi nunca falla)
+            ];
+
             let lastError = null;
 
-            // CORRECCIÓN 2: Agregamos 'safetySettings' para evitar que Google bloquee respuestas inofensivas
+            // Configuración de seguridad para evitar bloqueos falsos
             const securePayload = {
                 ...payload,
                 safetySettings: [
@@ -269,17 +276,21 @@ const getScheduleText = (schedule) => {
                         body: JSON.stringify(securePayload) 
                     });
                     
-                    if (res.ok) return await res.json();
+                    if (res.ok) {
+                        return await res.json();
+                    }
                     
-                    // Si falla, guardamos el error en la consola para que tú (como desarrollador) lo veas, pero intentamos el siguiente modelo
+                    // Solo guardamos el error en consola para depuración, pero continuamos al siguiente modelo
                     const errText = await res.text();
-                    console.warn(`Intento fallido con ${model}:`, errText);
+                    console.warn(`Modelo ${model} falló (${res.status}):`, errText);
                     lastError = `Error ${res.status}`;
                 } catch (e) { 
                     lastError = e.message; 
                 }
             }
-            throw new Error(`Error AI: ${lastError || "No se pudo conectar."}`);
+            
+            // Si llegamos aquí, fallaron los 4 modelos.
+            throw new Error(`Error de conexión AI: No se pudo contactar a ningún modelo.`);
         }
 
         // 6. COMPONENTES VISUALES
