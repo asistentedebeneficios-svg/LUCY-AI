@@ -1198,7 +1198,7 @@ const getScheduleText = (schedule) => {
 
             useEffect(() => {
                 if (OFFLINE_MODE || !user || !isAdmin || !db) return;
-                const agentsDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list');
+                const agentsDocRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'public_info', 'team');
                 const unsub = onSnapshot(agentsDocRef, (docSnap) => { if (docSnap.exists()) { setAgents(docSnap.data().list || []); } else { setAgents([]); } });
                 return () => unsub();
             }, [user, isAdmin]);
