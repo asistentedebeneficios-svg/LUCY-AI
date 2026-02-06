@@ -90,10 +90,6 @@
         // -----------------------------------------------------------------------------
         const OFFLINE_MODE = false; 
         
-        // API KEY INTEGRADAS (Dividida para evitar detección simple)
-        const _K_PART_1 = "AIzaSyAVpdr0-pjFioj";
-        const _K_PART_2 = "amUmYJ1BPOLdUFB0f_y8";
-        const GEMINI_API_KEY = `${_K_PART_1}${_K_PART_2}`; 
 
         const FIREBASE_CONFIG = {
             apiKey: "AIzaSyCh_eweHfWdALF3VtFHh1UM0AkiH-8I9Uo",
@@ -237,23 +233,49 @@ const getScheduleText = (schedule) => {
     }).join('\n');
 };
 
+       // ============================================================
+        //  NUEVA FUNCIÓN SEGURA - CONECTADA A LUCY EN LA NUBE
+        // ============================================================
         async function fetchGeminiWithRetry(payload) {
-            if (!rateLimit.check()) throw new Error("Espera unos segundos.");
-            if (OFFLINE_MODE) { await new Promise(r => setTimeout(r, 1000)); return { candidates: [{ content: { parts: [{ text: "Modo offline simulado." }] } }] }; }
-
-            const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'];
-            let lastError = null;
-
-            for (const model of models) {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-                try {
-                    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    if (res.ok) return await res.json();
-                    const errorText = await res.text();
-                    lastError = `Modelo ${model} falló: ${res.status}`;
-                } catch (e) { lastError = e.message; }
+            // 1. Verificar límites de velocidad (Rate Limit)
+            if (!rateLimit.check()) throw new Error("Por favor, espera unos segundos antes de enviar otro mensaje.");
+            
+            // 2. Modo Offline (solo para pruebas sin internet)
+            if (OFFLINE_MODE) { 
+                await new Promise(r => setTimeout(r, 1000)); 
+                return { candidates: [{ content: { parts: [{ text: "Modo offline simulado. (Sin conexión a Lucy)" }] } }] }; 
             }
-            throw new Error(`Error de conexión AI: ${lastError || "Verifica tu conexión"}`);
+
+            // 3. LA DIRECCIÓN DE TU GUARDAESPALDAS (CLOUD FUNCTION)
+            const FUNCTION_URL = "https://us-central1-lucy-ai-11572.cloudfunctions.net/hablarConLucy";
+
+            // 4. Extraemos solo el texto que escribió el usuario para enviarlo limpio
+            // (Tu código antiguo enviaba una estructura compleja, aquí la simplificamos)
+            const textoUsuario = payload.contents[0].parts[0].text; 
+
+            try {
+                console.log("Llamando a Lucy en la nube..."); // Para que veas en la consola que funciona
+                
+                // Hacemos la petición a TU servidor, no a Google directamente
+                const response = await fetch(FUNCTION_URL, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ prompt: textoUsuario }) 
+                });
+                
+                // Si hubo un error (ej. servidor caído), lanzamos el aviso
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error("Error del servidor de Lucy: " + errorText);
+                }
+
+                // Devolvemos la respuesta en el formato que tu app espera
+                return await response.json();
+
+            } catch (error) { 
+                console.error("Error de conexión:", error);
+                throw new Error("No pude conectar con Lucy. Revisa tu internet o intenta de nuevo."); 
+            }
         }
 
         // 6. COMPONENTES VISUALES
