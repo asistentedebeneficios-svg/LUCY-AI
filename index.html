@@ -649,7 +649,46 @@ const getScheduleText = (schedule) => {
             return (
                 <div className="animate-in fade-in space-y-6">
                     <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-gray-800">Agentes</h2><div className="flex gap-2">{selectedIds.length > 0 && <button onClick={handleDeleteSelected} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-sm font-bold flex gap-2"><Trash2 size={16}/> Eliminar</button>}<button onClick={() => { setFormData({}); setIsEditing(true); }} className="bg-black text-white px-4 py-2 rounded-xl text-sm font-bold flex gap-2 shadow-lg"><UserCog size={16}/> Nuevo</button></div></div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">{filteredAgents.map(a => (<div key={a.id} className={`bg-white rounded-2xl p-5 border transition-all hover:shadow-md cursor-pointer relative ${selectedIds.includes(a.id) ? 'border-blue-500 bg-blue-50/10' : 'border-gray-100'}`} onClick={() => setSelectedAgent(a)}><div className="absolute top-4 right-4" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(a.id)} onChange={() => handleSelectOne(a.id)} className="custom-checkbox"/></div><div className="flex items-center gap-4 mb-4"><img src={a.foto || "https://ui-avatars.com/api/?name="+a.nombre} className="w-14 h-14 rounded-full object-cover bg-gray-200"/><div><h3 className="font-bold text-gray-900">{a.nombre}</h3><p className="text-xs text-gray-500">{a.email}</p></div></div><div className="text-xs text-gray-600 space-y-1"><div className="flex gap-2"><Phone size={12}/> {a.telefono}</div><div className="flex gap-2"><MapPin size={12}/> {a.estados}</div></div></div>))}</div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    {filteredAgents.map(a => (
+        <div 
+            key={a.id} 
+            className={`bg-white rounded-2xl p-5 border transition-all hover:shadow-md cursor-pointer relative group ${selectedIds.includes(a.id) ? 'border-blue-500 bg-blue-50/10' : 'border-gray-100'}`} 
+            onClick={() => setSelectedAgent(a)}
+        >
+            {/* Checkbox de selección (Arriba Derecha) */}
+            <div className="absolute top-4 right-4" onClick={e => e.stopPropagation()}>
+                <input type="checkbox" checked={selectedIds.includes(a.id)} onChange={() => handleSelectOne(a.id)} className="custom-checkbox"/>
+            </div>
+
+            {/* --- NUEVO: Botón de Editar (Abajo Derecha) --- */}
+            <button 
+                onClick={(e) => { 
+                    e.stopPropagation(); // Evita que se abra la vista de detalles al hacer click
+                    openForm(a); // Abre el formulario con los datos de ESTE agente
+                }} 
+                className="absolute bottom-4 right-4 p-2 bg-gray-100 hover:bg-black hover:text-white text-gray-500 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                title="Editar Información"
+            >
+                <Pencil size={14} />
+            </button>
+            {/* --------------------------------------------- */}
+
+            <div className="flex items-center gap-4 mb-4">
+                <img src={a.foto || "https://ui-avatars.com/api/?name="+a.nombre} className="w-14 h-14 rounded-full object-cover bg-gray-200"/>
+                <div>
+                    <h3 className="font-bold text-gray-900">{a.nombre}</h3>
+                    <p className="text-xs text-gray-500">{a.email}</p>
+                </div>
+            </div>
+            
+            <div className="text-xs text-gray-600 space-y-1">
+                <div className="flex gap-2"><Phone size={12}/> {a.telefono}</div>
+                <div className="flex gap-2"><MapPin size={12}/> {a.estados}</div>
+            </div>
+        </div>
+    ))}
+</div>
                     {isEditing && (
                         <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
                             <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg">
