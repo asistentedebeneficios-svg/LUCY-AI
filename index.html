@@ -1297,13 +1297,13 @@ const getScheduleText = (schedule) => {
             };
 
             const saveAgent = async (agentData) => {
-                if (!isAdmin) return; const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list'); const docSnap = await getDoc(agentsRef); let currentList = docSnap.exists() ? (docSnap.data().list || []) : [];
+                if (!isAdmin) return; const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'public_info', 'team'); const docSnap = await getDoc(agentsRef); let currentList = docSnap.exists() ? (docSnap.data().list || []) : [];
                 if (agentData.id) { currentList = currentList.map(a => a.id === agentData.id ? { ...agentData, updatedAt: Date.now() } : a); }
                 else { const newAgent = { ...agentData, id: generateId(), createdAt: Date.now() }; currentList.push(newAgent); }
                 await setDoc(agentsRef, { list: currentList });
             };
             const deleteAgent = async (ids) => {
-                const idArray = Array.isArray(ids) ? ids : [ids]; if (!isAdmin) return; const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'agents_list'); const docSnap = await getDoc(agentsRef); if (!docSnap.exists()) return;
+                const idArray = Array.isArray(ids) ? ids : [ids]; if (!isAdmin) return; const agentsRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'public_info', 'team'); const docSnap = await getDoc(agentsRef); if (!docSnap.exists()) return;
                 let currentList = docSnap.data().list || []; currentList = currentList.filter(a => !idArray.includes(a.id)); await setDoc(agentsRef, { list: currentList });
             };
 
