@@ -236,47 +236,31 @@ const getScheduleText = (schedule) => {
        // ============================================================
         //  NUEVA FUNCIÓN SEGURA - CONECTADA A LUCY EN LA NUBE
         // ============================================================
-        async function fetchGeminiWithRetry(payload) {
-            // 1. Verificar límites de velocidad (Rate Limit)
-            if (!rateLimit.check()) throw new Error("Por favor, espera unos segundos antes de enviar otro mensaje.");
-            
-            // 2. Modo Offline (solo para pruebas sin internet)
-            if (OFFLINE_MODE) { 
-                await new Promise(r => setTimeout(r, 1000)); 
-                return { candidates: [{ content: { parts: [{ text: "Modo offline simulado. (Sin conexión a Lucy)" }] } }] }; 
-            }
+                async function fetchLucy({ prompt }) {
+                if (!rateLimit.check()) throw new Error("Por favor, espera unos segundos antes de enviar otro mensaje.");
 
-            // 3. LA DIRECCIÓN DE TU GUARDAESPALDAS (CLOUD FUNCTION)
-            const FUNCTION_URL = "https://us-central1-lucy-ai-11572.cloudfunctions.net/hablarConLucy";
-
-            // 4. Extraemos solo el texto que escribió el usuario para enviarlo limpio
-            // (Tu código antiguo enviaba una estructura compleja, aquí la simplificamos)
-            const textoUsuario = payload.contents[0].parts[0].text; 
-
-            try {
-                console.log("Llamando a Lucy en la nube..."); // Para que veas en la consola que funciona
-                
-                // Hacemos la petición a TU servidor, no a Google directamente
-                const response = await fetch(FUNCTION_URL, { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ prompt: textoUsuario }) 
-                });
-                
-                // Si hubo un error (ej. servidor caído), lanzamos el aviso
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error("Error del servidor de Lucy: " + errorText);
+                if (OFFLINE_MODE) {
+                    await new Promise(r => setTimeout(r, 1000));
+                    return { text: "Modo offline simulado. (Sin conexión a Lucy)" };
                 }
 
-                // Devolvemos la respuesta en el formato que tu app espera
-                return await response.json();
+                const FUNCTION_URL = "https://us-central1-lucy-ai-prod.cloudfunctions.net/hablarConLucy";
+                const textoUsuario = prompt;
 
-            } catch (error) { 
-                console.error("Error de conexión:", error);
-                throw new Error("No pude conectar con Lucy. Revisa tu internet o intenta de nuevo."); 
+                const response = await fetch(FUNCTION_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: textoUsuario })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText);
+                }
+
+                return await response.json();
             }
-        }
+
 
         // 6. COMPONENTES VISUALES
         const LucyAvatar = ({ className = "w-10 h-10" }) => (<img src="https://imnufit.com/wp-content/uploads/2026/01/IMG_0014.jpeg" alt="Lucy" className={`${className} rounded-full object-cover shadow-sm border border-slate-100 bg-slate-200`} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"; }} />);
@@ -1027,10 +1011,13 @@ const getScheduleText = (schedule) => {
                 `;
                     
                     // DEBUG
-                    console.log("--- ENVÍO A GEMINI ---");
+                    console.log("--- ENVÍO A LUCY (OpenAI) ---");
 
-                    const res = await fetchGeminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
-                    const rawText = res.candidates[0].content.parts[0].text;
+                    const res = await fetchLucy({
+                    prompt
+                    });
+
+                    const rawText = res.text;
                     
                     // DETECTAR BOTONES
                     let nextButtons = null;
