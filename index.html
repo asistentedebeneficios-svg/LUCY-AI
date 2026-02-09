@@ -1213,7 +1213,7 @@ ${textToSend}
                 }).catch(e => console.log("Usando Config Default"));
                 
                 return () => unsub();
-            }, [user, isAdmin]);
+            }, []);
 
             useEffect(() => {
                 if (OFFLINE_MODE || !user || !isAdmin || !db) return;
