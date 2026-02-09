@@ -902,9 +902,8 @@ const getScheduleText = (schedule) => {
         // --- CLIENT CHAT (DEFINIDO ANTES DE APP) ---
         function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
             const [activeUsers, setActiveUsers] = useState(Math.floor(Math.random() * (28 - 18 + 1)) + 18);
-            const [msgs, setMsgs] = useState([
-                { role: 'assistant', content: 'Hola, soy Lucy, su asistente personal experta en **Gastos Finales**. Mi misión es brindarle la información que necesita para su tranquilidad y la de su familia.\n\nTenga la plena seguridad de que **todo lo que hablemos es confidencial**; nada será divulgado sin su expresa autorización. Mi único objetivo es ayudarle.\n\nPara poder servirle mejor, ¿Con quién tengo el gusto de hablar hoy?' }
-            ]);
+            const WELCOME_MESSAGE = 'Hola, soy Lucy, su asistente personal experta en **Gastos Finales**. Mi misión es brindarle la información que necesita para su tranquilidad y la de su familia.\n\nTenga la plena seguridad de que **todo lo que hablemos es confidencial**; nada será divulgado sin su expresa autorización. Mi único objetivo es ayudarle.\n\nPara poder servirle mejor, ¿Con quién tengo el gusto de hablar hoy?';
+            const [msgs, setMsgs] = useState([]);
             const [input, setInput] = useState('');
             const [loading, setLoading] = useState(false);
             const [showShareModal, setShowShareModal] = useState(false);
@@ -1077,14 +1076,15 @@ const getScheduleText = (schedule) => {
                     </div>
 
                     <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-6 bg-white no-scrollbar">
-                        {msgs.map((m, i) => (
-                            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                                {m.role === 'assistant' && <LucyAvatar className="w-8 h-8 mr-2 mt-auto shrink-0" />}
-                                <div className={`w-fit max-w-[85%] px-5 py-3 rounded-2xl text-[15px] leading-relaxed shadow-sm text-left ${m.role === 'user' ? 'bg-[#007AFF] text-white rounded-br-none' : 'bg-[#F2F2F7] text-[#1d1d1f] rounded-bl-none'}`}>
-                                    <RichText content={m.content} />
-                                </div>
-                            </div>
-                        ))}
+                        {msgs.length === 0 && (
+                          <div className="flex justify-start">
+                            <LucyAvatar className="w-8 h-8 mr-2 mt-auto shrink-0" />
+                            <div className="w-fit max-w-[85%] px-5 py-3 rounded-2xl text-[15px] leading-relaxed shadow-sm bg-[#F2F2F7] text-[#1d1d1f] rounded-bl-none">
+                          <RichText content={WELCOME_MESSAGE} />
+                        </div>
+                      </div>
+                    )}
+
                         
                         {loading && (
                             <div className="flex justify-start pl-10">
@@ -1234,15 +1234,18 @@ const getScheduleText = (schedule) => {
                     setLeads(data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
                 }, (error) => { if (error.code === 'permission-denied' && isAdmin) setPermissionError(true); });
                 
-                getDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config')).then(s => {
-                    if (s.exists()) {
-                        // Merge con default para asegurar que no falten campos
-                        setAiConfig(prev => ({ ...prev, ...s.data() }));
-                    }
-                }).catch(e => console.log("Usando Config Default"));
-                
-                return () => unsub();
-            }, [user, isAdmin]);
+                    useEffect(() => {
+                    if (OFFLINE_MODE || !db) return;
+
+                    getDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config'))
+                        .then(s => {
+                            if (s.exists()) {
+                                setAiConfig(prev => ({ ...prev, ...s.data() }));
+                            }
+                        })
+                        .catch(() => console.log("Usando Config Default"));
+                }, []);
+
 
             useEffect(() => {
                 if (OFFLINE_MODE || !user || !isAdmin || !db) return;
