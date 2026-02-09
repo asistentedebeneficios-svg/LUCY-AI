@@ -1160,7 +1160,6 @@ const getScheduleText = (schedule) => {
         // 8. APP PRINCIPAL
         // -----------------------------------------------------------------------------
         function App() {
-            const [brainReady, setBrainReady] = useState(false);
             const [user, setUser] = useState(null);
             const [view, setView] = useState('landing');
             const [isAdmin, setIsAdmin] = useState(false);
@@ -1235,16 +1234,12 @@ const getScheduleText = (schedule) => {
                     setLeads(data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
                 }, (error) => { if (error.code === 'permission-denied' && isAdmin) setPermissionError(true); });
                 
-                getDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config'))
-                    .then(s => {
-                        if (s.exists()) {
-                    setAiConfig(prev => ({ ...prev, ...s.data() }));
-                }
-                    })
-                    .finally(() => {
-                        setBrainReady(true); // ✅ cerebro ya llegó
-                    });
-
+                getDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config')).then(s => {
+                    if (s.exists()) {
+                        // Merge con default para asegurar que no falten campos
+                        setAiConfig(prev => ({ ...prev, ...s.data() }));
+                    }
+                }).catch(e => console.log("Usando Config Default"));
                 
                 return () => unsub();
             }, [user, isAdmin]);
@@ -1386,38 +1381,10 @@ const getScheduleText = (schedule) => {
 
                     <main className="flex-1 relative overflow-hidden flex flex-col w-full max-w-7xl mx-auto">
                         {!isAdmin ? (
-                            view === 'landing' ? 
-                                          <LandingView onStartChat={() => navigateTo('chat')} onOpenLogin={() => setShowLogin(true)} /> :
-                                          <div className="flex-1 flex flex-col p-4 md:p-6 overflow-hidden">
-                                            {!brainReady ? (
-                                              <div className="h-full flex items-center justify-center text-sm text-gray-400">
-                                                Preparando a Lucy…
-                                              </div>
-                                            ) : (
-                                              <ClientChat 
-                                                aiConfig={aiConfig} 
-                                                onSaveLead={saveLeadToDb} 
-                                                onOpenLogin={() => setShowLogin(true)} 
-                                              />
-                                            )}
-                                          </div>
-
+                            view === 'landing' ? <LandingView onStartChat={() => navigateTo('chat')} onOpenLogin={() => setShowLogin(true)} /> :
+                                <div className="flex-1 flex flex-col p-4 md:p-6 overflow-hidden"><ClientChat aiConfig={aiConfig} onSaveLead={saveLeadToDb} onOpenLogin={() => setShowLogin(true)} /></div>
                         ) : (
-                            view === 'chat' ? 
-  <div className="flex-1 flex flex-col p-4 md:p-6 overflow-hidden">
-    {!brainReady ? (
-      <div className="h-full flex items-center justify-center text-sm text-gray-400">
-        Preparando a Lucy…
-      </div>
-    ) : (
-      <ClientChat 
-        aiConfig={aiConfig} 
-        onSaveLead={saveLeadToDb} 
-      />
-    )}
-  </div> 
-:
-
+                            view === 'chat' ? <div className="flex-1 flex flex-col p-4 md:p-6 overflow-hidden"><ClientChat aiConfig={aiConfig} onSaveLead={saveLeadToDb} /></div> :
                                 <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                                         <div className="flex gap-1 bg-[#E8E8ED]/50 p-1 rounded-xl w-fit self-start">
