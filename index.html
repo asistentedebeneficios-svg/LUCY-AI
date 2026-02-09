@@ -1235,16 +1235,17 @@ const getScheduleText = (schedule) => {
                 }, (error) => { if (error.code === 'permission-denied' && isAdmin) setPermissionError(true); });
                 
                     useEffect(() => {
-                    if (OFFLINE_MODE || !db) return;
+    if (OFFLINE_MODE || !db) return;
 
-                    getDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config'))
-                        .then(s => {
-                            if (s.exists()) {
-                                setAiConfig(prev => ({ ...prev, ...s.data() }));
-                            }
-                        })
-                        .catch(() => console.log("Usando Config Default"));
-                }, []);
+    getDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config'))
+        .then(s => {
+            if (s.exists()) {
+                setAiConfig(prev => ({ ...prev, ...s.data() }));
+            }
+        })
+        .catch(() => console.log("Usando Config Default"));
+}, []);
+
 
 
             useEffect(() => {
