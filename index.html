@@ -964,51 +964,22 @@ const getScheduleText = (schedule) => {
                 }
 
                 const scheduleText = getScheduleText(aiConfig?.schedule);
-                const systemBase = aiConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT;
-
-                // 2. INYECTAR CONTEXTO (CEREBRO CALENDARIO + CONFIRMACIÓN)
                 const prompt = `
-                  ${systemBase}
+[CONTEXTO OPERATIVO — NO ERES SYSTEM]
+HOY: ${fechaHoy}
+HORA: ${horaActual}
+ESTADO: ${statusInstruction}
 
-                  [DATOS INTERNOS]
-                  - HOY ES: ${fechaHoy}
-                  - HORA ACTUAL: ${horaActual}
-                  - ${statusInstruction}
+HORARIOS DISPONIBLES:
+${scheduleText}
 
-                  [OBJETIVO]
-                  Tu meta es obtener: Nombre, Motivo, Salud, PRESUPUESTO y definir una CITA o contacto inmediato.
+HISTORIAL DE CONVERSACIÓN:
+${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
 
-                  [FORMATO DE GUARDADO OBLIGATORIO]
-                  Cuando tengas los datos, genera UNICAMENTE este bloque JSON:
-                  \`\`\`json
-                  {
-                    "action": "data_ready",
-                    "nombre": "Nombre del cliente",
-                    "telefono": "Teléfono",
-                    "email": "Email o null",
-                    "resumen_ai": "Resumen breve",
-                    "edad": "Edad",
-                    "estado": "Estado (ej: FL)",
-                    "salud": "Condición de salud",
-                    "fuma": "Si/No",
-                    "presupuesto": "Monto o rango (Ej: $50-$70/mes)",
-                    "horario_preferido": "FECHA DE CITA o 'Inmediata'"
-                  }
-                  \`\`\`
+MENSAJE DEL USUARIO:
+${textToSend}
+`;
 
-                  [REGLAS DE GUARDADO]:
-                  1. PRESUPUESTO: Si no es exacto, pon el rango del plan que le interesó.
-                  2. HORARIO (CITA):
-                     - Si es YA: Escribe "Inmediata".
-                     - Si es CITA: Escribe la FECHA COMPLETA (Ej: "Lunes 14 de Agosto a las 4:00 PM").
-                     - Calcula la fecha exacta basada en "HOY ES". No uses "mañana".
-
-                  HORARIOS VÁLIDOS:
-                  ${scheduleText}
-
-                  HISTORIAL:
-                  ${newM.map(m => `${m.role}: ${m.content}`).join('\n')}
-                `;
                     
                     // DEBUG
                     console.log("--- ENVÍO A LUCY (OpenAI) ---");
