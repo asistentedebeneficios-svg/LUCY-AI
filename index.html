@@ -902,7 +902,9 @@ const getScheduleText = (schedule) => {
         // --- CLIENT CHAT (DEFINIDO ANTES DE APP) ---
         function ClientChat({ aiConfig, onSaveLead, onOpenLogin }) {
             const [activeUsers, setActiveUsers] = useState(Math.floor(Math.random() * (28 - 18 + 1)) + 18);
-            const [msgs, setMsgs] = useState([]);
+            const [msgs, setMsgs] = useState([
+                { role: 'assistant', content: 'Hola, soy Lucy, su asistente personal experta en **Gastos Finales**. Mi misión es brindarle la información que necesita para su tranquilidad y la de su familia.\n\nTenga la plena seguridad de que **todo lo que hablemos es confidencial**; nada será divulgado sin su expresa autorización. Mi único objetivo es ayudarle.\n\nPara poder servirle mejor, ¿Con quién tengo el gusto de hablar hoy?' }
+            ]);
             const [input, setInput] = useState('');
             const [loading, setLoading] = useState(false);
             const [showShareModal, setShowShareModal] = useState(false);
