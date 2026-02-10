@@ -1180,14 +1180,17 @@ const getScheduleText = (schedule) => {
 
             const [aiConfig, setAiConfig] = useState({
                 systemPrompt: DEFAULT_SYSTEM_PROMPT, 
-                webhookUrl: "https://hook.us2.make.com/m4iz0l3wywnm1y9ozb1zecrsvh8gcr1w", // <-- TU URL DE NUEVO LEAD
-                assignmentWebhookUrl: "https://hook.us2.make.com/yh7ylwex9ebpydp7ox2lfaqhltin3naw", // <-- TU URL DE ASIGNACIÓN
+                webhookUrl: "https://hook.us2.make.com/m4iz0l3wywnm1y9ozb1zecrsvh8gcr1w",
+                assignmentWebhookUrl: "https://hook.us2.make.com/yh7ylwex9ebpydp7ox2lfaqhltin3naw",
                 schedule: DEFAULT_SCHEDULE,
                 vacationMode: false, 
                 vacationStart: "", 
                 vacationEnd: "", 
                 personality: "Empático"
             });
+
+            // NUEVO: Variable para saber si ya descargamos el cerebro de la nube
+            const [configLoaded, setConfigLoaded] = useState(false);
 
             // Utils
             const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -1214,19 +1217,27 @@ const getScheduleText = (schedule) => {
                 return () => unsubscribe();
             }, []);
 
+            // ---------------------------------------------------------
+            // NUEVO BLOQUE: Carga el Cerebro y avisa cuando está listo
+            // ---------------------------------------------------------
             useEffect(() => {
+                // CASO 1: MODO OFFLINE (SIMULADO)
                 if (OFFLINE_MODE) { 
-                    // DATOS DE PRUEBA SIMULADOS
                     setLeads([
                         { id: '1', nombre: 'Juan Pérez', telefono: '+13055550101', edad: '65', estado: 'FL', salud: 'Buena', fuma: 'No', resumen_ai: 'Interesado en cobertura básica.', createdAt: { seconds: Date.now()/1000 }, status: 'active' },
                         { id: '2', nombre: 'Maria Rodriguez', telefono: '+14075550102', edad: '72', estado: 'TX', salud: 'Diabetes', fuma: 'No', resumen_ai: 'Busca seguro para gastos finales urgente.', createdAt: { seconds: Date.now()/1000 - 86400 }, status: 'active' }
                     ]); 
-                    setAgents([
-                        { id: 'a1', nombre: 'Agente Demo', email: 'demo@ejemplo.com', telefono: '555-0199', estados: 'FL, TX', foto: '' }
-                    ]);
+                    setAgents([{ id: 'a1', nombre: 'Agente Demo', email: 'demo@ejemplo.com', telefono: '555-0199', estados: 'FL, TX', foto: '' }]);
+                    
+                    // ¡IMPORTANTE! En offline decimos que cargó inmediatamente
+                    setConfigLoaded(true); 
                     return; 
                 }
+
+                // CASO 2: MODO ONLINE (REAL)
                 if (!user || !db) return;
+
+                // A. Escuchar Leads en tiempo real
                 const leadsRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'leads');
                 const unsub = onSnapshot(leadsRef, (snapshot) => {
                     setPermissionError(false);
@@ -1234,12 +1245,21 @@ const getScheduleText = (schedule) => {
                     setLeads(data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
                 }, (error) => { if (error.code === 'permission-denied' && isAdmin) setPermissionError(true); });
                 
-                getDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config')).then(s => {
-                    if (s.exists()) {
-                        // Merge con default para asegurar que no falten campos
-                        setAiConfig(prev => ({ ...prev, ...s.data() }));
-                    }
-                }).catch(e => console.log("Usando Config Default"));
+                // B. Descargar Configuración (Cerebro) y AVISAR cuando termine
+                getDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'settings', 'config'))
+                    .then(s => {
+                        if (s.exists()) {
+                            console.log("✅ Cerebro descargado de la nube");
+                            setAiConfig(prev => ({ ...prev, ...s.data() }));
+                        }
+                    })
+                    .catch(e => console.log("⚠️ Error descargando config (usando default):", e))
+                    .finally(() => {
+                        // AQUÍ ESTÁ LA SOLUCIÓN:
+                        // Avisamos a la App que ya terminamos de cargar (sea éxito o error)
+                        // para que quite la pantalla de carga y muestre a Lucy.
+                        setConfigLoaded(true);
+                    });
                 
                 return () => unsub();
             }, [user, isAdmin]);
@@ -1356,6 +1376,14 @@ const getScheduleText = (schedule) => {
             };
 
             if (!user) return <div className="h-screen flex items-center justify-center bg-[#F5F5F7] text-slate-400">Cargando...</div>;
+            if (!OFFLINE_MODE && user && !configLoaded) {
+                return (
+                    <div className="h-[100dvh] flex flex-col items-center justify-center bg-[#F5F5F7] gap-4">
+                        <div className="w-12 h-12 border-4 border-slate-200 border-t-black rounded-full animate-spin"></div>
+                        <p className="text-sm text-slate-500 font-medium animate-pulse">Cargando cerebro de Lucy...</p>
+                    </div>
+                );
+            }
 
             return (
                 <div className="h-[100dvh] bg-[#F5F5F7] text-[#1d1d1f] font-sans antialiased flex flex-col overflow-hidden">
