@@ -443,7 +443,9 @@ const getScheduleText = (schedule) => {
 
 💰 NEGOCIO:
 • Presupuesto: ${lead.presupuesto || 'No definido'}
-• Horario Cita: ${lead.horario_preferido || 'Pendiente'}
+• Horario Cita: ${lead.horario_acordado || 'Pendiente'}
+• Tipo Contacto: ${lead.tipo_contacto || 'No definido'}
+• Medio: ${lead.medio_videollamada || 'N/A'}
 
 🤖 RESUMEN AI:
 "${lead.resumen_ai || ''}"
@@ -981,18 +983,22 @@ const getScheduleText = (schedule) => {
                   Cuando tengas los datos, genera UNICAMENTE este bloque JSON:
                   \`\`\`json
                   {
-                    "action": "data_ready",
-                    "nombre": "Nombre del cliente",
-                    "telefono": "Teléfono",
-                    "email": "Email o null",
-                    "resumen_ai": "Resumen breve",
-                    "edad": "Edad",
-                    "estado": "Estado (ej: FL)",
-                    "salud": "Condición de salud",
-                    "fuma": "Si/No",
-                    "presupuesto": "Monto o rango (Ej: $50-$70/mes)",
-                    "horario_preferido": "FECHA DE CITA o 'Inmediata'"
-                  }
+                      "action": "data_ready",
+                      "nombre": "Nombre del cliente",
+                      "edad": "Edad",
+                      "estado": "Estado (ej: FL)",
+                      "salud": "Condición de salud",
+                      "fuma": "Si/No",
+                      "presupuesto": "Monto o rango",
+                      "telefono": "Teléfono",
+                      "email": "Email o null",
+                      "tipo_contacto": "Llamada regular | Videollamada",
+                      "medio_videollamada": "WhatsApp | Zoom | null",
+                      "horario_acordado": "Fecha completa confirmada",
+                      "resumen_ai": "Resumen breve estratégico",
+                      "estado_confirmacion": "CONFIRMADO_POR_USUARIO"
+                    }
+
                   \`\`\`
 
                   [REGLAS DE GUARDADO]:
