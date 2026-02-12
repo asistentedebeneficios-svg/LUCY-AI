@@ -443,7 +443,7 @@ const getScheduleText = (schedule) => {
 
 💰 NEGOCIO:
 • Presupuesto: ${lead.presupuesto || 'No definido'}
-• Horario Cita: ${lead.horario_acordado || 'Pendiente'}
+• Horario Cita: ${lead.horario_acordado || lead.horario_preferido || 'Pendiente'}
 • Tipo Contacto: ${lead.tipo_contacto || 'No definido'}
 • Medio: ${lead.medio_videollamada || 'N/A'}
 
