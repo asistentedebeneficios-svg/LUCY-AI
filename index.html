@@ -455,33 +455,33 @@ const getScheduleText = (schedule) => {
 📅 Fecha: ${dateStr}
 🔗 ID: ${lead.id}`;
 
-        try {
-    if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(text);
-    } else {
-        const textarea = document.createElement("textarea");
-        textarea.value = text;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
+        if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text)
+        .then(() => {
+            alert("Ficha copiada correctamente ✅");
+        })
+        .catch(() => {
+            alert("No se pudo copiar automáticamente.");
+        });
+} else {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    try {
         document.execCommand("copy");
-        document.body.removeChild(textarea);
+        alert("Ficha copiada correctamente ✅");
+    } catch (err) {
+        alert("No se pudo copiar automáticamente.");
     }
 
-    const btn = document.activeElement;
-    if (btn) {
-        const original = btn.innerText;
-        btn.innerText = "¡Copiado!";
-        setTimeout(() => {
-            btn.innerText = original;
-        }, 1000);
-    }
-
-} catch (err) {
-    alert("No se pudo copiar automáticamente.");
+    document.body.removeChild(textarea);
 }
+
 
     className="flex-1 py-3 bg-black text-white rounded-xl font-medium text-xs hover:bg-gray-800 transition-all shadow-lg active:scale-95"
 >
