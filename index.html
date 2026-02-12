@@ -485,7 +485,7 @@ const getScheduleText = (schedule) => {
 >
     Copiar Ficha Completa
 </button>
-                            <button onClick={() => { onUpdateStatus(lead.id, isArchive ? 'active' : 'archived'); onClose(); }} className="flex-1 py-3 bg-[#F5F5F7] text-[#1d1d1f] rounded-xl font-medium text-xs hover:bg-[#E8E8ED] transition-all">{isArchive ? 'Restaurar' : 'Archivar'}</button>
+                            <button onClick={async () => { onUpdateStatus(lead.id, isArchive ? 'active' : 'archived'); onClose(); }} className="flex-1 py-3 bg-[#F5F5F7] text-[#1d1d1f] rounded-xl font-medium text-xs hover:bg-[#E8E8ED] transition-all">{isArchive ? 'Restaurar' : 'Archivar'}</button>
                         </div>
                     </div>
                 </div>
