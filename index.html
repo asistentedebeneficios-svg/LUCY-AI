@@ -1050,10 +1050,10 @@ const getScheduleText = (schedule) => {
                         setIsSessionClosed(true); 
                         
                         // --- RECARGA AUTOMÁTICA (LOBOTOMÍA) ---
-                        // Espera 4 segundos para que lean el mensaje y luego reinicia todo
+                        // Espera 10 segundos para que lean el mensaje y luego reinicia todo
                         setTimeout(() => {
                             window.location.reload();
-                        }, 4000);
+                        }, 10000);
                     }
                         } catch (jsonErr) { console.error("Error JSON:", jsonErr); }
                     }
