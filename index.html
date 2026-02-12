@@ -456,23 +456,33 @@ const getScheduleText = (schedule) => {
 🔗 ID: ${lead.id}`;
 
         try {
-            if (navigator.clipboard && window.isSecureContext) {
-                await navigator.clipboard.writeText(text);
-            } else {
-                const textarea = document.createElement("textarea");
-                textarea.value = text;
-                textarea.style.position = "fixed";
-                textarea.style.opacity = "0";
-                document.body.appendChild(textarea);
-                textarea.focus();
-                textarea.select();
-                document.execCommand("copy");
-                document.body.removeChild(textarea);
-            }
-        } catch (err) {
-            alert("No se pudo copiar automáticamente.");
-        }
-    }}
+    if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+    } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+    }
+
+    const btn = document.activeElement;
+    if (btn) {
+        const original = btn.innerText;
+        btn.innerText = "¡Copiado!";
+        setTimeout(() => {
+            btn.innerText = original;
+        }, 1000);
+    }
+
+} catch (err) {
+    alert("No se pudo copiar automáticamente.");
+}
+
     className="flex-1 py-3 bg-black text-white rounded-xl font-medium text-xs hover:bg-gray-800 transition-all shadow-lg active:scale-95"
 >
     Copiar Ficha Completa
