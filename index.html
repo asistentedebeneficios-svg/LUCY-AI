@@ -425,7 +425,7 @@ const getScheduleText = (schedule) => {
                         </div>
                         <div className="p-6 border-t border-gray-100 flex gap-3 bg-white">
                                 <button
-    onClick={async () => {
+    onClick={() => {
         const agentName = assignedAgent ? assignedAgent.nombre : 'Sin Asignar';
         const dateStr = formatFirestoreDate(lead.createdAt);
 
@@ -456,37 +456,27 @@ const getScheduleText = (schedule) => {
 🔗 ID: ${lead.id}`;
 
         if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(text)
-        .then(() => {
+            navigator.clipboard.writeText(text)
+                .then(() => alert("Ficha copiada correctamente ✅"))
+                .catch(() => alert("No se pudo copiar automáticamente."));
+        } else {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
             alert("Ficha copiada correctamente ✅");
-        })
-        .catch(() => {
-            alert("No se pudo copiar automáticamente.");
-        });
-} else {
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.focus();
-    textarea.select();
-
-    try {
-        document.execCommand("copy");
-        alert("Ficha copiada correctamente ✅");
-    } catch (err) {
-        alert("No se pudo copiar automáticamente.");
-    }
-
-    document.body.removeChild(textarea);
-}
-
-
+        }
+    }}
     className="flex-1 py-3 bg-black text-white rounded-xl font-medium text-xs hover:bg-gray-800 transition-all shadow-lg active:scale-95"
 >
     Copiar Ficha Completa
 </button>
+
 
                             <button onClick={async () => { onUpdateStatus(lead.id, isArchive ? 'active' : 'archived'); onClose(); }} className="flex-1 py-3 bg-[#F5F5F7] text-[#1d1d1f] rounded-xl font-medium text-xs hover:bg-[#E8E8ED] transition-all">{isArchive ? 'Restaurar' : 'Archivar'}</button>
                         </div>
