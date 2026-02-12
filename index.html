@@ -424,77 +424,115 @@ const getScheduleText = (schedule) => {
                             </div>
                         </div>
                         <div className="p-6 border-t border-gray-100 flex gap-3 bg-white">
-                                <button 
-    onClick={() => { 
-        const agentName = assignedAgent ? assignedAgent.nombre : 'Sin Asignar';
-        const dateStr = formatFirestoreDate(lead.createdAt);
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
         
-        const text = `📋 FICHA DE CLIENTE
---------------------------------
-👤 Nombre: ${lead.nombre || 'N/A'}
-📞 Teléfono: ${lead.telefono || 'N/A'}
-📧 Email: ${lead.email || 'No indicado'}
-
-🏥 PERFIL:
-• Edad: ${lead.edad || '?'} años
-• Estado: ${lead.estado || '?'}
-• Salud: ${lead.salud || 'No especificada'}
-• Fuma: ${lead.fuma || '?'}
-
-💰 NEGOCIO:
-• Presupuesto: ${lead.presupuesto || 'No definido'}
-• Horario Cita: ${lead.horario_acordado || lead.horario_preferido || 'Pendiente'}
-• Tipo Contacto: ${lead.tipo_contacto || 'No definido'}
-• Medio: ${lead.medio_videollamada || 'N/A'}
-
-🤖 RESUMEN AI:
-"${lead.resumen_ai || ''}"
-
---------------------------------
-👨‍💼 Agente: ${agentName}
-📅 Fecha: ${dateStr}
-🔗 ID: ${lead.id}`;
-
-        navigator.clipboard.writeText(text);
-        const btn = document.activeElement;
-        if(btn) { 
-            const original = btn.innerText; 
-            btn.innerText = "¡Copiado!"; 
-            setTimeout(() => btn.innerText = original, 1000); 
-        }
-    }} 
-    className="flex-1 py-3 bg-black text-white rounded-xl font-medium text-xs hover:bg-gray-800 transition-all shadow-lg active:scale-95"
->
-    <div className="flex gap-2 mt-4">
-    <button
-        type="button"
-        onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onCopyFicha(lead); // deja tu función real aquí si tiene otro nombre
-        }}
-        className="flex-1 py-3 bg-[#1d1d1f] text-white rounded-xl font-medium text-xs hover:opacity-90 transition-all"
-    >
-        Copiar Ficha Completa
-    </button>
-
-    <button
-        type="button"
-        onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onUpdateStatus(lead.id, isArchive ? 'active' : 'archived');
-            onClose();
-        }}
-        className="flex-1 py-3 bg-[#F5F5F7] text-[#1d1d1f] rounded-xl font-medium text-xs hover:bg-[#E8E8ED] transition-all"
-    >
-        {isArchive ? 'Restaurar' : 'Archivar'}
-    </button>
-</div>
-                    </div>
+              const agentName = assignedAgent ? assignedAgent.nombre : 'Sin Asignar';
+              const dateStr = formatFirestoreDate(lead.createdAt);
+        
+              const horario =
+                lead.horario_acordado ||
+                lead.horario_preferido ||
+                lead.horario_agendado ||
+                'Pendiente';
+        
+              const medio =
+                lead.medio_contacto ||
+                lead.medio ||
+                'No especificado';
+        
+              const plataforma =
+                lead.plataforma_video ||
+                lead.plataforma ||
+                null;
+        
+              const contactoFinal = plataforma ? `${medio} (${plataforma})` : `${medio}`;
+        
+              const text = `📋 FICHA DE CLIENTE
+        --------------------------------
+        👤 Nombre: ${lead.nombre || 'N/A'}
+        📞 Teléfono: ${lead.telefono || 'N/A'}
+        📧 Email: ${lead.email || 'No indicado'}
+        
+        🏥 PERFIL:
+        • Edad: ${lead.edad || '?'} años
+        • Estado: ${lead.estado || '?'}
+        • Salud: ${lead.salud || 'No especificada'}
+        • Fuma: ${lead.fuma || '?'}
+        
+        💰 NEGOCIO:
+        • Presupuesto: ${lead.presupuesto || 'No definido'}
+        • Contacto: ${contactoFinal}
+        • Horario Cita: ${horario}
+        
+        🤖 RESUMEN AI:
+        "${lead.resumen_ai || ''}"
+        
+        --------------------------------
+        👨‍💼 Agente: ${agentName}
+        📅 Fecha: ${dateStr}
+        🔗 ID: ${lead.id}`;
+        
+              // Clipboard robusto (móvil-friendly)
+              const copyWithFallback = async (t) => {
+                try {
+                  if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(t);
+                    return true;
+                  }
+                } catch (err) {}
+        
+                try {
+                  const ta = document.createElement('textarea');
+                  ta.value = t;
+                  ta.setAttribute('readonly', '');
+                  ta.style.position = 'fixed';
+                  ta.style.left = '-9999px';
+                  ta.style.top = '0';
+                  document.body.appendChild(ta);
+                  ta.select();
+                  const ok = document.execCommand('copy');
+                  document.body.removeChild(ta);
+                  return ok;
+                } catch (err) {
+                  return false;
+                }
+              };
+        
+              copyWithFallback(text).then((ok) => {
+                const btn = e.currentTarget;
+                const original = btn.innerText;
+                btn.innerText = ok ? "¡Copiado!" : "No se pudo copiar";
+                setTimeout(() => (btn.innerText = original), 1200);
+              });
+            }}
+            className="flex-1 py-3 bg-black text-white rounded-xl font-medium text-xs hover:bg-gray-800 transition-all shadow-lg active:scale-95"
+          >
+            Copiar Ficha Completa
+          </button>
+        
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onUpdateStatus(lead.id, isArchive ? 'active' : 'archived');
+              onClose();
+            }}
+            className="flex-1 py-3 bg-[#F5F5F7] text-[#1d1d1f] rounded-xl font-medium text-xs hover:bg-[#E8E8ED] transition-all"
+          >
+            {isArchive ? 'Restaurar' : 'Archivar'}
+          </button>
+        </div>
+                  </div>
                 </div>
+              </div>
             );
         };
+
 
         const AgentAssignmentModal = ({ isOpen, onClose, onAssign, agents }) => {
             const [search, setSearch] = useState('');
