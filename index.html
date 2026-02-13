@@ -1435,6 +1435,10 @@ const getScheduleText = (schedule) => {
                             leadBudget: lead.presupuesto || 'No definido',
                             leadSummary: lead.resumen_ai || 'Sin resumen',
                             leadLocation: lead.estado || 'No especificado',
+
+                            // --- NUEVO: FECHA Y HORA DE CITA ---
+                            leadAppointmentDate: lead.horario_acordado || lead.horario_preferido || 'Pendiente de coordinar', 
+                            // (Esto enviará algo como "Lunes 14 de Agosto a las 4:00 PM" o "Pendiente...")
                             
                             // --- DATOS DEL AGENTE ---
                             agentName: assignedAgent.nombre,
