@@ -374,15 +374,21 @@ const getScheduleText = (schedule) => {
                                 </div>
                             )}
                             <div className="grid grid-cols-2 gap-4">
-                                {/* --- NUEVO: EMAIL (Ancho completo y Clickeable) --- */}
+                                {/* --- EMAIL CLICKEABLE (Versión Robusta) --- */}
                                 <div className="col-span-2 bg-[#F5F5F7] p-5 rounded-2xl flex flex-col justify-center">
                                     <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-1">Correo Electrónico</span>
                                     
                                     {lead.email ? (
                                         <a 
-                                            href={`mailto:${lead.email}`} 
-                                            className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline truncate transition-colors"
-                                            title="Enviar correo"
+                                            href={`mailto:${lead.email}`}
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => {
+                                               // Esto es un seguro adicional por si el enlace normal falla
+                                               e.stopPropagation(); 
+                                            }}
+                                            className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline truncate transition-colors cursor-pointer"
+                                            title="Enviar correo ahora"
                                         >
                                             <Mail size={18} className="shrink-0"/>
                                             {lead.email}
@@ -395,7 +401,7 @@ const getScheduleText = (schedule) => {
                                         </div>
                                     )}
                                 </div>
-                                {/* ------------------------------------- */}
+                                {/* ------------------------------------------- */}
                                 
                                 {/* Fila 1 Izquierda: Contacto */}
                                 <div className="bg-[#F5F5F7] p-5 rounded-2xl">
