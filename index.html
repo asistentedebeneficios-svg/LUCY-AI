@@ -1039,15 +1039,29 @@ const getScheduleText = (schedule) => {
                         try { nextButtons = JSON.parse(buttonMatch[1]); } catch (e) { console.error("Error botones:", e); }
                     }
 
-                    // PROCESAR JSON DATA_READY
-                    const jsonMatch = rawText.match(/```json([\s\S]*?)```/);
-                    if (jsonMatch) {
+                    // PROCESAR JSON DATA_READY (Robusto)
+                        let data = null;
+                        
                         try {
-                            const jsonStr = jsonMatch[1];
-                            const data = JSON.parse(jsonStr);
-                            if (data.action === 'data_ready') {
-                        onSaveLead({ ...data, fullChat: newM });
-                        setIsSessionClosed(true); 
+                            // Intentar parsear como JSON puro primero
+                            data = JSON.parse(rawText);
+                        } catch (e) {
+                            // Si falla, intentar extraer JSON dentro del texto
+                            const jsonMatch = rawText.match(/\{[\s\S]*"action"\s*:\s*"data_ready"[\s\S]*\}/);
+                            if (jsonMatch) {
+                                try {
+                                    data = JSON.parse(jsonMatch[0]);
+                                } catch (err) {
+                                    console.error("Error parseando JSON interno:", err);
+                                }
+                            }
+                        }
+                        
+                        if (data && data.action === 'data_ready') {
+                            onSaveLead({ ...data, fullChat: newM });
+                            setIsSessionClosed(true);
+                        }
+                         
                         
                         // --- RECARGA AUTOMÁTICA (LOBOTOMÍA) ---
                         // Espera 7 segundos para que lean el mensaje y luego reinicia todo
