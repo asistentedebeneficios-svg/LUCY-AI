@@ -374,34 +374,28 @@ const getScheduleText = (schedule) => {
                                 </div>
                             )}
                             <div className="grid grid-cols-2 gap-4">
-                                {/* --- EMAIL CLICKEABLE (Versión Robusta) --- */}
-                                <div className="col-span-2 bg-[#F5F5F7] p-5 rounded-2xl flex flex-col justify-center">
-                                    <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-1">Correo Electrónico</span>
-                                    
-                                    {lead.email ? (
-                                        <a 
-                                            href={`mailto:${lead.email}`}
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            onClick={(e) => {
-                                               // Esto es un seguro adicional por si el enlace normal falla
-                                               e.stopPropagation(); 
-                                            }}
-                                            className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline truncate transition-colors cursor-pointer"
-                                            title="Enviar correo ahora"
-                                        >
-                                            <Mail size={18} className="shrink-0"/>
-                                            {lead.email}
-                                            <ExternalLink size={14} className="opacity-50" />
-                                        </a>
-                                    ) : (
-                                        <div className="flex items-center gap-2 text-gray-400">
-                                            <Mail size={18} className="shrink-0"/>
-                                            <span className="font-medium text-sm italic">No registrado</span>
-                                        </div>
-                                    )}
-                                </div>
-                                {/* ------------------------------------------- */}
+                                {/* --- EMAIL CLICKEABLE (Corregido) --- */}
+                                    <div className="col-span-2 bg-[#F5F5F7] p-5 rounded-2xl flex flex-col justify-center">
+                                        <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-1">Correo Electrónico</span>
+                                        
+                                        {lead.email ? (
+                                            <a 
+                                                href={`mailto:${lead.email}`}
+                                                onClick={(e) => e.stopPropagation()} // Evita que el clic cierre el modal o haga otra cosa
+                                                className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline truncate transition-colors cursor-pointer"
+                                                title="Abrir correo"
+                                            >
+                                                <Mail size={18} className="shrink-0"/>
+                                                {lead.email}
+                                            </a>
+                                        ) : (
+                                            <div className="flex items-center gap-2 text-gray-400">
+                                                <Mail size={18} className="shrink-0"/>
+                                                <span className="font-medium text-sm italic">No registrado</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {/* ------------------------------------ */}
                                 
                                 {/* Fila 1 Izquierda: Contacto */}
                                 <div className="bg-[#F5F5F7] p-5 rounded-2xl">
