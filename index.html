@@ -1410,7 +1410,7 @@ const getScheduleText = (schedule) => {
 
                 const assignedAgent = agentId !== 'unassign' ? agents.find(a => a.id === agentId) : null;
                 
-                // 1. Guardar la asignación en la base de datos
+                // 1. Guardar la asignación en la base de datos (Firebase)
                 const batch = writeBatch(db);
                 targetIds.forEach(id => {
                     const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'leads', id);
@@ -1421,32 +1421,38 @@ const getScheduleText = (schedule) => {
                 });
                 await batch.commit();
 
-                // 2. Disparar el Webhook de Make (Lead + Agente)
+                // 2. Disparar el Webhook (Solo si se asignó un agente, no al desasignar)
                 if (assignedAgent && aiConfig.assignmentWebhookUrl) {
                     const targetLeads = leads.filter(l => targetIds.includes(l.id));
                     
                     targetLeads.forEach(lead => {
-                        // AQUÍ ESTÁ LA CLAVE: Preparamos un paquete mixto
+                        
+                        // --- LÓGICA SIMPLIFICADA (SOLO TEXTO) ---
+                        // Toma lo que haya en 'medio_videollamada' (Zoom/WhatsApp)
+                        // O si está vacío, toma 'tipo_contacto' (Llamada/Videollamada)
+                        // Si todo falla, pone 'Llamada Regular'
+                        const metodoContacto = lead.medio_videollamada || lead.tipo_contacto || 'Llamada Regular';
+
                         const payload = {
-                            // --- DATOS DEL LEAD ---
-                            leadName: lead.nombre || 'No especificado',
+                            // --- DATOS DEL CLIENTE ---
+                            leadName: lead.nombre || 'Cliente',
                             leadEmail: lead.email || 'No especificado',
                             leadPhone: lead.telefono || 'No especificado',
-                            leadBudget: lead.presupuesto || 'No definido',
-                            leadSummary: lead.resumen_ai || 'Sin resumen',
                             leadLocation: lead.estado || 'No especificado',
-
-                            // --- NUEVO: FECHA Y HORA DE CITA ---
-                            leadAppointmentDate: lead.horario_acordado || lead.horario_preferido || 'Pendiente de coordinar', 
-                            // (Esto enviará algo como "Lunes 14 de Agosto a las 4:00 PM" o "Pendiente...")
                             
+                            // --- DATOS DE LA CITA ---
+                            appointmentDate: lead.horario_acordado || lead.horario_preferido || 'Pendiente',
+                            contactMethod: metodoContacto, // <--- Aquí va el texto simple (Ej: "Videollamada por Zoom")
+
                             // --- DATOS DEL AGENTE ---
                             agentName: assignedAgent.nombre,
                             agentEmail: assignedAgent.email,
                             agentPhone: assignedAgent.telefono,
                             agentPhoto: assignedAgent.foto,
-                            agentDetails: assignedAgent.detalles_extra || 'Sin detalles adicionales',
-                            agentLicenses: assignedAgent.estados || 'No especificadas',
+                            
+                            // --- CAMPOS EXTRA (Bio y Licencias) ---
+                            agentDetails: assignedAgent.detalles_extra || 'Sin información adicional',
+                            agentLicenses: assignedAgent.estados || 'No especificadas', 
                             
                             // --- METADATOS ---
                             action: "assignment",
@@ -1454,6 +1460,7 @@ const getScheduleText = (schedule) => {
                         };
 
                         // Enviamos a Make
+                        console.log("📢 Enviando a Make:", payload);
                         fetch(aiConfig.assignmentWebhookUrl, { 
                             method: 'POST', 
                             mode: 'no-cors', 
@@ -1462,7 +1469,10 @@ const getScheduleText = (schedule) => {
                         }).catch(err => console.error("Error webhook asignación:", err));
                     });
                 }
+                
+                // Cerrar modal y limpiar selección
                 setAssignModalData({ isOpen: false, targetIds: [] });
+                setSelectedIds([]); 
             };
 
             const openAssignModal = (ids, actionType) => { 
