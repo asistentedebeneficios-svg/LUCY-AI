@@ -1439,6 +1439,8 @@ const getScheduleText = (schedule) => {
                             leadEmail: lead.email || 'No especificado',
                             leadPhone: lead.telefono || 'No especificado',
                             leadLocation: lead.estado || 'No especificado',
+                            leadBudget: lead.presupuesto || 'No definido',
+                            leadSummary: lead.resumen_ai || 'Sin resumen disponible',
                             
                             // --- DATOS DE LA CITA ---
                             appointmentDate: lead.horario_acordado || lead.horario_preferido || 'Pendiente',
