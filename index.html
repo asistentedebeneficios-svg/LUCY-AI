@@ -374,15 +374,26 @@ const getScheduleText = (schedule) => {
                                 </div>
                             )}
                             <div className="grid grid-cols-2 gap-4">
-                                {/* --- NUEVO: EMAIL (Ancho completo) --- */}
+                                {/* --- NUEVO: EMAIL (Ancho completo y Clickeable) --- */}
                                 <div className="col-span-2 bg-[#F5F5F7] p-5 rounded-2xl flex flex-col justify-center">
                                     <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-1">Correo Electrónico</span>
-                                    <div className="flex items-center gap-2">
-                                        <Mail size={16} className="text-gray-400 shrink-0"/>
-                                        <p className="font-semibold text-[#1d1d1f] text-sm select-all">
-                                            {lead.email || 'No registrado'}
-                                        </p>
-                                   </div> 
+                                    
+                                    {lead.email ? (
+                                        <a 
+                                            href={`mailto:${lead.email}`} 
+                                            className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline truncate transition-colors"
+                                            title="Enviar correo"
+                                        >
+                                            <Mail size={18} className="shrink-0"/>
+                                            {lead.email}
+                                            <ExternalLink size={14} className="opacity-50" />
+                                        </a>
+                                    ) : (
+                                        <div className="flex items-center gap-2 text-gray-400">
+                                            <Mail size={18} className="shrink-0"/>
+                                            <span className="font-medium text-sm italic">No registrado</span>
+                                        </div>
+                                    )}
                                 </div>
                                 {/* ------------------------------------- */}
                                 
