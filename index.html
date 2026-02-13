@@ -1040,36 +1040,31 @@ const getScheduleText = (schedule) => {
                     }
 
                     // PROCESAR JSON DATA_READY (Robusto)
-                        let data = null;
-                        
-                        try {
-                            // Intentar parsear como JSON puro primero
-                            data = JSON.parse(rawText);
-                        } catch (e) {
-                            // Si falla, intentar extraer JSON dentro del texto
-                            const jsonMatch = rawText.match(/\{[\s\S]*"action"\s*:\s*"data_ready"[\s\S]*\}/);
-                            if (jsonMatch) {
-                                try {
-                                    data = JSON.parse(jsonMatch[0]);
-                                } catch (err) {
-                                    console.error("Error parseando JSON interno:", err);
-                                }
+                    let data = null;
+                    
+                    try {
+                        // Intentar parsear como JSON puro primero
+                        data = JSON.parse(rawText);
+                    } catch (e) {
+                        // Si falla, intentar extraer JSON dentro del texto
+                        const jsonMatch = rawText.match(/\{[\s\S]*"action"\s*:\s*"data_ready"[\s\S]*\}/);
+                        if (jsonMatch) {
+                            try {
+                                data = JSON.parse(jsonMatch[0]);
+                            } catch (err) {
+                                console.error("Error parseando JSON interno:", err);
                             }
                         }
-                        
-                        if (data && data.action === 'data_ready') {
-                            onSaveLead({ ...data, fullChat: newM });
-                            setIsSessionClosed(true);
-                        }
-                         
-                        
-                        // --- RECARGA AUTOMÁTICA (LOBOTOMÍA) ---
-                        // Espera 7 segundos para que lean el mensaje y luego reinicia todo
+                    }
+                    
+                    if (data && data.action === 'data_ready') {
+                        onSaveLead({ ...data, fullChat: newM });
+                        setIsSessionClosed(true);
+                    
+                        // --- RECARGA AUTOMÁTICA ---
                         setTimeout(() => {
                             window.location.reload();
                         }, 7000);
-                    }
-                        } catch (jsonErr) { console.error("Error JSON:", jsonErr); }
                     }
 
                     // LIMPIAR RESPUESTA
