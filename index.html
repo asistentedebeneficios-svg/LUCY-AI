@@ -706,13 +706,57 @@ const getScheduleText = (schedule) => {
 </div>
                     {isEditing && (
                         <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-                            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg">
-                                <h3 className="text-lg font-bold mb-4">Nuevo Agente</h3>
+                            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg animate-in zoom-in-95">
+                                <h3 className="text-lg font-bold mb-4">Gestión de Agente</h3>
                                 <form onSubmit={handleFormSubmit} className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-500 uppercase">Nombre</label><input required className="w-full p-2 border rounded-lg text-sm" value={formData.nombre || ''} onChange={e => setFormData({...formData, nombre: e.target.value})} /></div><div><label className="text-[10px] font-bold text-gray-500 uppercase">Teléfono</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.telefono || ''} onChange={e => setFormData({...formData, telefono: e.target.value})} /></div></div>
-                                    <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-500 uppercase">Email</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} /></div><div><label className="text-[10px] font-bold text-gray-500 uppercase">Foto URL</label><input className="w-full p-2 border rounded-lg text-sm" placeholder="https://..." value={formData.foto || ''} onChange={e => setFormData({...formData, foto: e.target.value})} /></div></div>
-                                    <div><label className="text-[10px] font-bold text-gray-500 uppercase">Estados</label><input className="w-full p-2 border rounded-lg text-sm" value={formData.estados || ''} onChange={e => setFormData({...formData, estados: e.target.value})} /></div>
-                                    <div className="flex gap-2 justify-end mt-4"><button type="button" onClick={() => setIsEditing(false)} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button><button type="submit" className="px-4 py-2 text-sm bg-black text-white rounded-lg">Guardar</button></div>
+                                    {/* Fila 1: Nombre y Teléfono */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-gray-500 uppercase">Nombre</label>
+                                            <input required className="w-full p-2 border rounded-lg text-sm" value={formData.nombre || ''} onChange={e => setFormData({...formData, nombre: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-gray-500 uppercase">Teléfono</label>
+                                            <input className="w-full p-2 border rounded-lg text-sm" value={formData.telefono || ''} onChange={e => setFormData({...formData, telefono: e.target.value})} />
+                                        </div>
+                                    </div>
+
+                                    {/* Fila 2: Email y Foto */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-gray-500 uppercase">Email</label>
+                                            <input className="w-full p-2 border rounded-lg text-sm" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-gray-500 uppercase">Foto URL</label>
+                                            <input className="w-full p-2 border rounded-lg text-sm" placeholder="https://..." value={formData.foto || ''} onChange={e => setFormData({...formData, foto: e.target.value})} />
+                                        </div>
+                                    </div>
+
+                                    {/* Fila 3: Estados */}
+                                    <div>
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase">Estados</label>
+                                        <input className="w-full p-2 border rounded-lg text-sm" value={formData.estados || ''} onChange={e => setFormData({...formData, estados: e.target.value})} />
+                                    </div>
+
+                                    {/* --- NUEVO CAMPO LARGO --- */}
+                                    <div>
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase flex justify-between">
+                                            Información Extra / Notas <span className="text-blue-500 text-[9px]">Se enviará al Webhook</span>
+                                        </label>
+                                        <textarea 
+                                            className="w-full p-3 border rounded-lg text-sm h-24 focus:ring-2 focus:ring-black/10 outline-none resize-none bg-gray-50 focus:bg-white transition-colors" 
+                                            placeholder="Escribe aquí la biografía, notas internas o cualquier texto largo..." 
+                                            value={formData.detalles_extra || ''} 
+                                            onChange={e => setFormData({...formData, detalles_extra: e.target.value})} 
+                                        />
+                                    </div>
+                                    {/* ------------------------- */}
+
+                                    <div className="flex gap-2 justify-end mt-4">
+                                        <button type="button" onClick={() => setIsEditing(false)} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
+                                        <button type="submit" className="px-4 py-2 text-sm bg-black text-white rounded-lg shadow-lg hover:bg-gray-800 transition-all">Guardar</button>
+                                    </div>
                                 </form>
                             </div>
                         </div>
@@ -1356,6 +1400,7 @@ const getScheduleText = (schedule) => {
                             agentEmail: assignedAgent.email,
                             agentPhone: assignedAgent.telefono,
                             agentPhoto: assignedAgent.foto,
+                            agentDetails: assignedAgent.detalles_extra || 'Sin detalles adicionales',
                             
                             // --- METADATOS ---
                             action: "assignment",
