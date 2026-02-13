@@ -345,6 +345,7 @@ const getScheduleText = (schedule) => {
             if (!lead) return null;
             const assignedAgent = (agents || []).find(a => a.id === lead.assignedAgentId);
             const [copied, setCopied] = React.useState(false);
+            const [emailCopied, setEmailCopied] = useState(false);
 
             return (
                 <div className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in-95 duration-300">
@@ -374,28 +375,43 @@ const getScheduleText = (schedule) => {
                                 </div>
                             )}
                             <div className="grid grid-cols-2 gap-4">
-                                {/* --- EMAIL CLICKEABLE (Corregido) --- */}
-                                    <div className="col-span-2 bg-[#F5F5F7] p-5 rounded-2xl flex flex-col justify-center">
-                                        <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-1">Correo Electrónico</span>
+                                {/* --- EMAIL CON FUNCIÓN COPIAR --- */}
+                                    <div 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (lead.email) {
+                                                navigator.clipboard.writeText(lead.email); // Copia al portapapeles
+                                                setEmailCopied(true);
+                                                setTimeout(() => setEmailCopied(false), 2000); // Restaura después de 2 seg
+                                            }
+                                        }}
+                                        className={`col-span-2 p-5 rounded-2xl flex flex-col justify-center transition-all cursor-pointer select-none group border border-transparent ${
+                                            emailCopied 
+                                                ? "bg-green-50 border-green-200" 
+                                                : "bg-[#F5F5F7] hover:bg-[#E8E8ED] hover:border-gray-200"
+                                        }`}
+                                    >
+                                        <span className={`text-[10px] font-semibold uppercase tracking-wide block mb-1 transition-colors ${emailCopied ? "text-green-600" : "text-[#86868b]"}`}>
+                                            {emailCopied ? "Estado" : "Correo Electrónico"}
+                                        </span>
                                         
-                                        {lead.email ? (
-                                            <a 
-                                                href={`mailto:${lead.email}`}
-                                                onClick={(e) => e.stopPropagation()} // Evita que el clic cierre el modal o haga otra cosa
-                                                className="font-semibold text-blue-600 text-lg flex items-center gap-2 hover:underline truncate transition-colors cursor-pointer"
-                                                title="Abrir correo"
-                                            >
-                                                <Mail size={18} className="shrink-0"/>
-                                                {lead.email}
-                                            </a>
-                                        ) : (
-                                            <div className="flex items-center gap-2 text-gray-400">
-                                                <Mail size={18} className="shrink-0"/>
-                                                <span className="font-medium text-sm italic">No registrado</span>
+                                        <div className="flex items-center gap-3">
+                                            {/* Icono que cambia */}
+                                            <div className={`p-1.5 rounded-full transition-all ${emailCopied ? "bg-green-200 text-green-700" : "bg-white text-gray-400 group-hover:text-blue-600 shadow-sm"}`}>
+                                                {emailCopied ? <Check size={16} strokeWidth={3} /> : <Copy size={16} />}
                                             </div>
-                                        )}
+                                
+                                            {/* Texto que cambia */}
+                                            {lead.email ? (
+                                                <p className={`font-semibold text-lg truncate transition-colors ${emailCopied ? "text-green-700" : "text-[#1d1d1f] group-hover:text-blue-600"}`}>
+                                                    {emailCopied ? "¡Correo Copiado!" : lead.email}
+                                                </p>
+                                            ) : (
+                                                <span className="font-medium text-sm italic text-gray-400">No registrado</span>
+                                            )}
+                                        </div>
                                     </div>
-                                    {/* ------------------------------------ */}
+                                    {/* -------------------------------- */}
                                 
                                 {/* Fila 1 Izquierda: Contacto */}
                                 <div className="bg-[#F5F5F7] p-5 rounded-2xl">
