@@ -374,6 +374,17 @@ const getScheduleText = (schedule) => {
                                 </div>
                             )}
                             <div className="grid grid-cols-2 gap-4">
+                                {/* --- NUEVO: EMAIL (Ancho completo) --- */}
+                                <div className="col-span-2 bg-[#F5F5F7] p-5 rounded-2xl flex flex-col justify-center">
+                                    <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-1">Correo Electrónico</span>
+                                    <div className="flex items-center gap-2">
+                                        <Mail size={16} className="text-gray-400 shrink-0"/>
+                                        <p className="font-semibold text-[#1d1d1f] text-sm select-all">
+                                            {lead.email || 'No registrado'}
+                                        </p>
+                                    </div>
+                                {/* ------------------------------------- */}
+                                
                                 {/* Fila 1 Izquierda: Contacto */}
                                 <div className="bg-[#F5F5F7] p-5 rounded-2xl">
                                     <span className="text-[10px] font-semibold text-[#86868b] uppercase tracking-wide block mb-2">Contacto</span>
